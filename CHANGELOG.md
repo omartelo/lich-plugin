@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Marketplace manifest (`.claude-plugin/marketplace.json`), so the repository
+  installs directly via `claude plugin marketplace add omartelo/lich-plugin` +
+  `claude plugin install lich@lich-plugin`. README documents marketplace and
+  manual (clone-based) installation.
+
 ## [0.0.1] - 2026-07-13
 
 ### Added

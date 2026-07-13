@@ -1,0 +1,14 @@
+{
+  "name": "lich-plugin",
+  "description": "Claude Code plugin for the lich harness",
+  "owner": {
+    "name": "omartelo"
+  },
+  "plugins": [
+    {
+      "name": "lich",
+      "source": "./",
+      "description": "Claude Code plugin for the lich harness"
+    }
+  ]
+}
