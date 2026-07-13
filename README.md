@@ -1,6 +1,6 @@
 # lich-plugin
 
-Claude Code plugin for [lich](https://github.com/omartelo/lich) — reports session state (`busy`/`done`) to the harness over HTTP loopback.
+The Claude Code side of the [lich](https://github.com/omartelo/lich) integration. lich is a harness that orchestrates `claude` sessions; this companion plugin gives it eyes and hands inside each session. Every integration point follows a contract documented in `docs/` — the first one reports session state (`busy`/`done`) over HTTP loopback, and more will land as the integration grows.
 
 ## Structure
 

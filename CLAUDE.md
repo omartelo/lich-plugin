@@ -1,6 +1,6 @@
 # lich-plugin
 
-Claude Code plugin for talking to **lich** — a harness that orchestrates `claude` sessions. The plugin ships only hooks, which report session state to lich over HTTP loopback.
+The Claude Code side of the integration with **lich** — a harness that orchestrates `claude` sessions. This companion plugin is how lich observes and acts inside a running session. It currently ships only hooks; each integration point follows a contract documented in `docs/`.
 
 ## Structure
 
