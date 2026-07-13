@@ -27,3 +27,12 @@ Todo hook implementado aqui segue um contrato documentado em `docs/`. Antes de c
 ```bash
 claude --plugin-dir .
 ```
+
+## Release
+
+Mesmo padrão do repositório `lich` (Keep a Changelog + SemVer, CHANGELOG em inglês). Release é cortada por tag `vX.Y.Z`:
+
+1. Mover as entradas de `[Unreleased]` do `CHANGELOG.md` para o heading da nova versão (com data) e atualizar os compare links do rodapé.
+2. Alinhar `version` em `.claude-plugin/plugin.json` com a tag.
+3. Tag anotada `vX.Y.Z` + push com a tag.
+4. `gh release create vX.Y.Z` com as notes tiradas da seção correspondente do `CHANGELOG.md`.
