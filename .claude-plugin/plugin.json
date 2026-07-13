@@ -1,0 +1,8 @@
+{
+  "name": "lich",
+  "description": "Plugin do Claude Code",
+  "version": "0.0.1",
+  "author": {
+    "name": "omartelo"
+  }
+}
