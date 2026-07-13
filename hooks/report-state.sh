@@ -1,5 +1,5 @@
 #!/bin/sh
-# Reports session state to lich. Contract: docs/session-state-contract.md
+# Reports session state to lich. Contract: docs/session-state.md
 # Usage: report-state.sh <busy|done>
 
 # Outside lich (vars absent) → no-op. Safe to install globally.

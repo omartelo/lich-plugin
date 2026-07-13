@@ -13,9 +13,11 @@ docs/                        # lich ⇄ plugin communication contracts
 
 ## Contracts
 
-Every hook implemented here follows a contract documented in `docs/`. Read the matching contract before creating or changing a hook:
+Contracts are **canonical in the lich repository** (`docs/hooks/` there); this plugin only implements the client side. Each hook has a doc in `docs/` here that points at its contract and describes the plugin-side behavior. Read it before creating or changing a hook:
 
-- [docs/session-state-contract.md](docs/session-state-contract.md) — session-state reporting (`busy`/`done`) via `UserPromptSubmit`/`Stop`
+- [docs/session-state.md](docs/session-state.md) — session-state reporting (`busy`/`done`) via `UserPromptSubmit`/`Stop`
+- [docs/session-start.md](docs/session-start.md) — Claude session id via `SessionStart`
+- [docs/session-title.md](docs/session-title.md) — auto-generated `ai-title` via `Stop`
 
 ## Rules
 

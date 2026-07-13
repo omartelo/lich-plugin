@@ -1,14 +1,20 @@
 # lich-plugin
 
-The Claude Code side of the [lich](https://github.com/omartelo/lich) integration. lich is a harness that orchestrates `claude` sessions; this companion plugin gives it eyes and hands inside each session. Every integration point follows a contract documented in `docs/` — the first one reports session state (`busy`/`done`) over HTTP loopback, and more will land as the integration grows.
+The Claude Code side of the [lich](https://github.com/omartelo/lich) integration. lich is a harness that orchestrates `claude` sessions; this companion plugin gives it eyes and hands inside each session. Every hook implements a contract that is canonical in the lich repository (`docs/hooks/` there); the docs in `docs/` here point at each contract and describe the client side:
+
+- **session state** — `busy`/`done` on the session card (`UserPromptSubmit`/`Stop`)
+- **session start** — persists the Claude session id on the lich session (`SessionStart`)
+- **session title** — names the card after Claude's auto-generated title (`Stop`)
 
 ## Structure
 
 ```
-.claude-plugin/plugin.json   # plugin manifest (required)
-hooks/hooks.json             # hook registration
-hooks/report-state.sh        # state-reporting hook script
-docs/                        # lich ⇄ plugin communication contracts
+.claude-plugin/plugin.json      # plugin manifest (required)
+hooks/hooks.json                # hook registration
+hooks/report-state.sh           # session-state hook
+hooks/report-session-start.sh   # session-start hook
+hooks/report-title.sh           # session-title hook
+docs/                           # client-side docs, one per contract
 ```
 
 Hook scripts live in `hooks/` and are referenced from `hooks.json` via
