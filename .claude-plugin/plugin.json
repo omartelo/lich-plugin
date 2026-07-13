@@ -1,6 +1,6 @@
 {
   "name": "lich",
-  "description": "Plugin do Claude Code",
+  "description": "Claude Code plugin for the lich harness",
   "version": "0.0.1",
   "author": {
     "name": "omartelo"

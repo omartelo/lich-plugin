@@ -1,28 +1,28 @@
 # lich-plugin
 
-Plugin do Claude Code para comunicação com o **lich** — harness que orquestra sessões do `claude`. O plugin implementa apenas hooks que reportam o estado da sessão ao lich via HTTP loopback.
+Claude Code plugin for talking to **lich** — a harness that orchestrates `claude` sessions. The plugin ships only hooks, which report session state to lich over HTTP loopback.
 
-## Estrutura
+## Structure
 
 ```
-.claude-plugin/plugin.json   # manifesto do plugin
-hooks/hooks.json             # registro dos hooks
-hooks/                       # scripts dos hooks (${CLAUDE_PLUGIN_ROOT}/hooks/<script>)
-docs/                        # contratos de comunicação lich ⇄ plugin
+.claude-plugin/plugin.json   # plugin manifest
+hooks/hooks.json             # hook registration
+hooks/                       # hook scripts (${CLAUDE_PLUGIN_ROOT}/hooks/<script>)
+docs/                        # lich ⇄ plugin communication contracts
 ```
 
-## Contratos
+## Contracts
 
-Todo hook implementado aqui segue um contrato documentado em `docs/`. Antes de criar ou alterar um hook, leia o contrato correspondente:
+Every hook implemented here follows a contract documented in `docs/`. Read the matching contract before creating or changing a hook:
 
-- [docs/contrato-estado-sessao.md](docs/contrato-estado-sessao.md) — reporte de estado (`busy`/`done`) via `UserPromptSubmit`/`Stop`
+- [docs/session-state-contract.md](docs/session-state-contract.md) — session-state reporting (`busy`/`done`) via `UserPromptSubmit`/`Stop`
 
-## Regras
+## Rules
 
-- Hooks nunca podem travar ou falhar o turno do usuário: timeout curto, erros engolidos, sempre exit 0.
-- Fora do lich (env vars ausentes) todo hook é no-op com exit 0 — o plugin deve ser seguro para instalação global.
+- A hook must never block or fail the user's turn: short timeout, errors swallowed, always exit 0.
+- Outside lich (env vars absent) every hook is a no-op with exit 0 — the plugin must be safe to install globally.
 
-## Teste local
+## Local testing
 
 ```bash
 claude --plugin-dir .
@@ -30,9 +30,9 @@ claude --plugin-dir .
 
 ## Release
 
-Mesmo padrão do repositório `lich` (Keep a Changelog + SemVer, CHANGELOG em inglês). Release é cortada por tag `vX.Y.Z`:
+Same standard as the `lich` repository (Keep a Changelog + SemVer). Releases are cut by tagging `vX.Y.Z`:
 
-1. Mover as entradas de `[Unreleased]` do `CHANGELOG.md` para o heading da nova versão (com data) e atualizar os compare links do rodapé.
-2. Alinhar `version` em `.claude-plugin/plugin.json` com a tag.
-3. Tag anotada `vX.Y.Z` + push com a tag.
-4. `gh release create vX.Y.Z` com as notes tiradas da seção correspondente do `CHANGELOG.md`.
+1. Move the `[Unreleased]` entries in `CHANGELOG.md` under the new version heading (with date) and refresh the compare links at the bottom.
+2. Align `version` in `.claude-plugin/plugin.json` with the tag.
+3. Annotated tag `vX.Y.Z` + push with the tag.
+4. `gh release create vX.Y.Z` with the notes taken from the matching `CHANGELOG.md` section.

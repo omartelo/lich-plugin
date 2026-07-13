@@ -1,21 +1,23 @@
-# lich
+# lich-plugin
 
-Plugin do Claude Code — hooks.
+Claude Code plugin for [lich](https://github.com/omartelo/lich) — reports session state (`busy`/`done`) to the harness over HTTP loopback.
 
-## Estrutura
+## Structure
 
 ```
-.claude-plugin/plugin.json   # manifesto do plugin (obrigatório)
-hooks/hooks.json             # configuração dos hooks
+.claude-plugin/plugin.json   # plugin manifest (required)
+hooks/hooks.json             # hook registration
+hooks/report-state.sh        # state-reporting hook script
+docs/                        # lich ⇄ plugin communication contracts
 ```
 
-Scripts de hook ficam em `hooks/` e são referenciados no `hooks.json` via
+Hook scripts live in `hooks/` and are referenced from `hooks.json` via
 `${CLAUDE_PLUGIN_ROOT}/hooks/<script>`.
 
-## Teste local
+## Local testing
 
 ```bash
 claude --plugin-dir .
 ```
 
-O hook `SessionStart` de exemplo imprime "plugin lich ativo" no início da sessão.
+Outside lich (env vars absent) the hooks are a no-op — the plugin is safe to install globally.

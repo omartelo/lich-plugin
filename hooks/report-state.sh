@@ -1,8 +1,8 @@
 #!/bin/sh
-# Reporta estado da sessão ao lich. Contrato: docs/contrato-estado-sessao.md
-# Uso: report-state.sh <busy|done>
+# Reports session state to lich. Contract: docs/session-state-contract.md
+# Usage: report-state.sh <busy|done>
 
-# Fora do lich (vars ausentes) → no-op. Seguro instalar global.
+# Outside lich (vars absent) → no-op. Safe to install globally.
 [ -n "$LICH_PORT" ] && [ -n "$LICH_TOKEN" ] && [ -n "$LICH_SESSION_ID" ] || exit 0
 
 curl -s -o /dev/null --max-time 1 \
@@ -11,5 +11,5 @@ curl -s -o /dev/null --max-time 1 \
   -d "{\"session_id\":\"${LICH_SESSION_ID}\",\"state\":\"$1\"}" \
   || true
 
-# Nunca trava/falha o turno.
+# Never blocks or fails the turn.
 exit 0

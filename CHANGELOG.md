@@ -13,7 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Session-state hook: `UserPromptSubmit` reports `busy` and `Stop` reports
   `done` to the lich harness over token-authenticated HTTP loopback
-  (`POST /hook`), following the contract in `docs/contrato-estado-sessao.md`.
+  (`POST /hook`), following the contract in `docs/session-state-contract.md`.
   Outside lich (env vars absent) the hook is a no-op with exit 0, so the
   plugin is safe to install globally. Requests time out after ~1s and errors
   are swallowed — the hook never blocks or fails the turn.
