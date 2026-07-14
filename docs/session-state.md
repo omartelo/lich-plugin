@@ -11,6 +11,7 @@ toast) when Claude is blocked on the user.
 | Claude Code hook   | script                    | state     |
 |--------------------|---------------------------|-----------|
 | `UserPromptSubmit` | `report-state.sh busy`    | `busy`    |
+| `PostToolUse`      | `report-state.sh busy`    | `busy`    |
 | `Stop`             | `report-state.sh done`    | `done`    |
 | `Notification`     | `report-state.sh waiting` | `waiting` |
 
@@ -19,3 +20,10 @@ toast) when Claude is blocked on the user.
 
 `Notification` fires when Claude needs a permission decision or has been idle
 waiting for input — both mean "your turn". A later `busy` or `done` clears it.
+
+`PostToolUse` is the recovery from `waiting`: answering a permission request,
+approving a plan (`ExitPlanMode`) or answering a question (`AskUserQuestion`)
+does not fire `UserPromptSubmit`, but the tool that resumes work fires
+`PostToolUse` — so the spinner comes back. It posts `busy` on every tool call
+(loopback, idempotent). Known ceiling: a denied permission where Claude ends
+the turn without another tool call stays `waiting` until `Stop`.
