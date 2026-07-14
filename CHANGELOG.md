@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-07-14
+
 ### Added
 
 - Session-state hook now also reports `waiting`: `Notification` (permission
@@ -62,6 +64,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   plugin is safe to install globally. Requests time out after ~1s and errors
   are swallowed — the hook never blocks or fails the turn.
 
-[Unreleased]: https://github.com/omartelo/lich-plugin/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/omartelo/lich-plugin/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/omartelo/lich-plugin/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/omartelo/lich-plugin/compare/v0.0.1...v0.1.0
 [0.0.1]: https://github.com/omartelo/lich-plugin/releases/tag/v0.0.1
