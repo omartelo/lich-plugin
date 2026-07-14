@@ -14,12 +14,18 @@ toast) when Claude is blocked on the user.
 | `PostToolUse`      | `report-state.sh busy`    | `busy`    |
 | `Stop`             | `report-state.sh done`    | `done`    |
 | `Notification`     | `report-state.sh waiting` | `waiting` |
+| `SessionEnd`       | `report-state.sh idle`    | `idle`    |
 
 `POST /hook` with `{"session_id": $LICH_SESSION_ID, "state":
-"busy"|"done"|"waiting"}`.
+"busy"|"done"|"waiting"|"idle"}`.
 
 `Notification` fires when Claude needs a permission decision or has been idle
 waiting for input — both mean "your turn". A later `busy` or `done` clears it.
+
+`SessionEnd → idle` clears the card's indicator (no spinner/check/bell). It
+fires when the Claude session ends or is reset, so a stale state does not
+linger on a dead session, and a `/clear` starts the next session with a clean
+card.
 
 `PostToolUse` is the recovery from `waiting`: answering a permission request,
 approving a plan (`ExitPlanMode`) or answering a question (`AskUserQuestion`)

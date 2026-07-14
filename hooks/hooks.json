@@ -62,6 +62,16 @@
           }
         ]
       }
+    ],
+    "SessionEnd": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${CLAUDE_PLUGIN_ROOT}/hooks/report-state.sh idle"
+          }
+        ]
+      }
     ]
   }
 }

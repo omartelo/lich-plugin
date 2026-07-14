@@ -1,6 +1,6 @@
 #!/bin/sh
 # Reports session state to lich. Contract: docs/session-state.md
-# Usage: report-state.sh <busy|done|waiting>
+# Usage: report-state.sh <busy|done|waiting|idle>
 
 # Outside lich (vars absent) → no-op. Safe to install globally.
 [ -n "$LICH_PORT" ] && [ -n "$LICH_TOKEN" ] && [ -n "$LICH_SESSION_ID" ] || exit 0

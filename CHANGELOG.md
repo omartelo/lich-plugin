@@ -17,6 +17,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   answered — permission decisions, plan approvals and `AskUserQuestion`
   answers do not fire `UserPromptSubmit`, but the tool that resumes work
   fires `PostToolUse`.
+- `SessionEnd` reports `idle`, clearing the card's indicator (no
+  spinner/check/bell) — a stale state does not linger on a dead session, and
+  a `/clear` starts the next session with a clean card.
 - Session-touched hook: `PostToolUse` on file-mutating tools only
   (`Edit|Write|NotebookEdit|Bash`) posts to lich (`POST /session-touched`),
   which refreshes that session's git status ahead of its ~3s poll. Latency
