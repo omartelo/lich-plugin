@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Session-state hook now also reports `waiting`: `Notification` (permission
+  decision needed or idle waiting for input) posts `waiting` to lich, which
+  shows a bell on the session card and raises an actionable toast. A later
+  `busy`/`done` clears it. Contract: `docs/session-state.md`.
+
 ## [0.1.0] - 2026-07-13
 
 ### Added
