@@ -17,6 +17,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   answered — permission decisions, plan approvals and `AskUserQuestion`
   answers do not fire `UserPromptSubmit`, but the tool that resumes work
   fires `PostToolUse`.
+- Session-touched hook: `PostToolUse` on file-mutating tools only
+  (`Edit|Write|NotebookEdit|Bash`) posts to lich (`POST /session-touched`),
+  which refreshes that session's git status ahead of its ~3s poll. Latency
+  optimization only — without the plugin the poll catches the same changes.
+  Contract: `docs/session-touched.md`.
 
 ## [0.1.0] - 2026-07-13
 

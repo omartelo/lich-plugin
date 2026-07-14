@@ -5,6 +5,7 @@ The Claude Code side of the [lich](https://github.com/omartelo/lich) integration
 - **session state** — `busy`/`done` on the session card (`UserPromptSubmit`/`Stop`)
 - **session start** — persists the Claude session id on the lich session (`SessionStart`)
 - **session title** — names the card after Claude's auto-generated title (`Stop`)
+- **session touched** — refreshes the card's git status right after file-mutating tools (`PostToolUse`)
 
 ## Structure
 
@@ -14,6 +15,7 @@ hooks/hooks.json                # hook registration
 hooks/report-state.sh           # session-state hook
 hooks/report-session-start.sh   # session-start hook
 hooks/report-title.sh           # session-title hook
+hooks/report-touched.sh         # session-touched hook
 docs/                           # client-side docs, one per contract
 ```
 
