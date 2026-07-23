@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-07-23
+
+### Changed
+
+- The session-start hook now sends `provider_session_id` instead of
+  `claude_session_id`: lich renamed the stored id to a provider-agnostic one
+  (the payload field is the contract side of it). lich still accepts the old
+  alias for plugins up to v0.2.0, but a plugin sending the new field needs a
+  lich that already understands it — release this only after the lich release
+  carrying the rename. Contract: `docs/session-start.md`.
+- `docs/session-start.md`: the report also marks the card as running Claude
+  (its icon) until `SessionEnd → idle` clears it — a lich-side effect of the
+  same report, no extra call from the plugin.
+
 ## [0.2.0] - 2026-07-14
 
 ### Added
@@ -64,7 +78,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   plugin is safe to install globally. Requests time out after ~1s and errors
   are swallowed — the hook never blocks or fails the turn.
 
-[Unreleased]: https://github.com/omartelo/lich-plugin/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/omartelo/lich-plugin/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/omartelo/lich-plugin/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/omartelo/lich-plugin/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/omartelo/lich-plugin/compare/v0.0.1...v0.1.0
 [0.0.1]: https://github.com/omartelo/lich-plugin/releases/tag/v0.0.1
