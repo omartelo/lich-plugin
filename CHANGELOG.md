@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- The session-start hook no longer requires `jq`: on Windows `jq` is usually
+  absent, so the hook was silently no-opping and the Claude `session_id` never
+  reached lich (state hooks kept working since they use only `curl`). It now
+  falls back to `sed` to read the payload and builds the request body inline,
+  matching `report-state.sh`. Contract: `docs/session-start.md`.
+
 ## [0.3.0] - 2026-07-23
 
 ### Changed

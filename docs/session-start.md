@@ -21,7 +21,8 @@ older plugins, but this plugin no longer sends it.
 
 `SessionStart` fires on startup, resume, `/clear` and compaction; each report
 overwrites the stored id, so lich always holds the session currently in the
-card. Requires `jq`; absent → no-op.
+card. Uses `jq` to read the payload when present, and falls back to `sed`
+otherwise — so it also works on Windows, where `jq` is usually absent.
 
 The report doubles as proof that Claude runs in that PTY, so lich also marks
 the card as running Claude (its icon) until the mark is cleared — which is what
