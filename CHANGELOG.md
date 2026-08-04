@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.1] - 2026-08-04
+
 ### Fixed
 
 - **A theme built by the skill now ends up selectable.** The skill offered
@@ -114,7 +116,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   plugin is safe to install globally. Requests time out after ~1s and errors
   are swallowed — the hook never blocks or fails the turn.
 
-[Unreleased]: https://github.com/omartelo/lich-plugin/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/omartelo/lich-plugin/compare/v0.4.1...HEAD
+[0.4.1]: https://github.com/omartelo/lich-plugin/compare/v0.4.0...v0.4.1
 [0.4.0]: https://github.com/omartelo/lich-plugin/compare/v0.3.1...v0.4.0
 [0.3.1]: https://github.com/omartelo/lich-plugin/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/omartelo/lich-plugin/compare/v0.2.0...v0.3.0
