@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Checks a lich theme against the rules internal/themes/themes.go enforces on
-// import. A theme copied straight into the themes directory fails silently
-// (log warning, absent from the UI), which is what this is for.
+// import, so a rejection lands here instead of in the middle of the user's
+// import.
 //
 // Usage: node validate.mjs my-theme.json
 import { readFileSync } from "node:fs"
@@ -63,4 +63,4 @@ if (errors.length) {
   for (const error of errors) console.error(`  - ${error}`)
   process.exit(1)
 }
-console.log(`${path}: ok — install as ${theme.id}.json`)
+console.log(`${path}: ok — install it from Settings › Appearance › Import`)
