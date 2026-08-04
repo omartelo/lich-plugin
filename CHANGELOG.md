@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **A theme built by the skill now ends up selectable.** The skill offered
+  copying the file into lich's themes directory as an install path, and that is
+  the one it took: lich reads the theme list once, at page load, so the theme
+  was announced as installed and was nowhere to be found in Settings until the
+  window was reloaded. The skill now writes the file where a file picker can
+  reach it and hands the install to the user through Settings › Appearance ›
+  Import, which validates the theme, stores it, applies it and selects it on the
+  spot.
+
 ## [0.4.0] - 2026-08-04
 
 ### Added

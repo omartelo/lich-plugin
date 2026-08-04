@@ -22,14 +22,17 @@ start from it, don't type the shape from memory.
 
 ## Where the file lives
 
+The themes directory is lich's to write — it stores a theme there on import, you
+never put one there yourself.
+
 | OS      | Directory                                     |
 |---------|-----------------------------------------------|
 | Linux   | `${XDG_CONFIG_HOME:-$HOME/.config}/lich/themes/` |
 | macOS   | `~/Library/Application Support/lich/themes/`   |
 | Windows | `%AppData%\lich\themes\`                       |
 
-A lich started with `LICH_DEV` (that's `task dev`) reads `themes-dev/` instead —
-a theme dropped in `themes/` will not show up there, and vice versa.
+A lich started with `LICH_DEV` (that's `task dev`) uses `themes-dev/` instead, so
+a theme imported in one window is absent from the other.
 
 ## Building one
 
@@ -39,12 +42,12 @@ a theme dropped in `themes/` will not show up there, and vice versa.
    colors too unless you want xterm's built-in palette fighting your background.
 4. Validate: `node validate.mjs <file>` (in this skill's directory). It checks
    the same rules the backend checks, so a pass means the import will not bounce.
-5. Install, either way:
-   - **Copy it** to the themes directory above as `<id>.json`, then reload the
-     lich window (the theme list is read once, at page load).
-   - **Import it** from Settings › Appearance › Import theme. lich validates it,
-     names the file, applies it immediately and selects it. Prefer this when you
-     want the validation error spelled out on screen.
+5. Write the file where the user can point a file picker at it — the session's
+   working directory, as `<id>.json` — and tell them the absolute path.
+6. Hand the install to them: **Settings › Appearance › Import**, then pick that
+   file. lich validates it, stores it under the name it wants, applies it and
+   selects it on the spot — no window reload. The file from step 5 is only the
+   hand-off copy; say it can be deleted once the theme is in.
 
 ## Validation rules (the backend rejects anything else)
 
@@ -67,10 +70,12 @@ a theme dropped in `themes/` will not show up there, and vice versa.
 
 ## Traps
 
-- **A bad file copied straight into the themes directory disappears in
-  silence.** Invalid JSON, a failed rule, or a filename that isn't `<id>.json`
-  makes lich skip the theme with a warning in the log and nothing in the UI.
-  Run `validate.mjs`, or import through Settings.
+- **Copying a file into the themes directory is not installing it.** The theme
+  list is read once, at page load, so nothing appears until the window is
+  reloaded — the user is told the theme is in and cannot find it in Settings.
+  And a file that fails a rule, or is named anything but `<id>.json`, is skipped
+  with a warning in the log and nothing on screen. Import is the only path that
+  ends with the theme selected and the errors spelled out.
 - **A non-hex terminal color half-applies.** xterm parses hex directly;
   everything else goes through a round-trip that throws on translucency and is
   swallowed into a fallback. The backend rejects it up front — don't work around
@@ -131,4 +136,5 @@ Claude Code's own meta lines vanish.
 - [ ] `border` reads as a hairline, not a rule
 - [ ] `emerald-500` / `amber-500` / `destructive` still read on your surfaces
 - [ ] Terminal `background` sits well beside app `background` (they touch)
-- [ ] Installed as `<id>.json`, and the window reloaded
+- [ ] Handed over as a file path plus the Settings › Appearance › Import step —
+      never written into the themes directory
