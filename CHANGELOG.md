@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Theme skill.** Asking Claude for a lich theme — a palette ported from
+  somewhere else, a tweak to an installed one, or a fix for one lich refused —
+  no longer starts by reading `docs/themes.md` in the lich repository. The skill
+  carries the shape (31 app tokens plus the xterm palette), the role each token
+  actually plays in the interface, where the file goes on each OS, and the
+  failure modes that show nothing on screen: a file copied into the themes
+  directory under a name that is not `<id>.json`, a terminal color that is not
+  hex, a dark palette declared `light`. It ships the same starter template lich
+  hands out and a `validate.mjs` that checks a theme against the rules the
+  backend enforces on import.
+
 ## [0.3.1] - 2026-07-24
 
 ### Fixed
