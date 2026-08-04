@@ -1,6 +1,6 @@
 # lich-plugin
 
-The Claude Code side of the integration with **lich** — a harness that orchestrates `claude` sessions. This companion plugin is how lich observes and acts inside a running session. It currently ships only hooks; each integration point follows a contract documented in `docs/`.
+The Claude Code side of the integration with **lich** — a harness that orchestrates `claude` sessions. This companion plugin is how lich observes and acts inside a running session. It ships hooks — each following a contract documented in `docs/` — plus skills for work that targets lich itself.
 
 ## Structure
 
@@ -9,6 +9,7 @@ The Claude Code side of the integration with **lich** — a harness that orchest
 hooks/hooks.json             # hook registration
 hooks/                       # hook scripts (${CLAUDE_PLUGIN_ROOT}/hooks/<script>)
 docs/                        # lich ⇄ plugin communication contracts
+skills/                      # skills (skills/<name>/SKILL.md)
 ```
 
 ## Contracts
@@ -20,10 +21,15 @@ Contracts are **canonical in the lich repository** (`docs/hooks/` there); this p
 - [docs/session-title.md](docs/session-title.md) — auto-generated `ai-title` via `Stop`
 - [docs/session-touched.md](docs/session-touched.md) — git-status refresh signal via `PostToolUse` (file-mutating tools only)
 
+## Skills
+
+- [skills/theme](skills/theme/SKILL.md) — writing, porting and validating lich color themes. Mirrors the theme contract in the lich repository (`docs/themes.md` there); `template.json` is a copy of the starter lich itself hands out, and `validate.mjs` derives its token sets from that copy. A change to the theme shape in lich lands here too.
+
 ## Rules
 
 - A hook must never block or fail the user's turn: short timeout, errors swallowed, always exit 0.
 - Outside lich (env vars absent) every hook is a no-op with exit 0 — the plugin must be safe to install globally.
+- A skill must be useful from any working directory: the user runs `claude` on their own project, not on the lich checkout.
 
 ## Local testing
 

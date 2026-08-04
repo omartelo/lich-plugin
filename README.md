@@ -7,6 +7,10 @@ The Claude Code side of the [lich](https://github.com/omartelo/lich) integration
 - **session title** — names the card after Claude's auto-generated title (`Stop`)
 - **session touched** — refreshes the card's git status right after file-mutating tools (`PostToolUse`)
 
+It also ships skills for the parts of lich you configure from inside a session:
+
+- **theme** (`/lich:theme`) — write, port or fix a lich color theme: the app tokens, the xterm palette, where the file goes, and a validator for the rules that otherwise fail silently
+
 ## Structure
 
 ```
@@ -17,6 +21,7 @@ hooks/report-session-start.sh   # session-start hook
 hooks/report-title.sh           # session-title hook
 hooks/report-touched.sh         # session-touched hook
 docs/                           # client-side docs, one per contract
+skills/theme/                   # theme skill: SKILL.md, template.json, validate.mjs
 ```
 
 Hook scripts live in `hooks/` and are referenced from `hooks.json` via
