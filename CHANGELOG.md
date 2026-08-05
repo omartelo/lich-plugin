@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **The theme skill can build a theme repository, not just a file.** lich now
+  installs themes from a git repository and keeps them versioned by its
+  manifest, so the skill asks which of the two you want before it writes
+  anything: a single file for a palette you are trying out, a repository for
+  anything shared or anything you will keep changing. For a repository it
+  scaffolds the layout — `lich-theme.json` plus the themes beside it — writes
+  the themes, and hands over the install as a path to paste into Settings ›
+  Appearance › Import. It also spells out what shipping an update takes, which
+  is the part that is easy to get wrong: an edited theme under an unbumped
+  manifest version reads as already up to date and reaches nobody.
+- **`validate.mjs` accepts a directory.** Pointed at a repository it checks the
+  manifest and every theme in one run, the way an install reads them — including
+  what a single file has no way to get wrong: a missing or pre-release version,
+  no themes beside the manifest, two files claiming the same id.
+
 ## [0.4.1] - 2026-08-04
 
 ### Fixed
