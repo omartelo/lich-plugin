@@ -1,0 +1,21 @@
+{
+  "name": "lich",
+  "version": "0.5.0",
+  "description": "Codex CLI plugin for the lich harness",
+  "author": {
+    "name": "omartelo"
+  },
+  "homepage": "https://github.com/omartelo/lich-plugin",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/omartelo/lich-plugin.git"
+  },
+  "keywords": [
+    "lich",
+    "harness",
+    "hooks",
+    "codex-cli"
+  ],
+  "skills": "./skills/",
+  "hooks": "./hooks/codex-hooks.json"
+}

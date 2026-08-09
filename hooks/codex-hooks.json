@@ -5,7 +5,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "${CLAUDE_PLUGIN_ROOT}/hooks/report-session-start.sh claude"
+            "command": "\"$CLAUDE_PLUGIN_ROOT/hooks/report-session-start.sh\" codex",
+            "timeout": 5
           }
         ]
       }
@@ -15,7 +16,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "${CLAUDE_PLUGIN_ROOT}/hooks/report-state.sh busy"
+            "command": "\"$CLAUDE_PLUGIN_ROOT/hooks/report-state.sh\" busy",
+            "timeout": 5
           }
         ]
       }
@@ -25,26 +27,29 @@
         "hooks": [
           {
             "type": "command",
-            "command": "${CLAUDE_PLUGIN_ROOT}/hooks/report-state.sh busy"
+            "command": "\"$CLAUDE_PLUGIN_ROOT/hooks/report-state.sh\" busy",
+            "timeout": 5
           }
         ]
       },
       {
-        "matcher": "Edit|Write|NotebookEdit|Bash",
+        "matcher": "apply_patch|Edit|Write|Bash",
         "hooks": [
           {
             "type": "command",
-            "command": "${CLAUDE_PLUGIN_ROOT}/hooks/report-touched.sh"
+            "command": "\"$CLAUDE_PLUGIN_ROOT/hooks/report-touched.sh\"",
+            "timeout": 5
           }
         ]
       }
     ],
-    "Notification": [
+    "PermissionRequest": [
       {
         "hooks": [
           {
             "type": "command",
-            "command": "${CLAUDE_PLUGIN_ROOT}/hooks/report-state.sh waiting"
+            "command": "\"$CLAUDE_PLUGIN_ROOT/hooks/report-state.sh\" waiting",
+            "timeout": 5
           }
         ]
       }
@@ -54,11 +59,13 @@
         "hooks": [
           {
             "type": "command",
-            "command": "${CLAUDE_PLUGIN_ROOT}/hooks/report-state.sh done"
+            "command": "\"$CLAUDE_PLUGIN_ROOT/hooks/report-state.sh\" done",
+            "timeout": 5
           },
           {
             "type": "command",
-            "command": "${CLAUDE_PLUGIN_ROOT}/hooks/report-title.sh"
+            "command": "\"$CLAUDE_PLUGIN_ROOT/hooks/report-title.sh\"",
+            "timeout": 5
           }
         ]
       }
@@ -68,7 +75,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "${CLAUDE_PLUGIN_ROOT}/hooks/report-state.sh idle"
+            "command": "\"$CLAUDE_PLUGIN_ROOT/hooks/report-state.sh\" idle",
+            "timeout": 3
           }
         ]
       }
