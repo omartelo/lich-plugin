@@ -7,6 +7,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **The plugin installs on OpenAI Codex too.** Same repository, same hook
+  scripts, same skills — a second manifest (`.codex-plugin/plugin.json`), a
+  second marketplace file (`.agents/plugins/marketplace.json`) and a second
+  hook registration (`hooks/codex-hooks.json`) are all it takes, because Codex
+  exposes what a report needs under the same names: `session_id` and
+  `transcript_path` on stdin, `$CLAUDE_PLUGIN_ROOT` in the environment. A lich
+  card therefore shows the same spinner, check, bell and git status for a Codex
+  session as for a Claude one. Two differences are handled in the registration:
+  "your turn" arrives as `PermissionRequest` instead of `Notification`, and
+  Codex writes files through `apply_patch`. Codex asks you to trust a plugin's
+  hooks once (`/hooks`) before it runs them.
+- **`report-title.sh` reads Codex transcripts.** Codex generates no title — it
+  names a thread after its first user message — so with no `ai-title` present
+  the hook falls back to the rollout's first `user_message`, first line, cut to
+  80 characters. The card gets the label Codex itself shows, trimmed to size.
+- **The session-start report says which provider sent it.**
+  `report-session-start.sh` takes the provider id as its argument, passed by the
+  registration that runs it (`claude` from `hooks.json`, `codex` from
+  `codex-hooks.json`), so a lich card shows the icon of the CLI actually running
+  in its terminal and resumes it with that CLI's own invocation. Needs lich ≥
+  0.28.0; an older lich ignores the field and reads every report as Claude's, as
+  before.
+- **[docs/providers.md](docs/providers.md)** — which file each harness reads,
+  where the event vocabularies differ, what adding a third provider takes. The
+  per-contract docs now carry one event column per provider.
+
+### Known ceilings on Codex
+
+- Codex has no `SessionEnd` event, so nothing reports `idle` there: a card keeps
+  its last indicator until lich respawns its terminal. The registration keeps
+  the entry, which starts working if Codex ever adds the event.
+
 ## [0.5.0] - 2026-08-05
 
 ### Added
