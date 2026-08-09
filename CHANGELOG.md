@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-08-09
+
 ### Added
 
 - **The plugin installs on OpenAI Codex too.** Same repository, same hook
@@ -19,7 +21,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   session as for a Claude one. Two differences are handled in the registration:
   "your turn" arrives as `PermissionRequest` instead of `Notification`, and
   Codex writes files through `apply_patch`. Codex asks you to trust a plugin's
-  hooks once (`/hooks`) before it runs them.
+  hooks once (`/hooks`) before it runs them, and skips them silently until you
+  do. One report has no Codex half at all: Codex has no `SessionEnd` event, so
+  nothing reports `idle` there and a card keeps its last indicator until lich
+  respawns its terminal. The registration keeps the entry, which starts working
+  if Codex ever adds the event.
 - **`report-title.sh` reads Codex transcripts.** Codex generates no title — it
   names a thread after its first user message — so with no `ai-title` present
   the hook falls back to the rollout's first `user_message`, first line, cut to
@@ -34,12 +40,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **[docs/providers.md](docs/providers.md)** — which file each harness reads,
   where the event vocabularies differ, what adding a third provider takes. The
   per-contract docs now carry one event column per provider.
-
-### Known ceilings on Codex
-
-- Codex has no `SessionEnd` event, so nothing reports `idle` there: a card keeps
-  its last indicator until lich respawns its terminal. The registration keeps
-  the entry, which starts working if Codex ever adds the event.
 
 ## [0.5.0] - 2026-08-05
 
@@ -169,7 +169,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   plugin is safe to install globally. Requests time out after ~1s and errors
   are swallowed — the hook never blocks or fails the turn.
 
-[Unreleased]: https://github.com/omartelo/lich-plugin/compare/v0.5.0...HEAD
+[Unreleased]: https://github.com/omartelo/lich-plugin/compare/v0.6.0...HEAD
+[0.6.0]: https://github.com/omartelo/lich-plugin/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/omartelo/lich-plugin/compare/v0.4.1...v0.5.0
 [0.4.1]: https://github.com/omartelo/lich-plugin/compare/v0.4.0...v0.4.1
 [0.4.0]: https://github.com/omartelo/lich-plugin/compare/v0.3.1...v0.4.0
