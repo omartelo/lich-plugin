@@ -21,6 +21,7 @@ It also ships skills for the parts of lich you configure from inside a session:
 hooks/hooks.json                  # hook registration, Claude Code
 hooks/codex-hooks.json            # hook registration, Codex
 hooks/report-state.sh             # session-state hook
+hooks/report-tool.sh              # session-state hook: the tool a turn is running
 hooks/report-session-start.sh     # session-start hook
 hooks/report-title.sh             # session-title hook
 hooks/report-touched.sh           # session-touched hook

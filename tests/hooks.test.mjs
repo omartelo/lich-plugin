@@ -230,6 +230,7 @@ const HOOK_FILES = [
 
 const SCRIPTS = {
   'report-state.sh': '/hook',
+  'report-tool.sh': '/hook',
   'report-session-start.sh': '/session-start',
   'report-title.sh': '/session-title',
   'report-touched.sh': '/session-touched',
@@ -305,7 +306,7 @@ function codexTranscript(message, name = 'codex.jsonl') {
 function binWithout(missing) {
   const dir = path.join(TMP, `bin-without-${missing}`)
   mkdirSync(dir, { recursive: true })
-  for (const tool of ['sh', 'sed', 'grep', 'cut', 'head', 'tail', 'curl', 'jq']) {
+  for (const tool of ['sh', 'sed', 'grep', 'cut', 'head', 'tail', 'cat', 'curl', 'jq']) {
     if (tool === missing) continue
     const found = spawnSync('sh', ['-c', `command -v ${tool}`], { encoding: 'utf8' }).stdout.trim()
     if (!found) continue
@@ -328,6 +329,18 @@ const TRANSCRIPT = {
   codex: codexTranscript('Fix the replay ring overflow\nand its second line'),
 }
 
+/**
+ * The tool call a PreToolUse payload describes. Both harnesses spell the
+ * envelope the same way (`tool_name` / `tool_input`), and Codex reports a shell
+ * call as `Bash` with a plain-string `command` exactly as Claude Code does —
+ * verified against a real `codex exec` run, not assumed. Its one own word is
+ * `apply_patch` (see the details table below).
+ */
+const TOOL_CALL = {
+  claude: { tool_name: 'Bash', tool_input: { command: 'pnpm test', description: 'run the suite' } },
+  codex: { tool_name: 'Bash', tool_input: { command: 'go test ./...' } },
+}
+
 /** What the harness puts on stdin for the event this registration rides. */
 function stdinFor({ provider, event }) {
   return JSON.stringify({
@@ -335,6 +348,7 @@ function stdinFor({ provider, event }) {
     transcript_path: TRANSCRIPT[provider],
     cwd: ROOT,
     hook_event_name: event,
+    ...(event === 'PreToolUse' ? TOOL_CALL[provider] : {}),
   })
 }
 
@@ -426,6 +440,10 @@ for (const registration of REGISTRATIONS) {
       const { body } = assertContractHonoured(endpoint, stub.requests[0])
       assert.equal(body.session_id, LICH_SESSION_ID)
       if (script === 'report-state.sh') assert.equal(body.state, argument)
+      if (script === 'report-tool.sh') {
+        assert.equal(body.state, 'busy')
+        assert.equal(body.tool, TOOL_CALL[provider].tool_name)
+      }
       if (script === 'report-session-start.sh') {
         assert.equal(body.provider, provider)
         assert.equal(body.provider_session_id, PROVIDER_SESSION_ID[provider])
@@ -537,12 +555,149 @@ test('session-title no-ops when the transcript is missing', async () => {
   })
 })
 
+// ---------------------------------------------------------- the tool report --
+
+/** Runs report-tool.sh against a PreToolUse payload and returns the stub's view. */
+async function runToolHook(payload, { env = {} } = {}) {
+  return withStub(async (stub) => {
+    const result = await runHook(`"${ROOT}/hooks/report-tool.sh"`, {
+      env: { ...lichEnv(stub.port), ...env },
+      stdin: JSON.stringify({ session_id: 's', hook_event_name: 'PreToolUse', ...payload }),
+    })
+    assertSilentSuccess(result)
+    return { requests: stub.requests }
+  })
+}
+
+test('report-tool no-ops when the payload names no tool', async () => {
+  const { requests } = await runToolHook({ tool_input: { command: 'pnpm test' } })
+  assert.equal(requests.length, 0, `reported a tool it was never given: ${requests[0]?.raw}`)
+})
+
+test('report-tool no-ops when the tool name is empty', async () => {
+  const { requests } = await runToolHook({ tool_name: '', tool_input: {} })
+  assert.equal(requests.length, 0, `reported an empty tool: ${requests[0]?.raw}`)
+})
+
+// The detail is optional in the contract: absent, not blank. A blank one is a
+// shape no accept case carries, which assertContractHonoured would catch.
+test('report-tool omits the detail when the call carries nothing to say', async () => {
+  const { requests } = await runToolHook({ tool_name: 'Read', tool_input: {} })
+  const { body, match } = assertContractHonoured('/hook', requests[0])
+  assert.equal(match, 'a tool with nothing to say about it')
+  assert.equal(body.tool, 'Read')
+  assert.ok(!('detail' in body), `sent a detail anyway: ${requests[0].raw}`)
+})
+
+// The field, not the tool name, is what one rule can cover for both harnesses.
+// The payloads here are the ones a real run produces — the Codex shapes were
+// taken off `codex exec` against a stub listener.
+const DETAILS = [
+  ['a command line', { tool_name: 'Bash', tool_input: { command: 'pnpm test' } }, 'pnpm test'],
+  [
+    'the file a codex patch adds',
+    {
+      tool_name: 'apply_patch',
+      tool_input: { command: '*** Begin Patch\n*** Add File: probe.txt\n+hello\n*** End Patch' },
+    },
+    'probe.txt',
+  ],
+  [
+    'the file a codex patch updates',
+    {
+      tool_name: 'apply_patch',
+      tool_input: {
+        command: '*** Begin Patch\n*** Update File: internal/terminal/usage.go\n@@\n-a\n+b\n',
+      },
+    },
+    'internal/terminal/usage.go',
+  ],
+  [
+    'the file an edit acts on, against the session directory',
+    { cwd: '/w', tool_name: 'Edit', tool_input: { file_path: '/w/internal/terminal/usage.go' } },
+    'internal/terminal/usage.go',
+  ],
+  [
+    'a file outside the session directory by its name alone',
+    { cwd: '/w', tool_name: 'Read', tool_input: { file_path: '/etc/hosts' } },
+    'hosts',
+  ],
+  [
+    'a command that starts with a path, uncut',
+    { cwd: '/w', tool_name: 'Bash', tool_input: { command: '/usr/bin/env node build.mjs' } },
+    '/usr/bin/env node build.mjs',
+  ],
+  ['a search pattern', { tool_name: 'Grep', tool_input: { pattern: 'statusEvent' } }, 'statusEvent'],
+  [
+    'a fetched url',
+    { tool_name: 'WebFetch', tool_input: { url: 'https://example.com/a' } },
+    'https://example.com/a',
+  ],
+]
+
+for (const [label, payload, want] of DETAILS) {
+  test(`report-tool names ${label}`, async () => {
+    const { requests } = await runToolHook(payload)
+    const { body } = assertContractHonoured('/hook', requests[0])
+    assert.equal(body.state, 'busy')
+    assert.equal(body.tool, payload.tool_name)
+    assert.equal(body.detail, want)
+  })
+}
+
+// The whole patch is what Codex passes as the command, so the plain rule would
+// put its envelope on the card. A patch naming no file leaves nothing readable,
+// and the tool name goes alone rather than "*** Begin Patch".
+test('report-tool sends the tool alone when a patch names no file', async () => {
+  const { requests } = await runToolHook({
+    tool_name: 'apply_patch',
+    tool_input: { command: '*** Begin Patch\nmalformed' },
+  })
+  const { body, match } = assertContractHonoured('/hook', requests[0])
+  assert.equal(match, 'a tool with nothing to say about it')
+  assert.equal(body.tool, 'apply_patch')
+  assert.ok(!('detail' in body), `put a patch envelope on the card: ${requests[0].raw}`)
+})
+
+test('report-tool escapes a detail that would break the JSON body', async () => {
+  const command = 'grep -n "state" internal/*.go | sed \'s/\\t/ /g\''
+  const { requests } = await runToolHook({ tool_name: 'Bash', tool_input: { command } })
+  const { body } = assertContractHonoured('/hook', requests[0])
+  assert.equal(body.detail, command)
+})
+
+// A card is one line high; the rest of a heredoc has nowhere to go.
+test('report-tool sends one line of a multi-line command', async () => {
+  const { requests } = await runToolHook({
+    tool_name: 'Bash',
+    tool_input: { command: 'cat <<EOF\nfirst\nsecond\nEOF' },
+  })
+  const { body } = assertContractHonoured('/hook', requests[0])
+  assert.equal(body.detail, 'cat <<EOF')
+})
+
+// Windows ships sed (Git Bash) but rarely jq. The name still gets through; the
+// detail does not, because a hand-built body cannot escape arbitrary text.
+test('report-tool reports the tool alone without jq', async () => {
+  const { requests } = await runToolHook(
+    { tool_name: 'Bash', tool_input: { command: 'pnpm test' } },
+    { env: { PATH: binWithout('jq') } },
+  )
+  const { body, match } = assertContractHonoured('/hook', requests[0])
+  assert.equal(match, 'a tool with nothing to say about it')
+  assert.equal(body.tool, 'Bash')
+  assert.ok(!('detail' in body), `built a detail without jq: ${requests[0].raw}`)
+})
+
 // 5: the client rules — a hook must never block or fail the user's turn.
+// `event` is the payload the script is fed: only report-tool.sh reads fields
+// that a SessionStart payload does not carry.
 const EVERY_SCRIPT = [
-  { script: 'report-state.sh', argument: 'busy' },
-  { script: 'report-session-start.sh', argument: 'claude' },
-  { script: 'report-title.sh', argument: '' },
-  { script: 'report-touched.sh', argument: '' },
+  { script: 'report-state.sh', argument: 'busy', event: 'SessionStart' },
+  { script: 'report-tool.sh', argument: '', event: 'PreToolUse' },
+  { script: 'report-session-start.sh', argument: 'claude', event: 'SessionStart' },
+  { script: 'report-title.sh', argument: '', event: 'SessionStart' },
+  { script: 'report-touched.sh', argument: '', event: 'SessionStart' },
 ]
 
 const PARTIAL_ENVS = {
@@ -553,14 +708,14 @@ const PARTIAL_ENVS = {
   'blank LICH_SESSION_ID': { LICH_PORT: '1', LICH_TOKEN: TOKEN, LICH_SESSION_ID: '' },
 }
 
-for (const { script, argument } of EVERY_SCRIPT) {
+for (const { script, argument, event } of EVERY_SCRIPT) {
   for (const [label, env] of Object.entries(PARTIAL_ENVS)) {
     test(`${script} no-ops outside lich: ${label}`, async () => {
       await withStub(async (stub) => {
         const result = await runHook(`"${ROOT}/hooks/${script}" ${argument}`.trim(), {
           // LICH_PORT points at the stub so a leak would be caught, not refused.
           env: { ...env, ...(('LICH_PORT' in env) ? { LICH_PORT: String(stub.port) } : {}) },
-          stdin: stdinFor({ provider: 'claude', event: 'SessionStart' }),
+          stdin: stdinFor({ provider: 'claude', event }),
         })
         assertSilentSuccess(result)
         assert.equal(stub.requests.length, 0, 'reported without a full lich environment')
@@ -573,7 +728,7 @@ for (const { script, argument } of EVERY_SCRIPT) {
       async (stub) => {
         const result = await runHook(`"${ROOT}/hooks/${script}" ${argument}`.trim(), {
           env: lichEnv(stub.port),
-          stdin: stdinFor({ provider: 'claude', event: 'SessionStart' }),
+          stdin: stdinFor({ provider: 'claude', event }),
         })
         assertSilentSuccess(result)
         assert.equal(stub.requests.length, 1)
@@ -588,7 +743,7 @@ for (const { script, argument } of EVERY_SCRIPT) {
     await stub.close() // nothing listens on that port any more
     const result = await runHook(`"${ROOT}/hooks/${script}" ${argument}`.trim(), {
       env: lichEnv(port),
-      stdin: stdinFor({ provider: 'claude', event: 'SessionStart' }),
+      stdin: stdinFor({ provider: 'claude', event }),
     })
     assertSilentSuccess(result)
   })

@@ -9,6 +9,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **The card says which tool the agent is running.** A new `report-tool.sh`
+  rides `PreToolUse` in both harnesses and reports the same `busy` with two
+  extra fields — the tool's name and what it acts on — which lich draws under
+  the session's label and clears when the turn leaves `busy`. The detail is read
+  by field rather than by tool name (`command`, then `file_path`, then
+  `pattern` / `url` / `query`), which is what lets one rule cover both: Codex
+  reports a shell call as `Bash` carrying the same `command` string Claude Code
+  sends. Two shapes needed more: `apply_patch` passes the whole patch as its
+  command, so the file its `*** Add File:` line names is what goes on the card,
+  and an absolute path is shortened against the session's directory, because
+  both harnesses report full ones and a card is 240px wide. Without `jq` the
+  tool name still goes out; the detail does not. Needs lich ≥ 0.29.0 — an older
+  one ignores the two fields.
+
+  `PreToolUse` is the first contract event on the agent's critical path: a hook
+  exiting `2` there blocks the tool call. Until now the worst a broken script
+  could do was lose a status report.
+
 - **The hook payloads are asserted against lich's contract fixtures.** lich
   publishes every hook contract as bytes (`docs/hooks/fixtures/*.jsonl` there,
   one case per line: the payloads it accepts and the ones it refuses) and
