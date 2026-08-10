@@ -1,0 +1,31 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    name: hook contract tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: node --test tests/*.test.mjs
+
+  fixtures-drift:
+    name: fixtures match lich
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Refresh from omartelo/lich@main
+        run: tests/refresh-fixtures.sh
+      - name: Fail if the vendored copies drifted
+        run: |
+          git diff --exit-code -- tests/fixtures || {
+            echo "::error::A hook contract moved in lich. Run tests/refresh-fixtures.sh, then make the scripts match."
+            exit 1
+          }

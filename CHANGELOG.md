@@ -7,6 +7,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **The hook payloads are asserted against lich's contract fixtures.** lich
+  publishes every hook contract as bytes (`docs/hooks/fixtures/*.jsonl` there,
+  one case per line: the payloads it accepts and the ones it refuses) and
+  asserts its endpoints against them. This repository now asserts the other
+  half: `node --test tests/*.test.mjs` runs every hook script as a real
+  subprocess — from the command line its registration actually spells, for both
+  harnesses — against a stub HTTP server, and checks the body it POSTs matches
+  an accepted shape, matches no rejected one, lands on the right endpoint with
+  the right `?token=`, and never sends the deprecated `claude_session_id`. It
+  also pins the client rules: no report without the full lich environment, exit
+  0 and silence when lich answers 500 or refuses the connection. The fixtures
+  are vendored (`tests/fixtures/`, refreshed by `tests/refresh-fixtures.sh`) so
+  the suite never needs the network, and CI diffs the copies against lich on
+  every run. A field that moves in either repository now goes red in both.
+
+### Fixed
+
+- **A blank session title is no longer reported.** `report-title.sh` checked
+  that it had extracted *something* before posting, which a title of nothing but
+  spaces passes — and lich rejects a blank title with a 400. Codex made it
+  reachable: it names a thread after its first user message, so a prompt whose
+  first line is indentation produced exactly that payload. The title is trimmed
+  before the check now, which also matches what lich stores.
+
 ## [0.6.0] - 2026-08-09
 
 ### Added

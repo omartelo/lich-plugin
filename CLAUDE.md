@@ -14,6 +14,7 @@ hooks/codex-hooks.json            # hook registration, Codex
 hooks/                            # hook scripts ($CLAUDE_PLUGIN_ROOT/hooks/<script>, both)
 docs/                             # lich ⇄ plugin communication contracts
 skills/                           # skills (skills/<name>/SKILL.md, both)
+tests/                            # hook payloads asserted against lich's fixtures
 ```
 
 ## Contracts
@@ -31,8 +32,31 @@ Each doc carries the event mapping for **every** provider, one column each — a
 
 - [skills/theme](skills/theme/SKILL.md) — writing, porting and validating lich color themes, as a single file or as a versioned theme repository. Mirrors the theme contract in the lich repository (`docs/themes.md` there); `template.json` is a copy of the starter lich itself hands out, and `validate.mjs` derives its token sets from that copy. A change to the theme shape, or to the repository contract, lands here too.
 
+## Tests
+
+```bash
+node --test tests/*.test.mjs
+```
+
+[tests/hooks.test.mjs](tests/hooks.test.mjs) drives every hook script as a real
+subprocess — the command line taken from the registration each harness reads —
+against a stub HTTP server, and asserts the body it POSTs against lich's
+contract fixtures: an accepted shape, no rejected one, the right endpoint and
+`?token=`, no deprecated `claude_session_id`, plus the client rules (no lich
+environment → no report, exit 0 on a 500 or a refused connection). Node only,
+no dependencies.
+
+The fixtures are vendored in `tests/fixtures/` from lich
+(`docs/hooks/fixtures/*.jsonl` there) by
+[tests/refresh-fixtures.sh](tests/refresh-fixtures.sh), so the suite never needs
+the network; CI diffs the copies against upstream and fails on drift.
+
 ## Rules
 
+- **The fixtures are upstream truth — never edit one to get a green run.** A
+  payload that disagrees with a fixture is a bug in the script, or a contract
+  change that lands in lich first (prose, then fixtures, then its endpoint, then
+  here).
 - A hook must never block or fail the user's turn: short timeout, errors swallowed, always exit 0. On Codex the exit code is louder still — `2` on `PermissionRequest` denies the request, so silence and exit 0 are what keep a report an observation.
 - Outside lich (env vars absent) every hook is a no-op with exit 0 — the plugin must be safe to install globally.
 - A skill must be useful from any working directory: the user runs the agent CLI on their own project, not on the lich checkout.
