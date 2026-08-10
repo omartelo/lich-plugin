@@ -23,8 +23,9 @@ harness it supports:
 The repository root is the plugin root for both, so a single clone installs on
 either CLI. The scripts are shared because both harnesses expose the same
 things a report needs: the payload arrives as JSON on stdin with `session_id`
-and `transcript_path`, and `$CLAUDE_PLUGIN_ROOT` points at the installed plugin
-— Codex sets that same variable, so the command lines are identical.
+and `transcript_path` (and `tool_name` / `tool_input` / `cwd` on a pre-tool
+event), and `$CLAUDE_PLUGIN_ROOT` points at the installed plugin — Codex sets
+that same variable, so the command lines are identical.
 
 ## Event vocabulary
 
@@ -32,6 +33,7 @@ and `transcript_path`, and `$CLAUDE_PLUGIN_ROOT` points at the installed plugin
 |---------------------|------------------------------|------------------------------|
 | session id          | `SessionStart`               | `SessionStart`               |
 | `busy`              | `UserPromptSubmit`, `PostToolUse` | `UserPromptSubmit`, `PostToolUse` |
+| `busy` + tool       | `PreToolUse`                 | `PreToolUse`                 |
 | `waiting`           | `Notification`               | `PermissionRequest`          |
 | `done` + title      | `Stop`                       | `Stop`                       |
 | `idle`              | `SessionEnd`                 | — (registered, never fires)  |
