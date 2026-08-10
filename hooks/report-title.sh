@@ -24,6 +24,10 @@ if [ -z "$title" ]; then
     | head -n 1 | cut -c 1-80)
 fi
 
+# lich rejects a blank title (400): a Codex first line can be nothing but
+# spaces, and an ai-title could in principle be padded. Trim before deciding
+# there is a title at all — command substitution above only ate the newlines.
+title=$(printf '%s' "$title" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
 [ -n "$title" ] || exit 0
 
 body=$(jq -cn --arg sid "$LICH_SESSION_ID" --arg title "$title" \

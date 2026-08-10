@@ -26,6 +26,7 @@ hooks/report-title.sh             # session-title hook
 hooks/report-touched.sh           # session-touched hook
 docs/                             # client-side docs, one per contract
 skills/theme/                     # theme skill: SKILL.md, template.json, validate.mjs
+tests/                            # hook payloads asserted against lich's fixtures
 ```
 
 One set of hook scripts serves both harnesses — they live in `hooks/` and are referenced via `$CLAUDE_PLUGIN_ROOT/hooks/<script>`, a variable Codex sets too. [docs/providers.md](docs/providers.md) maps the layout and the two harnesses' event names.
@@ -81,3 +82,11 @@ Outside lich (env vars absent) the hooks are a no-op — the plugin is safe to i
 ```bash
 claude --plugin-dir .
 ```
+
+## Tests
+
+```bash
+node --test tests/*.test.mjs
+```
+
+Every hook script runs as a real subprocess, from the command line its registration spells, against a stub HTTP server — and the body it POSTs is asserted against [lich's contract fixtures](https://github.com/omartelo/lich/tree/main/docs/hooks/fixtures): an accepted shape, never a rejected one, the right endpoint and token, plus the client rules (no lich environment → no report; exit 0 when lich answers 500 or refuses the connection). The fixtures are vendored in `tests/fixtures/` by `tests/refresh-fixtures.sh`; CI diffs them against upstream so a contract that moves in lich goes red here.
