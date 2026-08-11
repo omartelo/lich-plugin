@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **opencode sessions can drive the sessions beside them.** They could already
+  report what they were doing; now they can act — list the other sessions, hand
+  one a task and wait for its answer, answer one that asked, open a session
+  (with a git worktree under it), close one, and read what is in each checkout.
+  Claude Code and Codex get those operations as MCP tools lich registers when it
+  spawns them; opencode cannot be told about a server on its command line, and a
+  plugin there cannot register one either — but it can define tools, so the same
+  seven are defined here, under the same names.
+
+  Each one runs the `lich` binary rather than talking to lich directly, which is
+  what keeps every rule about them — what is required, what is refused, what a
+  refusal says — in the one place it is written. Nothing is registered outside a
+  lich session, and nothing is registered when opencode's plugin package cannot
+  be imported; the reports go on working in both cases.
+
 ## [0.8.0] - 2026-08-11
 
 ### Added

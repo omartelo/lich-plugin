@@ -36,7 +36,210 @@ function detailOf(args) {
   return undefined
 }
 
-export const LichPlugin = async () => {
+// The lich command every tool below shells out to. lich exports it into each
+// PTY it spawns, and the contract says to call *that* one rather than whatever
+// `lich` resolves to on PATH: a machine running an installed lich beside a
+// `task dev` build has two, and only this one belongs to the session.
+function lichBin() {
+  return process.env.LICH_BIN || "lich"
+}
+
+// How long a tool that waits on another session may block. It mirrors the cap
+// lich's own MCP server applies (docs/cli.md, mcpMaxWait): the ticket is what
+// makes a short wait cheap, so a wait that ends unanswered costs one more tool
+// call rather than a call that hangs.
+const MAX_WAIT_SECONDS = 90
+
+function waitSeconds(asked) {
+  const seconds = Number(asked)
+  if (!Number.isFinite(seconds) || seconds <= 0 || seconds > MAX_WAIT_SECONDS) {
+    return MAX_WAIT_SECONDS
+  }
+  return Math.floor(seconds)
+}
+
+// flag builds one optional argument pair, dropping it when the value is empty —
+// an empty --project would narrow to a project named "".
+function flag(name, value) {
+  return typeof value === "string" && value !== "" ? [name, value] : []
+}
+
+// runner turns a tool call into a `lich` invocation.
+//
+// Shelling out rather than posting to the endpoint directly is deliberate. lich
+// documents one contract (docs/cli.md) and already implements it twice — the
+// command line and the MCP server, both in Go. A third implementation here, in
+// another repository, is one an argument change would leave behind silently.
+// This way what lives here is the argv, and every refusal, every wording and
+// every rule about worktrees and force stays where it is written.
+//
+// The command's own stderr is the answer on failure: those messages are written
+// to be read by an agent — they name what was refused and what to do about it.
+function runner($) {
+  return async (args) => {
+    const result = await $`${lichBin()} ${args}`.nothrow().quiet()
+    const stdout = result.stdout?.toString().trim() ?? ""
+    if (result.exitCode !== 0) {
+      return result.stderr?.toString().trim() || stdout || `lich exited ${result.exitCode}`
+    }
+    return stdout
+  }
+}
+
+// lichTools is the other half of this plugin: the reports above tell lich what a
+// session is doing, and these let that session act on the ones beside it.
+//
+// opencode has no way to register an MCP server from a plugin, which is how
+// Claude Code and Codex get the same operations — but it does let a plugin
+// define tools, so the tools are defined here and the transport disappears.
+//
+// Two guards, both about not breaking what already works:
+//
+//   - Nothing is registered outside lich. The module is a no-op there by
+//     design, and seven tools that could only answer "no lich is running" would
+//     be seven tools in every unrelated opencode session's prompt.
+//   - The helper is imported at run time, inside a try. It resolves from
+//     opencode's own plugin dependencies, and a plugin dropped somewhere they
+//     do not reach would otherwise fail at import — taking the reports, which
+//     need nothing, down with the tools.
+// helper is the injection seam the suite uses: opencode's package resolves from
+// its own plugin dependencies, which a checkout of this repository does not
+// have, and the argv these tools build is worth testing without it.
+export async function lichTools($, helper) {
+  if (!$ || !process.env.LICH_PORT || !process.env.LICH_TOKEN || !process.env.LICH_SESSION_ID) {
+    return null
+  }
+  let tool = helper
+  if (!tool) {
+    try {
+      ;({ tool } = await import("@opencode-ai/plugin"))
+    } catch {
+      return null
+    }
+  }
+  if (typeof tool !== "function" || !tool.schema) return null
+
+  const s = tool.schema
+  const run = runner($)
+  const session = s.string().describe("The session, by the label on its card or the name it answers to.")
+  const project = s.string().optional().describe("Project to narrow to, when the same label exists in more than one.")
+
+  return {
+    list_sessions: tool({
+      description:
+        "The lich sessions you can give work to right now, as JSON. Each carries the label on " +
+        "its card and the name it answers to; either addresses it.",
+      args: {},
+      execute: () => run(["sessions", "--json"]),
+    }),
+
+    send_to_session: tool({
+      description:
+        "Give a task to another lich session and wait for its agent to answer. The answer comes " +
+        "back as that agent wrote it. If the wait runs out the task is still delivered and you " +
+        "get a ticket to pick the answer up with — carry on and it arrives at your own prompt.",
+      args: {
+        session,
+        prompt: s.string().describe("What to ask that session's agent to do."),
+        project,
+        timeout_seconds: s.number().optional().describe("Seconds to wait. Capped at 90."),
+      },
+      execute: (args) =>
+        run([
+          "send",
+          ...flag("--project", args.project),
+          "--timeout",
+          String(waitSeconds(args.timeout_seconds)),
+          args.session,
+          args.prompt,
+        ]),
+    }),
+
+    wait_for_answer: tool({
+      description: "Wait again on a ticket an earlier send handed back.",
+      args: {
+        ticket: s.string().describe("The ticket from a previous send."),
+        timeout_seconds: s.number().optional().describe("Seconds to wait. Capped at 90."),
+      },
+      execute: (args) =>
+        run(["wait", "--timeout", String(waitSeconds(args.timeout_seconds)), args.ticket]),
+    }),
+
+    reply_to_session: tool({
+      description:
+        "Answer a task another session sent you. A relayed task names the ticket to use, and " +
+        "that ticket is the only way back: whoever asked is blocked on it and reading nothing " +
+        "else. Do not answer by messaging a peer session instead.",
+      args: {
+        ticket: s.string().describe("The ticket named in the task you were given."),
+        answer: s.string().describe("Your answer, in full."),
+      },
+      execute: (args) => run(["reply", args.ticket, args.answer]),
+    }),
+
+    open_session: tool({
+      description:
+        "Open a new lich session and start it, so it can be given work with send_to_session. " +
+        "Optionally creates a git worktree first and roots the new session in it, which is how " +
+        "you give a task its own checkout instead of sharing yours. A branch that is already " +
+        "checked out is opened rather than created again.",
+      args: {
+        project: s.string().optional().describe("Project to open it in. Defaults to your own."),
+        kind: s
+          .string()
+          .optional()
+          .describe("What it runs: claude, codex, opencode, omp, crush or shell. Defaults to yours."),
+        worktree: s.string().optional().describe("Branch name for the worktree to root it in."),
+        base: s.string().optional().describe("Branch the new worktree starts from."),
+      },
+      execute: (args) =>
+        run([
+          "open",
+          ...flag("--project", args.project),
+          ...flag("--kind", args.kind),
+          ...flag("--worktree", args.worktree),
+          ...flag("--base", args.base),
+        ]),
+    }),
+
+    close_session: tool({
+      description:
+        "Close a lich session. Closing the last session in a git worktree decides what happens " +
+        "to that checkout, so it needs the worktree argument: keep it on disk (the session is " +
+        "parked, and opening that branch again resumes its conversation) or remove it. A " +
+        "checkout with uncommitted work is only removed with force, because what that discards " +
+        "is in no commit and on no remote — ask the user first. You cannot close your own session.",
+      args: {
+        session,
+        project,
+        worktree: s
+          .string()
+          .optional()
+          .describe('Required for a worktree\'s last session: "keep" or "remove".'),
+        force: s.boolean().optional().describe("Remove a checkout that still has uncommitted work."),
+      },
+      execute: (args) =>
+        run([
+          "close",
+          ...flag("--project", args.project),
+          ...flag("--worktree", args.worktree),
+          ...(args.force === true ? ["--force"] : []),
+          args.session,
+        ]),
+    }),
+
+    list_worktrees: tool({
+      description:
+        "A project's git worktrees as JSON: what each is called, whether it has uncommitted " +
+        "work, and which sessions are open in it. Read it before opening a session on a branch " +
+        "and before closing one — the last session in a checkout decides that checkout's fate.",
+      args: { project: s.string().optional().describe("Project to list. Defaults to your own.") },
+      execute: (args) => run(["worktrees", "--json", ...flag("--project", args.project)]),
+    }),
+  }
+}
+
+export const LichPlugin = async ({ $ } = {}) => {
   // A sub-session (the `task` tool) reports its own status and would answer for
   // the card: its `idle` is a sub-agent finishing, not the turn ending. They are
   // known by the parentID their session events carry.
@@ -45,6 +248,8 @@ export const LichPlugin = async () => {
   // the timestamp. Holding it is what tells a real title apart from it later,
   // without matching on its wording.
   const bornTitles = new Map()
+
+  const tools = await lichTools($)
 
   const track = (properties) => {
     const info = properties?.info
@@ -104,5 +309,9 @@ export const LichPlugin = async () => {
       if (!input?.tool || subSessions.has(input.sessionID)) return
       report("hook", { state: "busy", tool: input.tool, detail: detailOf(output?.args) })
     },
+
+    // Absent outside lich, and absent when the helper cannot be imported: the
+    // reports above must work in both cases (see lichTools).
+    ...(tools ? { tool: tools } : {}),
   }
 }

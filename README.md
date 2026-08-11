@@ -9,6 +9,14 @@ The agent side of the [lich](https://github.com/omartelo/lich) integration. lich
 
 The four are what Claude Code, Codex and opencode report. **Crush reports two of them** — its session id and the git-status refresh — because `PreToolUse` is the only event it has, and a state nothing can end is worse on a card than no state. [docs/providers.md](docs/providers.md) has the event mapping per harness.
 
+On **opencode** it also carries the other direction: the seven operations lich
+offers a session for driving the sessions beside it — list, send, wait, reply,
+open, close, and read the worktrees — as tools of opencode's own. Claude Code and
+Codex get those as MCP tools lich registers when it spawns them; opencode cannot
+be told about a server on its command line, so they are defined in the module
+instead. [docs/opencode-tools.md](docs/opencode-tools.md) has the list and the
+two cases where they are deliberately absent.
+
 It also ships skills for the parts of lich you configure from inside a session:
 
 - **theme** (`/lich:theme` in Claude Code; on Codex the `theme` skill loads from its description) — write, port or fix a lich color theme: the app tokens, the xterm palette, where the file goes, and a validator for the rules that otherwise fail silently
@@ -28,7 +36,7 @@ hooks/report-tool.sh              # session-state hook: the tool a turn is runni
 hooks/report-session-start.sh     # session-start hook
 hooks/report-title.sh             # session-title hook
 hooks/report-touched.sh           # session-touched hook
-opencode/lich.js                  # opencode client: all four reports, one module
+opencode/lich.js                  # opencode client: all four reports plus the seven tools, one module
 docs/                             # client-side docs, one per contract
 skills/theme/                     # theme skill: SKILL.md, template.json, validate.mjs
 tests/                            # hook payloads asserted against lich's fixtures
