@@ -1,6 +1,6 @@
 # lich-plugin
 
-The agent side of the integration with **lich** — a harness that orchestrates agent CLI sessions. This companion plugin is how lich observes and acts inside a running session. It ships hooks — each following a contract documented in `docs/` — plus skills for work that targets lich itself. One plugin, packaged for **Claude Code** and **OpenAI Codex** from the same repository root.
+The agent side of the integration with **lich** — a harness that orchestrates agent CLI sessions. This companion plugin is how lich observes and acts inside a running session. It ships hooks — each following a contract documented in `docs/` — plus skills for work that targets lich itself. One plugin, packaged for **Claude Code**, **OpenAI Codex**, **opencode** and **Crush** from the same repository root.
 
 ## Structure
 
@@ -11,11 +11,20 @@ The agent side of the integration with **lich** — a harness that orchestrates 
 .agents/plugins/marketplace.json  # marketplace, Codex
 hooks/hooks.json                  # hook registration, Claude Code
 hooks/codex-hooks.json            # hook registration, Codex
-hooks/                            # hook scripts ($CLAUDE_PLUGIN_ROOT/hooks/<script>, both)
+hooks/crush-hooks.json            # hook registration, Crush (hand-merged into crush.json)
+hooks/                            # hook scripts ($CLAUDE_PLUGIN_ROOT/hooks/<script>, all three)
+opencode/lich.js                  # opencode client: a module, not a command
 docs/                             # lich ⇄ plugin communication contracts
-skills/                           # skills (skills/<name>/SKILL.md, both)
+skills/                           # skills (skills/<name>/SKILL.md, all)
 tests/                            # hook payloads asserted against lich's fixtures
 ```
+
+Two harnesses do not fit the script model, each its own way. **opencode** runs no
+commands: a plugin there is a JavaScript module its server imports, so all four
+reports live in `opencode/lich.js`. **Crush** runs the scripts unchanged — its
+hooks are Claude Code-compatible down to the stdin payload — but has exactly one
+event, `PreToolUse`, so only the session id and the touched refresh are
+registered for it.
 
 ## Contracts
 
@@ -26,7 +35,7 @@ Contracts are **canonical in the lich repository** (`docs/hooks/` there); this p
 - [docs/session-title.md](docs/session-title.md) — auto-generated `ai-title` via `Stop`
 - [docs/session-touched.md](docs/session-touched.md) — git-status refresh signal via `PostToolUse` (file-mutating tools only)
 
-Each doc carries the event mapping for **every** provider, one column each — a contract is implemented once and registered per harness. [docs/providers.md](docs/providers.md) is the map: which file each harness reads, where the two event vocabularies differ, and what adding a third provider takes.
+Each doc carries the event mapping for **every** provider, one column each — a contract is implemented once and registered per harness. [docs/providers.md](docs/providers.md) is the map: which file each harness reads, where the event vocabularies differ, and what adding another provider takes. A harness that cannot close a state does not get that report registered: an unendable `busy` is worse on a card than a card with no indicator.
 
 ## Skills
 
@@ -43,8 +52,14 @@ subprocess — the command line taken from the registration each harness reads �
 against a stub HTTP server, and asserts the body it POSTs against lich's
 contract fixtures: an accepted shape, no rejected one, the right endpoint and
 `?token=`, no deprecated `claude_session_id`, plus the client rules (no lich
-environment → no report, exit 0 on a 500 or a refused connection). Node only,
-no dependencies.
+environment → no report, exit 0 on a 500 or a refused connection).
+[tests/opencode.test.mjs](tests/opencode.test.mjs) does the same for the
+opencode module, which is imported rather than spawned, and fed the event
+payloads a real opencode run emits — including the sub-session ones it must
+drop and the listener that never answers, which must not hold the turn.
+[tests/contract.mjs](tests/contract.mjs) is the fixtures, the assertions and the
+stub, shared so both clients answer to the same lines. Node only, no
+dependencies.
 
 The fixtures are vendored in `tests/fixtures/` from lich
 (`docs/hooks/fixtures/*.jsonl` there) by
@@ -60,7 +75,8 @@ the network; CI diffs the copies against upstream and fails on drift.
 - A hook must never block or fail the user's turn: short timeout, errors swallowed, always exit 0. On Codex the exit code is louder still — `2` on `PermissionRequest` denies the request, so silence and exit 0 are what keep a report an observation.
 - Outside lich (env vars absent) every hook is a no-op with exit 0 — the plugin must be safe to install globally.
 - A skill must be useful from any working directory: the user runs the agent CLI on their own project, not on the lich checkout.
-- One script per contract, shared by every provider. Registration differs per harness, the report does not — extend a script to read a second transcript format before adding a second script.
+- One script per contract, shared by every provider that runs commands. Registration differs per harness, the report does not — extend a script to read a second transcript format before adding a second script. A harness that runs no commands at all is the one case for a client of its own, which is what `opencode/lich.js` is; it still sends the same payloads to the same endpoints.
+- opencode awaits its plugin hooks, so `lich.js` never awaits a report and never throws — that is its version of "always exit 0".
 
 ## Local testing
 

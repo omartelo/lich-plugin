@@ -9,17 +9,25 @@ session's git status immediately instead of waiting for its ~3s poll. Latency
 optimization only — without the plugin the poll catches the same changes, up
 to a poll interval later.
 
-| script              | Claude Code hook                                        | Codex hook                                              |
-|---------------------|---------------------------------------------------------|---------------------------------------------------------|
-| `report-touched.sh` | `PostToolUse` matcher `Edit\|Write\|NotebookEdit\|Bash`  | `PostToolUse` matcher `apply_patch\|Edit\|Write\|Bash`  |
+| script              | Claude Code hook                                        | Codex hook                                              | Crush hook                                             | opencode event |
+|---------------------|---------------------------------------------------------|---------------------------------------------------------|--------------------------------------------------------|----------------|
+| `report-touched.sh` | `PostToolUse` matcher `Edit\|Write\|NotebookEdit\|Bash`  | `PostToolUse` matcher `apply_patch\|Edit\|Write\|Bash`  | `PreToolUse` matcher `^(edit\|write\|multiedit\|bash)$` | `file.edited`  |
 
 `POST /session-touched` with `{"session_id": $LICH_SESSION_ID}`.
 
 The matcher is deliberate: only tools that write to disk. Read-only tools
-(`Read`, `Grep`, `Glob`) must not fire it — a git-status refresh per read
-would cost more than the poll it front-runs. No stdin parsing, no `jq`.
+(`Read`, `Grep`, `Glob`, Crush's `view`) must not fire it — a git-status refresh
+per read would cost more than the poll it front-runs. No stdin parsing, no `jq`.
 
 Codex writes files through `apply_patch` rather than `Edit`/`Write`, and runs
 commands as `Bash`; `Edit` and `Write` stay in its matcher because Codex
 accepts them as aliases for `apply_patch`, so the same intent holds if a tool
-is renamed.
+is renamed. Crush spells the same set in lower case and anchors the matcher,
+because its tool names are whole words (`ls` would otherwise be matched by a
+loose `s`).
+
+opencode needs no matcher at all: `file.edited` fires only when a file actually
+changed, which is what the matchers above approximate. Crush is the opposite —
+`PreToolUse` is its only event, so the refresh runs *before* the write and sees
+the tree the tool has not touched yet. What it front-runs there is the previous
+tool's write; the last write of a turn waits for the poll.

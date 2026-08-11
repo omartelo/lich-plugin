@@ -1,11 +1,13 @@
 # lich-plugin
 
-The agent side of the [lich](https://github.com/omartelo/lich) integration. lich is a harness that orchestrates agent CLI sessions; this companion plugin gives it eyes and hands inside each session. It installs on **Claude Code** and **OpenAI Codex** from this same repository. Every hook implements a contract that is canonical in the lich repository (`docs/hooks/` there); the docs in `docs/` here point at each contract and describe the client side:
+The agent side of the [lich](https://github.com/omartelo/lich) integration. lich is a harness that orchestrates agent CLI sessions; this companion plugin gives it eyes and hands inside each session. It installs on **Claude Code**, **OpenAI Codex**, **opencode** and **Crush** from this same repository. Every hook implements a contract that is canonical in the lich repository (`docs/hooks/` there); the docs in `docs/` here point at each contract and describe the client side:
 
 - **session state** — `busy`/`done` on the session card (`UserPromptSubmit`/`Stop`)
 - **session start** — persists the agent's session id on the lich session (`SessionStart`)
 - **session title** — names the card after the session's own title (`Stop`)
 - **session touched** — refreshes the card's git status right after file-mutating tools (`PostToolUse`)
+
+The four are what Claude Code, Codex and opencode report. **Crush reports two of them** — its session id and the git-status refresh — because `PreToolUse` is the only event it has, and a state nothing can end is worse on a card than no state. [docs/providers.md](docs/providers.md) has the event mapping per harness.
 
 It also ships skills for the parts of lich you configure from inside a session:
 
@@ -20,17 +22,19 @@ It also ships skills for the parts of lich you configure from inside a session:
 .agents/plugins/marketplace.json  # marketplace, Codex
 hooks/hooks.json                  # hook registration, Claude Code
 hooks/codex-hooks.json            # hook registration, Codex
+hooks/crush-hooks.json            # hook registration, Crush (merged into crush.json by hand)
 hooks/report-state.sh             # session-state hook
 hooks/report-tool.sh              # session-state hook: the tool a turn is running
 hooks/report-session-start.sh     # session-start hook
 hooks/report-title.sh             # session-title hook
 hooks/report-touched.sh           # session-touched hook
+opencode/lich.js                  # opencode client: all four reports, one module
 docs/                             # client-side docs, one per contract
 skills/theme/                     # theme skill: SKILL.md, template.json, validate.mjs
 tests/                            # hook payloads asserted against lich's fixtures
 ```
 
-One set of hook scripts serves both harnesses — they live in `hooks/` and are referenced via `$CLAUDE_PLUGIN_ROOT/hooks/<script>`, a variable Codex sets too. [docs/providers.md](docs/providers.md) maps the layout and the two harnesses' event names.
+One set of hook scripts serves Claude Code, Codex and Crush — they live in `hooks/` and are referenced via `$CLAUDE_PLUGIN_ROOT/hooks/<script>`, a variable Codex sets too. opencode runs no commands: a plugin there is a module its server imports, so its client is the single file `opencode/lich.js`, sending the same payloads to the same endpoints. [docs/providers.md](docs/providers.md) maps the layout and every harness's event names.
 
 ## Installation
 
@@ -53,6 +57,35 @@ codex plugin add lich@lich-plugin
 ```
 
 Then start a new session and run `/hooks` to review and trust the plugin's hooks — Codex does not run a plugin's hooks until you do, so until then the plugin is installed but silent. Hooks themselves are stable and on by default in current Codex; on older versions set `[features] hooks = true` in `~/.codex/config.toml`.
+
+### opencode
+
+opencode has no marketplace: a plugin is a file in its plugin directory, so dropping it there is the install.
+
+```bash
+mkdir -p ~/.config/opencode/plugin
+curl -fsSL -o ~/.config/opencode/plugin/lich.js \
+  https://raw.githubusercontent.com/omartelo/lich-plugin/main/opencode/lich.js
+```
+
+Per project instead of globally, use `.opencode/plugin/lich.js`. Updating means fetching the file again.
+
+### Crush
+
+Crush has no plugin system either: its hooks live in your own `crush.json`. Clone this repository, then merge [`hooks/crush-hooks.json`](hooks/crush-hooks.json) into `~/.config/crush/crush.json` (global) or the project's `crush.json`, replacing `<lich-plugin>` with the absolute path of the clone:
+
+```jsonc
+{
+  "hooks": {
+    "PreToolUse": [
+      { "name": "lich session id", "command": "/home/you/src/lich-plugin/hooks/report-session-start.sh crush", "timeout": 5 },
+      { "name": "lich git-status refresh", "matcher": "^(edit|write|multiedit|bash)$", "command": "/home/you/src/lich-plugin/hooks/report-touched.sh", "timeout": 5 }
+    ]
+  }
+}
+```
+
+`command` is resolved against the working directory, not the config file, so a global install needs the absolute path. Crush reports no session state and no title — see [docs/providers.md](docs/providers.md) for why.
 
 ### Manual (from a clone)
 
@@ -90,4 +123,4 @@ claude --plugin-dir .
 node --test tests/*.test.mjs
 ```
 
-Every hook script runs as a real subprocess, from the command line its registration spells, against a stub HTTP server — and the body it POSTs is asserted against [lich's contract fixtures](https://github.com/omartelo/lich/tree/main/docs/hooks/fixtures): an accepted shape, never a rejected one, the right endpoint and token, plus the client rules (no lich environment → no report; exit 0 when lich answers 500 or refuses the connection). The fixtures are vendored in `tests/fixtures/` by `tests/refresh-fixtures.sh`; CI diffs them against upstream so a contract that moves in lich goes red here.
+Every hook script runs as a real subprocess, from the command line its registration spells, against a stub HTTP server — and the body it POSTs is asserted against [lich's contract fixtures](https://github.com/omartelo/lich/tree/main/docs/hooks/fixtures): an accepted shape, never a rejected one, the right endpoint and token, plus the client rules (no lich environment → no report; exit 0 when lich answers 500 or refuses the connection). The opencode module is imported instead of spawned and fed the events a real opencode run emits, against the same fixtures. Both share `tests/contract.mjs`. The fixtures are vendored in `tests/fixtures/` by `tests/refresh-fixtures.sh`; CI diffs them against upstream so a contract that moves in lich goes red here.

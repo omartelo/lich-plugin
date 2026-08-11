@@ -1,173 +1,33 @@
 // Pins this plugin's hook scripts to lich's contract fixtures.
 //
-// lich owns the endpoints, this repository owns the scripts that build the
-// payloads. The fixtures in tests/fixtures/ are lich's, vendored verbatim
-// (tests/refresh-fixtures.sh); they are upstream truth and are never edited to
-// make a run green.
-//
 // Every case here drives a real script as a subprocess — the command line taken
 // from the hook registration a harness actually reads — against a stub HTTP
-// server, and asserts the body it POSTs.
+// server, and asserts the body it POSTs. The fixtures, the assertions and the
+// stub live in contract.mjs, shared with the opencode client's suite.
 //
 // Run: node --test tests/
 
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { createServer } from 'node:http'
 import { spawn, spawnSync } from 'node:child_process'
 import { readFileSync, writeFileSync, mkdtempSync, mkdirSync, symlinkSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
-import { fileURLToPath } from 'node:url'
 
-const HERE = path.dirname(fileURLToPath(import.meta.url))
-const ROOT = path.resolve(HERE, '..')
-
-const TOKEN = 'test-token'
-const LICH_SESSION_ID = 'lich-session-1'
-
-// ---------------------------------------------------------------- fixtures --
-
-/** endpoint → fixture file, per lich's docs/hooks/fixtures/README.md. */
-const FIXTURE_OF = {
-  '/hook': 'session-state',
-  '/session-start': 'session-start',
-  '/session-title': 'session-title',
-  '/session-touched': 'session-touched',
-}
-
-const readFixture = (name) =>
-  readFileSync(path.join(HERE, 'fixtures', `${name}.jsonl`), 'utf8')
-    .split('\n')
-    .filter((line) => line.trim() !== '')
-    .map((line) => JSON.parse(line))
-
-const CASES = Object.fromEntries(
-  Object.entries(FIXTURE_OF).map(([endpoint, file]) => [endpoint, readFixture(file)]),
-)
-
-const accepted = (endpoint) => CASES[endpoint].filter((c) => c.accept)
-const rejected = (endpoint) => CASES[endpoint].filter((c) => c.reject)
-
-// Enumerations come from the fixtures, not from a copy of them kept here: a
-// state or a provider that lich stops accepting stops being accepted below too.
-const STATES = new Set(accepted('/hook').map((c) => c.accept.state))
-const PROVIDERS = new Set(accepted('/session-start').map((c) => c.accept.provider))
-
-const isObject = (v) => v !== null && typeof v === 'object' && !Array.isArray(v)
-const blank = (v) => typeof v !== 'string' || v.trim() === ''
-
-/**
- * `reject` prose is documentation, not a matcher, so each rejected case is
- * modelled here as a predicate: true means the body is the shape that case
- * describes. A rejected case with no rule fails its own test below, so a new
- * one upstream cannot slip through unmodelled.
- */
-const REJECT_RULES = {
-  '/hook': {
-    'missing session_id': (b) => !('session_id' in b),
-    'empty session_id': (b) => b.session_id === '',
-    'missing state': (b) => !('state' in b),
-    'unknown state': (b) => 'state' in b && !STATES.has(b.state),
-    'state is case sensitive': (b) =>
-      typeof b.state === 'string' && !STATES.has(b.state) && STATES.has(b.state.toLowerCase()),
-    'malformed json': (b, raw) => !isJsonObject(raw),
-  },
-  '/session-start': {
-    'missing session_id': (b) => !('session_id' in b),
-    'missing provider_session_id': (b) => !('provider_session_id' in b) && !('claude_session_id' in b),
-    'empty provider_session_id': (b) => b.provider_session_id === '',
-    'unregistered provider': (b) => 'provider' in b && !PROVIDERS.has(b.provider),
-    'malformed json': (b, raw) => !isJsonObject(raw),
-  },
-  '/session-title': {
-    'missing session_id': (b) => !('session_id' in b),
-    'missing title': (b) => !('title' in b),
-    'empty title': (b) => b.title === '',
-    'blank title': (b) => 'title' in b && blank(b.title),
-    'malformed json': (b, raw) => !isJsonObject(raw),
-  },
-  '/session-touched': {
-    'missing session_id': (b) => !('session_id' in b),
-    'empty session_id': (b) => b.session_id === '',
-    'malformed json': (b, raw) => !isJsonObject(raw),
-  },
-}
-
-function isJsonObject(raw) {
-  try {
-    return isObject(JSON.parse(raw))
-  } catch {
-    return false
-  }
-}
-
-/**
- * Compares a sent body against every `accept` case's `body` for the endpoint:
- * same key set, and each value of the same class (a non-blank string stays a
- * non-blank string). Values themselves are dynamic — session ids and titles are
- * whatever the session happens to hold — so only shape is asserted here;
- * enumerated values are pinned by the reject rules.
- *
- * Returns the name of the case it matches, or null.
- */
-function matchingAcceptCase(endpoint, body) {
-  const shape = (o) =>
-    Object.keys(o)
-      .sort()
-      .map((k) => `${k}:${blank(o[k]) ? typeof o[k] + '(blank)' : typeof o[k]}`)
-      .join(',')
-  const sent = shape(body)
-  return accepted(endpoint).find((c) => c.body && shape(c.body) === sent)?.name ?? null
-}
-
-function assertContractHonoured(endpoint, request) {
-  assert.equal(request.method, 'POST')
-  assert.equal(
-    request.url,
-    `${endpoint}?token=${TOKEN}`,
-    `posted to ${request.url}, expected ${endpoint}?token=${TOKEN}`,
-  )
-  assert.match(request.headers['content-type'] ?? '', /application\/json/)
-
-  assert.ok(isJsonObject(request.raw), `body is not a JSON object: ${request.raw}`)
-  const body = JSON.parse(request.raw)
-
-  // 4. claude_session_id is a deprecated alias lich still folds for plugins
-  //    released before v0.3.0. Nothing shipping today emits it.
-  assert.ok(!('claude_session_id' in body), `body still sends claude_session_id: ${request.raw}`)
-
-  const match = matchingAcceptCase(endpoint, body)
-  assert.ok(match, `body matches no accepted shape for ${endpoint}: ${request.raw}`)
-
-  for (const [name, violates] of Object.entries(REJECT_RULES[endpoint])) {
-    assert.ok(!violates(body, request.raw), `body is the rejected shape "${name}": ${request.raw}`)
-  }
-  return { body, match }
-}
-
-// ------------------------------------------------------------------ harness --
-
-async function startStub({ status = 204 } = {}) {
-  const requests = []
-  const server = createServer((req, res) => {
-    let raw = ''
-    req.setEncoding('utf8')
-    req.on('data', (chunk) => {
-      raw += chunk
-    })
-    req.on('end', () => {
-      requests.push({ method: req.method, url: req.url, headers: req.headers, raw })
-      res.writeHead(status).end()
-    })
-  })
-  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve))
-  return {
-    requests,
-    port: server.address().port,
-    close: () => new Promise((resolve) => server.close(resolve)),
-  }
-}
+import {
+  CASES,
+  LICH_SESSION_ID,
+  PROVIDERS,
+  ROOT,
+  REJECT_RULES,
+  STATES,
+  TOKEN,
+  assertContractHonoured,
+  lichEnv,
+  rejected,
+  startStub,
+  withStub,
+} from './contract.mjs'
 
 /** The ambient environment minus anything lich would inject. */
 const BASE_ENV = Object.fromEntries(
@@ -198,21 +58,6 @@ function runHook(command, { env = {}, stdin = '' } = {}) {
   })
 }
 
-const lichEnv = (port) => ({
-  LICH_PORT: String(port),
-  LICH_TOKEN: TOKEN,
-  LICH_SESSION_ID,
-})
-
-async function withStub(fn, options) {
-  const stub = await startStub(options)
-  try {
-    return await fn(stub)
-  } finally {
-    await stub.close()
-  }
-}
-
 // A hook that reports never speaks on stdout: on Codex the session-state hook
 // rides PermissionRequest, where output and a non-zero exit are an answer to
 // the request rather than an observation.
@@ -226,7 +71,12 @@ function assertSilentSuccess(result) {
 const HOOK_FILES = [
   { provider: 'claude', file: 'hooks/hooks.json' },
   { provider: 'codex', file: 'hooks/codex-hooks.json' },
+  { provider: 'crush', file: 'hooks/crush-hooks.json' },
 ]
+
+// Crush has no plugin root to expand, so its registration ships the clone's
+// path as a placeholder the user replaces. Here it becomes this checkout.
+const PLUGIN_ROOT_PLACEHOLDER = '<lich-plugin>'
 
 const SCRIPTS = {
   'report-state.sh': '/hook',
@@ -236,24 +86,42 @@ const SCRIPTS = {
   'report-touched.sh': '/session-touched',
 }
 
+/**
+ * What each harness registers. Claude Code and Codex carry every report; Crush
+ * carries the two its single `PreToolUse` event can honour, because a `busy`
+ * nothing can end would pin a spinner to a card (docs/providers.md).
+ */
+const REGISTERED_SCRIPTS = {
+  claude: Object.keys(SCRIPTS),
+  codex: Object.keys(SCRIPTS),
+  crush: ['report-session-start.sh', 'report-touched.sh'],
+}
+
+/**
+ * A registration group is either Claude Code's shape (a matcher wrapping a
+ * `hooks` array) or Crush's (the hook itself, matcher included).
+ */
+const hooksIn = (group) => (Array.isArray(group.hooks) ? group.hooks : [group])
+
 function registrations() {
   const out = []
   for (const { provider, file } of HOOK_FILES) {
     const json = JSON.parse(readFileSync(path.join(ROOT, file), 'utf8'))
     for (const [event, groups] of Object.entries(json.hooks)) {
       for (const group of groups) {
-        for (const hook of group.hooks) {
+        for (const hook of hooksIn(group)) {
           const script = Object.keys(SCRIPTS).find((s) => hook.command.includes(s))
           assert.ok(script, `unknown script in ${file}: ${hook.command}`)
+          const command = hook.command.split(PLUGIN_ROOT_PLACEHOLDER).join(ROOT)
           out.push({
             provider,
             file,
             event,
             matcher: group.matcher,
-            command: hook.command,
+            command,
             script,
             endpoint: SCRIPTS[script],
-            argument: hook.command.trim().split(/\s+/).slice(1).join(' '),
+            argument: command.trim().split(/\s+/).slice(1).join(' '),
           })
         }
       }
@@ -322,8 +190,11 @@ function binWithout(missing) {
 const PROVIDER_SESSION_ID = {
   claude: '9f1c7c1e-8f2a-4c3b-9d5e-2a7b6c4d1e05',
   codex: '018f9c5a-0000-7000-9a3b-1c2d3e4f5c01',
+  crush: 'db3492a0-4a6b-4335-8c0b-d4cc43fc4cb0',
+  opencode: 'ses_011856954ffe5NEMhsYeTuWykR',
 }
 
+// Crush has no transcript to point a hook at: its payload is about the tool.
 const TRANSCRIPT = {
   claude: claudeTranscript('Fix the replay ring overflow'),
   codex: codexTranscript('Fix the replay ring overflow\nand its second line'),
@@ -339,10 +210,23 @@ const TRANSCRIPT = {
 const TOOL_CALL = {
   claude: { tool_name: 'Bash', tool_input: { command: 'pnpm test', description: 'run the suite' } },
   codex: { tool_name: 'Bash', tool_input: { command: 'go test ./...' } },
+  crush: { tool_name: 'write', tool_input: { file_path: 'probe.txt', content: 'ok\n' } },
 }
 
-/** What the harness puts on stdin for the event this registration rides. */
+/**
+ * What the harness puts on stdin for the event this registration rides. Crush's
+ * envelope is Claude Code's with two differences, both taken off a real run: it
+ * names the event `event`, and it carries no transcript.
+ */
 function stdinFor({ provider, event }) {
+  if (provider === 'crush') {
+    return JSON.stringify({
+      event,
+      session_id: PROVIDER_SESSION_ID.crush,
+      cwd: ROOT,
+      ...(event === 'PreToolUse' ? TOOL_CALL.crush : {}),
+    })
+  }
   return JSON.stringify({
     session_id: PROVIDER_SESSION_ID[provider],
     transcript_path: TRANSCRIPT[provider],
@@ -375,7 +259,7 @@ test('the vendored fixtures parse and carry exactly one body and one verdict', (
     }
   }
   assert.deepEqual([...STATES].sort(), ['busy', 'done', 'idle', 'waiting'])
-  assert.deepEqual([...PROVIDERS].sort(), ['claude', 'codex'])
+  assert.deepEqual([...PROVIDERS].sort(), ['claude', 'codex', 'crush', 'opencode'])
 })
 
 test('every rejected case is modelled by a client-side rule', () => {
@@ -390,20 +274,30 @@ test('every rejected case is modelled by a client-side rule', () => {
   }
 })
 
-test('every script is registered by both providers', () => {
-  for (const provider of ['claude', 'codex']) {
+test('each harness registers exactly the scripts it can honour', () => {
+  for (const [provider, expected] of Object.entries(REGISTERED_SCRIPTS)) {
     const scripts = new Set(REGISTRATIONS.filter((r) => r.provider === provider).map((r) => r.script))
-    assert.deepEqual([...scripts].sort(), Object.keys(SCRIPTS).sort(), `${provider} misses a script`)
+    assert.deepEqual([...scripts].sort(), [...expected].sort(), `${provider} registers the wrong set`)
   }
+})
+
+test("Crush's registration keeps the placeholder for the clone's path", () => {
+  const raw = readFileSync(path.join(ROOT, 'hooks/crush-hooks.json'), 'utf8')
+  assert.ok(
+    raw.includes(PLUGIN_ROOT_PLACEHOLDER),
+    'crush-hooks.json must ship the placeholder, not a path from somebody\'s machine',
+  )
 })
 
 test('every registered state argument is an accepted state', () => {
   const sent = REGISTRATIONS.filter((r) => r.script === 'report-state.sh').map((r) => r.argument)
   assert.ok(sent.length > 0)
   for (const state of sent) assert.ok(STATES.has(state), `registration reports unknown state "${state}"`)
-  // Both registrations wire up the whole vocabulary; Codex's SessionEnd never
-  // fires today, but the entry is deliberate (docs/providers.md).
-  for (const provider of ['claude', 'codex']) {
+  // A harness that reports state at all wires up the whole vocabulary; Codex's
+  // SessionEnd never fires today, but the entry is deliberate. Crush reports no
+  // state at all — see docs/providers.md for both.
+  for (const [provider, scripts] of Object.entries(REGISTERED_SCRIPTS)) {
+    if (!scripts.includes('report-state.sh')) continue
     const states = new Set(
       REGISTRATIONS.filter((r) => r.provider === provider && r.script === 'report-state.sh').map(
         (r) => r.argument,

@@ -7,6 +7,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **opencode sessions report to lich.** opencode runs no hook commands — a
+  plugin there is a module its server imports — so its client is one file,
+  `opencode/lich.js`, sending the same four reports to the same endpoints: the
+  session id off `session.created`, `busy`/`done` off `session.status`,
+  `waiting` off `permission.asked`, the tool line off `tool.execute.before`, the
+  card's label off `session.updated`, and the git-status refresh off
+  `file.edited`. Install it by dropping the file in `~/.config/opencode/plugin/`
+  — there is no marketplace to go through. Sub-sessions (the `task` tool) are
+  filtered out by their `parentID`, so a sub-agent finishing does not look like
+  the turn ending.
+- **Crush sessions report their id and refresh git status.** Crush's hooks are
+  Claude Code-compatible, so the existing scripts run unchanged — but
+  `PreToolUse` is its only event, so only the two reports it can honour are
+  registered. `hooks/crush-hooks.json` is the block to merge into your own
+  `crush.json`, with `<lich-plugin>` where the clone's path goes. A Crush card
+  shows no spinner and keeps the name lich gave it; both arrive the day Crush
+  ships an end-of-turn event.
+
+### Changed
+
+- The test suite is split: `tests/contract.mjs` holds lich's fixtures and the
+  assertions, and both clients — the hook scripts and the opencode module —
+  answer to the same lines. `tests/opencode.test.mjs` drives the module through
+  the events a real opencode run emits.
+
 ## [0.7.0] - 2026-08-10
 
 ### Added

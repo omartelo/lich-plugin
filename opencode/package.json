@@ -1,0 +1,5 @@
+{
+  "private": true,
+  "type": "module",
+  "comment": "lich.js is ESM. opencode imports it through Bun, which needs no help; this file is what lets Node — the test suite — read the same extension as a module."
+}
