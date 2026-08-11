@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-08-11
+
 ### Added
 
 - **opencode sessions report to lich.** opencode runs no hook commands — a
@@ -242,7 +244,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   plugin is safe to install globally. Requests time out after ~1s and errors
   are swallowed — the hook never blocks or fails the turn.
 
-[Unreleased]: https://github.com/omartelo/lich-plugin/compare/v0.7.0...HEAD
+[Unreleased]: https://github.com/omartelo/lich-plugin/compare/v0.8.0...HEAD
+[0.8.0]: https://github.com/omartelo/lich-plugin/compare/v0.7.0...v0.8.0
 [0.7.0]: https://github.com/omartelo/lich-plugin/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/omartelo/lich-plugin/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/omartelo/lich-plugin/compare/v0.4.1...v0.5.0
