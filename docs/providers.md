@@ -44,7 +44,7 @@ never awaits a report.
 | session id          | `SessionStart`               | `SessionStart`               | `session.created`         | `PreToolUse`                |
 | `busy`              | `UserPromptSubmit`, `PostToolUse` | `UserPromptSubmit`, `PostToolUse` | `session.status` (`busy`) | —              |
 | `busy` + tool       | `PreToolUse`                 | `PreToolUse`                 | `tool.execute.before`     | —                           |
-| `waiting`           | `Notification`               | `PermissionRequest`          | `permission.asked`        | —                           |
+| `waiting`           | `Notification`               | `PermissionRequest`          | any `*.asked`             | —                           |
 | `done`              | `Stop`                       | `Stop`                       | `session.status` (`idle`) | —                           |
 | title               | `Stop`                       | `Stop`                       | `session.updated`         | —                           |
 | `idle`              | `SessionEnd`                 | — (registered, never fires)  | — (nothing outlives it)   | —                           |
@@ -64,6 +64,13 @@ The registration keeps its `SessionEnd` entry anyway: an unregistered event name
 is ignored rather than rejected, so the report starts working the day Codex adds
 one. Until then a Codex card holds its last indicator (and its provider mark)
 until lich respawns that PTY.
+
+opencode's `waiting` is the one cell that is a rule rather than an event name.
+It asks the user in more than one way — `permission.asked` and `question.asked`,
+each with a `.v2.` spelling published beside it — and its catalogue is not
+exhaustive: a real run emits types (`server.heartbeat`) absent from its own
+schema. Enumerating names there is how a prompt goes unreported, so the module
+matches the suffix. See [session-state.md](session-state.md).
 
 The session id carries the provider that reported it (`report-session-start.sh
 codex`), which is what puts Codex's icon rather than Claude's on the card, and

@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **An opencode session that asks you a question now rings the bell.** Only its
+  permission prompts did: an interactive question rides an event of its own
+  (`question.asked`), which the plugin did not listen for, so the card kept the
+  spinner and the tool name of the question itself while the session sat waiting
+  — no bell, no toast, no desktop notification, and nothing to distinguish it
+  from work in progress. Every way opencode asks the user something now reports
+  `waiting`, matched by the shape of the event name rather than by a list of
+  them: its published catalogue is not exhaustive, and a prompt nobody
+  enumerated is a session that waits unseen.
+
 ## [0.9.0] - 2026-08-11
 
 ### Added
