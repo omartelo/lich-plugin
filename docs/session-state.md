@@ -8,14 +8,20 @@ Reports the session's processing state so the lich card shows a spinner while
 the agent works, a check when the turn ends, and a bell (plus an actionable
 toast) when the agent is blocked on the user.
 
-| script                    | state            | Claude Code hook   | Codex hook          |
-|---------------------------|------------------|--------------------|---------------------|
-| `report-state.sh busy`    | `busy`           | `UserPromptSubmit` | `UserPromptSubmit`  |
-| `report-tool.sh`          | `busy` + `tool`  | `PreToolUse`       | `PreToolUse`        |
-| `report-state.sh busy`    | `busy`           | `PostToolUse`      | `PostToolUse`       |
-| `report-state.sh done`    | `done`           | `Stop`             | `Stop`              |
-| `report-state.sh waiting` | `waiting`        | `Notification`     | `PermissionRequest` |
-| `report-state.sh idle`    | `idle`           | `SessionEnd`       | — (never fires)     |
+| script                    | state            | Claude Code hook   | Codex hook          | opencode event            |
+|---------------------------|------------------|--------------------|---------------------|---------------------------|
+| `report-state.sh busy`    | `busy`           | `UserPromptSubmit` | `UserPromptSubmit`  | `session.status` (`busy`) |
+| `report-tool.sh`          | `busy` + `tool`  | `PreToolUse`       | `PreToolUse`        | `tool.execute.before`     |
+| `report-state.sh busy`    | `busy`           | `PostToolUse`      | `PostToolUse`       | `session.status` (`busy`) |
+| `report-state.sh done`    | `done`           | `Stop`             | `Stop`              | `session.status` (`idle`) |
+| `report-state.sh waiting` | `waiting`        | `Notification`     | `PermissionRequest` | `permission.asked`        |
+| `report-state.sh idle`    | `idle`           | `SessionEnd`       | — (never fires)     | — (never fires)           |
+
+opencode runs no scripts: `opencode/lich.js` sends the same payloads off the
+event bus, and its `session.status` carries the state rather than implying it —
+`idle` there is the turn ending, which is this contract's `done`. **Crush is
+absent from the table on purpose**: its only event is `PreToolUse`, and a `busy`
+nothing can end would pin a spinner to a card. See [providers.md](providers.md).
 
 `POST /hook` with `{"session_id": $LICH_SESSION_ID, "state":
 "busy"|"done"|"waiting"|"idle"}`, plus the optional `tool` / `detail` pair the
@@ -61,17 +67,19 @@ always exit 0) stop being merely polite here.
 What the two harnesses actually send, taken off a real run of each against a
 stub listener rather than off their documentation:
 
-| Action        | Claude Code       | Codex                     |
-|---------------|-------------------|---------------------------|
-| run a command | `Bash`            | `Bash`                    |
-| edit a file   | `Edit` / `Write`  | `apply_patch`             |
-| read a file   | `Read`            | — (goes through `Bash`)   |
-| search        | `Grep` / `Glob`   | — (goes through `Bash`)   |
+| Action        | Claude Code       | Codex                     | opencode         |
+|---------------|-------------------|---------------------------|------------------|
+| run a command | `Bash`            | `Bash`                    | `bash`           |
+| edit a file   | `Edit` / `Write`  | `apply_patch`             | `edit` / `write` |
+| read a file   | `Read`            | — (goes through `Bash`)   | `read`           |
+| search        | `Grep` / `Glob`   | — (goes through `Bash`)   | `grep` / `glob`  |
 
 The `detail` is read by field, never by tool name — `command`, then
 `file_path` / `path`, then `pattern` / `url` / `query` — which is what makes one
 rule cover both: a Codex shell call arrives as `Bash` carrying the same
-`command` string Claude Code sends.
+`command` string Claude Code sends. opencode spells the same fields in camel
+case (`filePath`) and hands over paths already relative to the session, so
+`lich.js` reads the same list and skips the shortening below.
 
 Two shapes need more than the plain rule:
 
