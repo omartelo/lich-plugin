@@ -108,19 +108,69 @@ for (const [type, state] of STATUS_STATES) {
   })
 }
 
-test('permission.asked reports waiting', async () => {
+// Every way opencode 1.18.16 asks the user something. The first two were taken
+// off a real run; the `.v2.` pair is published in the server's own schema and
+// carries the same `sessionID`, so the suffix rule covers it the day it fires.
+const ASKED_EVENTS = {
+  'permission.asked': {
+    id: 'per_fee7bb506001U0pyEOIdUduVvD',
+    sessionID: OPENCODE_SESSION_ID,
+    permission: 'edit',
+    patterns: ['oc-probe.txt'],
+    metadata: { filepath: '/w/oc-probe.txt' },
+  },
+  'question.asked': {
+    id: 'que_ff1dae01f001v4G2287HaQw71N',
+    sessionID: OPENCODE_SESSION_ID,
+    questions: [
+      {
+        question: 'coffee or tea?',
+        header: 'Hot drink preference',
+        options: [{ label: 'Coffee', description: 'Go with coffee' }],
+      },
+    ],
+    tool: { messageID: 'msg_ff1dac169001EiYr6PAjjcEL80', callID: 'call_e5dacd91b4a44eec' },
+  },
+  'permission.v2.asked': {
+    id: 'per_fee7bb506001U0pyEOIdUduVvE',
+    sessionID: OPENCODE_SESSION_ID,
+    action: 'edit',
+    resources: ['oc-probe.txt'],
+  },
+  'question.v2.asked': {
+    id: 'que_ff1dae01f001v4G2287HaQw71T',
+    sessionID: OPENCODE_SESSION_ID,
+    questions: [{ question: 'coffee or tea?' }],
+  },
+}
+
+for (const [type, properties] of Object.entries(ASKED_EVENTS)) {
+  test(`${type} reports waiting`, async () => {
+    const requests = await reportsFor(({ event }) => event(type, properties))
+    assert.equal(requests.length, 1)
+    const { body } = assertContractHonoured('/hook', requests[0])
+    assert.equal(body.state, 'waiting')
+  })
+}
+
+// The point of the suffix rule: a prompt opencode adds later, under a name
+// nothing here knows, still reaches the card.
+test('an unknown .asked event reports waiting', async () => {
   const requests = await reportsFor(({ event }) =>
-    event('permission.asked', {
-      id: 'per_fee7bb506001U0pyEOIdUduVvD',
-      sessionID: OPENCODE_SESSION_ID,
-      permission: 'edit',
-      patterns: ['oc-probe.txt'],
-      metadata: { filepath: '/w/oc-probe.txt' },
-    }),
+    event('elicitation.asked', { id: 'eli_1', sessionID: OPENCODE_SESSION_ID }),
   )
   assert.equal(requests.length, 1)
-  const { body } = assertContractHonoured('/hook', requests[0])
-  assert.equal(body.state, 'waiting')
+  assert.equal(assertContractHonoured('/hook', requests[0]).body.state, 'waiting')
+})
+
+// ...and its bound: the suffix is the whole rule, so an event merely mentioning
+// the word must not put a bell on the card.
+test('an event that only contains "asked" reports nothing', async () => {
+  const requests = await reportsFor(
+    ({ event }) => event('question.asked.dismissed', { sessionID: OPENCODE_SESSION_ID }),
+    { expected: 0 },
+  )
+  assert.equal(requests.length, 0, `a non-prompt raised a bell: ${requests[0]?.raw}`)
 })
 
 test('file.edited refreshes the git status', async () => {
@@ -221,6 +271,7 @@ test('a sub-session finishing does not end the turn', async () => {
       await event('session.created', { sessionID: SUB_SESSION_ID, info: sub })
       await event('session.status', { sessionID: SUB_SESSION_ID, status: { type: 'idle' } })
       await event('permission.asked', { sessionID: SUB_SESSION_ID, permission: 'edit' })
+      await event('question.asked', { sessionID: SUB_SESSION_ID, questions: [{ question: 'q' }] })
     },
     { expected: 0 },
   )

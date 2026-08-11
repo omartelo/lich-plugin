@@ -14,7 +14,7 @@ toast) when the agent is blocked on the user.
 | `report-tool.sh`          | `busy` + `tool`  | `PreToolUse`       | `PreToolUse`        | `tool.execute.before`     |
 | `report-state.sh busy`    | `busy`           | `PostToolUse`      | `PostToolUse`       | `session.status` (`busy`) |
 | `report-state.sh done`    | `done`           | `Stop`             | `Stop`              | `session.status` (`idle`) |
-| `report-state.sh waiting` | `waiting`        | `Notification`     | `PermissionRequest` | `permission.asked`        |
+| `report-state.sh waiting` | `waiting`        | `Notification`     | `PermissionRequest` | any `*.asked`             |
 | `report-state.sh idle`    | `idle`           | `SessionEnd`       | — (never fires)     | — (never fires)           |
 
 opencode runs no scripts: `opencode/lich.js` sends the same payloads off the
@@ -34,6 +34,18 @@ which fires when Codex asks to run a command or write outside its sandbox.
 There, the hook's own exit code is an approval decision — exit `2` would deny
 the request — so `report-state.sh` staying silent and always exiting 0 is what
 keeps the report an observation instead of an answer.
+
+**opencode's `waiting` is matched by suffix, not by name.** It asks the user in
+more than one way — a permission and an interactive question, each with a `.v2.`
+spelling alongside — and its event catalogue is not exhaustive: a real run emits
+types (`server.heartbeat`) that its own published schema does not list. So
+`lich.js` reports `waiting` for any event type ending in `.asked` rather than for
+a list of names. The failure modes are not symmetric: a surplus bell is cleared
+by the next status report, which follows a reply within ~100ms, while a name
+nobody enumerated leaves a session waiting behind a card that shows a spinner.
+Answering (`question.replied` → `session.status busy`) and dismissing
+(`question.rejected` → `session.status idle`) both re-arm the card on their own,
+which is why neither is registered here.
 
 `SessionEnd → idle` clears the card's indicator (no spinner/check/bell). It
 fires when the session ends or is reset, so a stale state does not linger on a

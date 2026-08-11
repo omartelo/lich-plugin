@@ -292,14 +292,22 @@ export const LichPlugin = async ({ $ } = {}) => {
           else if (type === "busy" || type === "retry") report("hook", { state: "busy" })
           return
         }
-        case "permission.asked": {
-          if (subSessions.has(properties.sessionID)) return
-          report("hook", { state: "waiting" })
-          return
-        }
         case "file.edited":
           report("session-touched", {})
           return
+        default:
+          // Anything opencode *asked* the user is "your turn": a permission and
+          // a question today, each in two spellings (`permission.asked`,
+          // `question.asked`, and their `.v2.` variants). Matched by suffix
+          // rather than by name because opencode's event catalogue is not
+          // exhaustive — its server emits types its own schema does not list —
+          // and a prompt whose name is not here would leave the card silent,
+          // which is the failure this line exists for. A surplus bell costs the
+          // next status report, which follows a reply within ~100ms; a missing
+          // one costs the user the session.
+          if (event?.type?.endsWith(".asked") && !subSessions.has(properties.sessionID)) {
+            report("hook", { state: "waiting" })
+          }
       }
     },
 
