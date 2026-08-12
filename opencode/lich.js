@@ -104,8 +104,12 @@ function runner($) {
 //     need nothing, down with the tools.
 // helper is the injection seam the suite uses: opencode's package resolves from
 // its own plugin dependencies, which a checkout of this repository does not
-// have, and the argv these tools build is worth testing without it.
-export async function lichTools($, helper) {
+// have, and the argv these tools build is worth testing without it. It is
+// reached through LichPlugin's own second argument rather than exported,
+// because opencode loads *every* export of a plugin module as a plugin: a
+// second export would be called with a plugin input and its return value read
+// for hook keys, which took the server down when it was null.
+async function lichTools($, helper) {
   if (!$ || !process.env.LICH_PORT || !process.env.LICH_TOKEN || !process.env.LICH_SESSION_ID) {
     return null
   }
@@ -239,7 +243,11 @@ export async function lichTools($, helper) {
   }
 }
 
-export const LichPlugin = async ({ $ } = {}) => {
+// The one export, and it has to stay the one: opencode calls every export of a
+// plugin module with a plugin input and reads hook keys off what comes back.
+// helper is the suite's seam for the tool package — opencode passes one
+// argument, so the second is invisible to it.
+export const LichPlugin = async ({ $ } = {}, helper) => {
   // A sub-session (the `task` tool) reports its own status and would answer for
   // the card: its `idle` is a sub-agent finishing, not the turn ending. They are
   // known by the parentID their session events carry.
@@ -249,7 +257,7 @@ export const LichPlugin = async ({ $ } = {}) => {
   // without matching on its wording.
   const bornTitles = new Map()
 
-  const tools = await lichTools($)
+  const tools = await lichTools($, helper)
 
   const track = (properties) => {
     const info = properties?.info
