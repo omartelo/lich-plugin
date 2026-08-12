@@ -15,6 +15,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 
 import { LICH_SESSION_ID, assertContractHonoured, lichEnv, startStub, withStub } from './contract.mjs'
+import * as module from '../opencode/lich.js'
 import { LichPlugin } from '../opencode/lich.js'
 
 const OPENCODE_SESSION_ID = 'ses_011856954ffe5NEMhsYeTuWykR'
@@ -410,4 +411,51 @@ test('a malformed event payload is survived', async () => {
     { expected: 0 },
   )
   assert.equal(requests.length, 0, `a malformed payload reached lich: ${requests[0]?.raw}`)
+})
+
+// opencode loads *every* export of a plugin module as a plugin: it calls each
+// one with the plugin input and then reads hook keys off whatever comes back.
+// An export that is not a plugin — a helper, a seam for this suite — is called
+// all the same, and anything it returns that is not a hooks object takes the
+// server down at startup with "Unexpected server error". Outside lich is where
+// it bites, because that is where a guard returns early.
+test('every export is a plugin opencode can load, outside lich', async () => {
+  // What opencode hands a plugin. Only `$` is read here; the rest is what makes
+  // the call the real one rather than an empty object the guards fall through.
+  const input = {
+    client: {},
+    app: {},
+    $: () => {},
+    directory: '/w',
+    worktree: '/w',
+    project: { id: 'global', worktree: '/w' },
+  }
+
+  const previous = { ...process.env }
+  for (const key of Object.keys(process.env)) if (key.startsWith('LICH_')) delete process.env[key]
+  try {
+    const names = Object.keys(module)
+    assert.deepEqual(names, ['LichPlugin'], 'a second export is a second plugin opencode will call')
+
+    for (const name of names) {
+      const exported = module[name]
+      assert.equal(typeof exported, 'function', `${name} is exported but is not callable as a plugin`)
+      const hooks = await exported(input)
+      assert.ok(
+        hooks && typeof hooks === 'object',
+        `${name} returned ${JSON.stringify(hooks)} — opencode reads hook keys off that and dies`,
+      )
+      // The reads opencode makes on a loaded plugin. Undefined is fine; a
+      // throw is the crash.
+      assert.doesNotThrow(() => {
+        void hooks.config
+        void hooks.event
+        void hooks.tool
+        void hooks['tool.execute.before']
+      })
+    }
+  } finally {
+    for (const key of Object.keys(process.env)) if (key.startsWith('LICH_')) delete process.env[key]
+    Object.assign(process.env, previous)
+  }
 })

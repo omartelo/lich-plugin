@@ -10,7 +10,7 @@
 
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { LichPlugin, lichTools } from '../opencode/lich.js'
+import { LichPlugin } from '../opencode/lich.js'
 
 // A stand-in for the zod re-export opencode hands plugins. Only the calls the
 // module makes are implemented; the shapes themselves are opencode's to read.
@@ -83,7 +83,10 @@ async function withoutLich(fn) {
 // inLich runs a test body with a session's coordinates in place, handing it the
 // tools and the shell they ran through.
 async function inLich(shell, body) {
-  return withEnv(INSIDE_LICH, async () => body(await lichTools(shell.$, fakeHelper())))
+  return withEnv(INSIDE_LICH, async () => {
+    const plugin = await LichPlugin({ $: shell.$ }, fakeHelper())
+    return body(plugin.tool)
+  })
 }
 
 test('every operation lich offers is a tool', async () => {
@@ -185,9 +188,7 @@ test('nothing is registered outside a lich session', async () => {
   const shell = fakeShell()
 
   await withoutLich(async () => {
-    assert.equal(await lichTools(shell.$, fakeHelper()), null)
-
-    const plugin = await LichPlugin({ $: shell.$ })
+    const plugin = await LichPlugin({ $: shell.$ }, fakeHelper())
     assert.equal(plugin.tool, undefined)
     // The reports are the part that must survive: they need no helper and no
     // shell, and a session outside lich is exactly where they are a no-op.
