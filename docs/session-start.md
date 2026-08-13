@@ -8,9 +8,9 @@ Reports the agent CLI's own session id so lich can persist the link between its
 session (the card) and the agent session running inside it. lich stores it as
 the *provider* session id — the field is provider-agnostic.
 
-| script                             | action                          | Claude Code hook | Codex hook     | opencode event    | Crush hook   |
-|------------------------------------|---------------------------------|------------------|----------------|-------------------|--------------|
-| `report-session-start.sh <provider>` | send the CLI's `session_id`   | `SessionStart`   | `SessionStart` | `session.created` | `PreToolUse` |
+| script                             | action                          | Claude Code hook | Codex hook     | opencode event    | omp event       | Crush hook   |
+|------------------------------------|---------------------------------|------------------|----------------|-------------------|-----------------|--------------|
+| `report-session-start.sh <provider>` | send the CLI's `session_id`   | `SessionStart`   | `SessionStart` | `session.created` | `session_start` | `PreToolUse` |
 
 `POST /session-start` with `{"session_id": $LICH_SESSION_ID,
 "provider_session_id": <session_id from the hook payload on stdin>, "provider":
@@ -19,7 +19,8 @@ the *provider* session id — the field is provider-agnostic.
 The provider id comes from the registration, not from the payload: the scripts
 are shared, the hook files are not, so `hooks.json` passes `claude`,
 `codex-hooks.json` passes `codex` and `crush-hooks.json` passes `crush`.
-`opencode/lich.js` has no registration to read it from and spells its own.
+`opencode/lich.js` and `omp/lich.js` have no registration to read it from and
+spell their own.
 lich keys the card's icon on it — a hand-run `codex` inside a shell session
 marks that card as Codex, not as Claude. An omitted argument defaults to
 `claude`, which is also how lich reads a report from a plugin older than this
@@ -35,10 +36,19 @@ Crush included, whose hooks are Claude Code-compatible — so one script serves
 them. It uses `jq` to read the payload when present, and falls back to `sed`
 otherwise — so it also works on Windows, where `jq` is usually absent.
 
-The two newer harnesses report from the earliest place each offers. opencode
-raises `session.created` before the first turn, as early as `SessionStart`.
-**Crush only has `PreToolUse`**, so its id rides the first tool call and a
-conversation that answers without a tool never sends one — late, not wrong.
+The module harnesses report from the earliest place each offers. opencode raises
+`session.created` before the first turn, as early as `SessionStart`; omp's
+`session_start` fires at the same point, and the id itself is read off
+`ctx.sessionManager.getSessionId()` rather than off the event, which carries
+nothing but its type. **Crush only has `PreToolUse`**, so its id rides the first
+tool call and a conversation that answers without a tool never sends one — late,
+not wrong.
+
+**`omp` is not a registered provider id upstream yet.** This client sends it
+because it is the only correct value, and the day lich adds it to its provider
+list the card wears omp's icon and resumes with `omp -r <id>` — omp keeps a
+session per file, so that check has something to find, unlike opencode's and
+Crush's SQLite. Until then lich rejects the report and the card holds no id.
 
 The report doubles as proof that an agent runs in that PTY, so lich also marks
 the card as running that provider (its icon) until the mark is cleared — which

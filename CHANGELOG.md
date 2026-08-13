@@ -7,6 +7,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **omp (oh-my-pi) sessions report to lich.** A fifth harness, and the second
+  that loads a module rather than running commands: omp merges `--hook` and
+  `--extension` into one list and `import()`s every entry, so even the files it
+  calls hooks are modules. `omp/lich.js` is the whole client — the session id off
+  `ctx.sessionManager.getSessionId()` at `session_start`, `busy` on `input` and
+  `turn_start`, the tool line on `tool_call`, the git-status refresh on a
+  `tool_result` from `write`/`edit`/`bash`/`notebook`, and `done` plus the
+  generated title when a turn settles. Install is the file plus a line:
+  `~/.omp/agent/extensions/lich.js`, or any path named in `extensions:` in
+  `~/.omp/agent/config.yml`.
+
+  Two states are deliberately absent. Nothing reports `waiting`: omp has an
+  approval event, but it was never observed on a real run here, and a name taken
+  off a type declaration is a report that silently never fires — so an omp card
+  shows a spinner, not a bell, while the agent waits on you. Nothing reports
+  `idle` either, for the same reason no opencode session does: the process that
+  would send it is the one exiting.
+
+  The gate lives in the module rather than in a registration. omp discovers
+  `~/.claude` and `~/.omp` configuration wholesale, so a global install is loaded
+  by every omp run on the machine; with no lich environment the factory
+  subscribes to nothing at all.
+
+  Needs `omp` registered as a provider id in lich — until then the session-id
+  report is rejected and the card holds no id, while the other three land.
+
 ## [0.9.2] - 2026-08-12
 
 ### Fixed
