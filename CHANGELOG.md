@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **A Codex session on Windows reports again.** Every hook failed there —
+  `hook exited with code 1` on each event, and `invalid stop hook JSON output`
+  on top of it, because cmd.exe writes its own error to stdout and Codex reads
+  a Stop hook's stdout as a decision. Two causes, both on this side. Codex
+  substitutes `${KEY}` and nothing else before handing the line to a shell, so
+  the bare `$CLAUDE_PLUGIN_ROOT` the Codex registration used only ever worked
+  because the Unix shell expanded what Codex had left alone — `cmd.exe /C` does
+  not, and the hook ran a path that does not exist. The registration now spells
+  the braced form, the one Claude Code's has always used. And cmd.exe cannot
+  execute a `.sh` at all, so each hook gained a `commandWindows` handing the
+  same script and the same argument to `hooks/win-run.cmd`, a wrapper that
+  finds Git Bash — on `PATH`, then at its default install — and exits 0
+  whether or not it does. Codex prefers `commandWindows` on Windows and ignores
+  it everywhere else, so one registration still serves both, and nothing about
+  a Unix run changes.
+
 ## [0.9.2] - 2026-08-12
 
 ### Fixed

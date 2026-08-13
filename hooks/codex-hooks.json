@@ -5,7 +5,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "\"$CLAUDE_PLUGIN_ROOT/hooks/report-session-start.sh\" codex",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/report-session-start.sh\" codex",
+            "commandWindows": "\"${CLAUDE_PLUGIN_ROOT}/hooks/win-run.cmd\" \"${CLAUDE_PLUGIN_ROOT}/hooks/report-session-start.sh\" codex",
             "timeout": 5
           }
         ]
@@ -16,7 +17,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "\"$CLAUDE_PLUGIN_ROOT/hooks/report-state.sh\" busy",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/report-state.sh\" busy",
+            "commandWindows": "\"${CLAUDE_PLUGIN_ROOT}/hooks/win-run.cmd\" \"${CLAUDE_PLUGIN_ROOT}/hooks/report-state.sh\" busy",
             "timeout": 5
           }
         ]
@@ -27,7 +29,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "\"$CLAUDE_PLUGIN_ROOT/hooks/report-tool.sh\"",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/report-tool.sh\"",
+            "commandWindows": "\"${CLAUDE_PLUGIN_ROOT}/hooks/win-run.cmd\" \"${CLAUDE_PLUGIN_ROOT}/hooks/report-tool.sh\"",
             "timeout": 5
           }
         ]
@@ -38,7 +41,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "\"$CLAUDE_PLUGIN_ROOT/hooks/report-state.sh\" busy",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/report-state.sh\" busy",
+            "commandWindows": "\"${CLAUDE_PLUGIN_ROOT}/hooks/win-run.cmd\" \"${CLAUDE_PLUGIN_ROOT}/hooks/report-state.sh\" busy",
             "timeout": 5
           }
         ]
@@ -48,7 +52,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "\"$CLAUDE_PLUGIN_ROOT/hooks/report-touched.sh\"",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/report-touched.sh\"",
+            "commandWindows": "\"${CLAUDE_PLUGIN_ROOT}/hooks/win-run.cmd\" \"${CLAUDE_PLUGIN_ROOT}/hooks/report-touched.sh\"",
             "timeout": 5
           }
         ]
@@ -59,7 +64,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "\"$CLAUDE_PLUGIN_ROOT/hooks/report-state.sh\" waiting",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/report-state.sh\" waiting",
+            "commandWindows": "\"${CLAUDE_PLUGIN_ROOT}/hooks/win-run.cmd\" \"${CLAUDE_PLUGIN_ROOT}/hooks/report-state.sh\" waiting",
             "timeout": 5
           }
         ]
@@ -70,12 +76,14 @@
         "hooks": [
           {
             "type": "command",
-            "command": "\"$CLAUDE_PLUGIN_ROOT/hooks/report-state.sh\" done",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/report-state.sh\" done",
+            "commandWindows": "\"${CLAUDE_PLUGIN_ROOT}/hooks/win-run.cmd\" \"${CLAUDE_PLUGIN_ROOT}/hooks/report-state.sh\" done",
             "timeout": 5
           },
           {
             "type": "command",
-            "command": "\"$CLAUDE_PLUGIN_ROOT/hooks/report-title.sh\"",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/report-title.sh\"",
+            "commandWindows": "\"${CLAUDE_PLUGIN_ROOT}/hooks/win-run.cmd\" \"${CLAUDE_PLUGIN_ROOT}/hooks/report-title.sh\"",
             "timeout": 5
           }
         ]
@@ -86,7 +94,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "\"$CLAUDE_PLUGIN_ROOT/hooks/report-state.sh\" idle",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/report-state.sh\" idle",
+            "commandWindows": "\"${CLAUDE_PLUGIN_ROOT}/hooks/win-run.cmd\" \"${CLAUDE_PLUGIN_ROOT}/hooks/report-state.sh\" idle",
             "timeout": 3
           }
         ]
