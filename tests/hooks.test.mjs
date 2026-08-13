@@ -289,6 +289,34 @@ test("Crush's registration keeps the placeholder for the clone's path", () => {
   )
 })
 
+// Codex substitutes `${KEY}` and nothing else, then hands the line to a shell:
+// `$SHELL -lc` on Unix, `cmd.exe /C` on Windows. A bare `$CLAUDE_PLUGIN_ROOT`
+// therefore only works by accident — the Unix shell expands what Codex left
+// alone, and cmd.exe does not, so every hook ran a path that does not exist.
+test("Codex's registration spells the plugin root the way Codex expands it", () => {
+  const raw = readFileSync(path.join(ROOT, 'hooks/codex-hooks.json'), 'utf8')
+  assert.ok(
+    !/\$CLAUDE_PLUGIN_ROOT/.test(raw),
+    'codex-hooks.json must use ${CLAUDE_PLUGIN_ROOT}: Codex only substitutes the braced form',
+  )
+})
+
+// cmd.exe cannot execute a .sh, so the Windows line hands the same script and
+// the same argument to win-run.cmd, which finds a POSIX shell for it.
+test("Codex's registration runs every hook through the wrapper on Windows", () => {
+  const json = JSON.parse(readFileSync(path.join(ROOT, 'hooks/codex-hooks.json'), 'utf8'))
+  const hooks = Object.values(json.hooks).flatMap((groups) => groups.flatMap((g) => g.hooks))
+  assert.ok(hooks.length > 0)
+  for (const hook of hooks) {
+    assert.ok(hook.commandWindows, `no commandWindows for ${hook.command}`)
+    assert.equal(
+      hook.commandWindows,
+      `"\${CLAUDE_PLUGIN_ROOT}/hooks/win-run.cmd" ${hook.command}`,
+      `commandWindows must wrap the command unchanged: ${hook.command}`,
+    )
+  }
+})
+
 test('every registered state argument is an accepted state', () => {
   const sent = REGISTRATIONS.filter((r) => r.script === 'report-state.sh').map((r) => r.argument)
   assert.ok(sent.length > 0)

@@ -13,6 +13,7 @@ hooks/hooks.json                  # hook registration, Claude Code
 hooks/codex-hooks.json            # hook registration, Codex
 hooks/crush-hooks.json            # hook registration, Crush (hand-merged into crush.json)
 hooks/                            # hook scripts ($CLAUDE_PLUGIN_ROOT/hooks/<script>, all three)
+hooks/win-run.cmd                 # runs one of those scripts on Windows (Codex)
 opencode/lich.js                  # opencode client: a module, not a command
 docs/                             # lich ⇄ plugin communication contracts
 skills/                           # skills (skills/<name>/SKILL.md, all)

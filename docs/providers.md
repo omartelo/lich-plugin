@@ -18,6 +18,7 @@ This repository is one plugin, packaged for each harness it supports:
 | `hooks/codex-hooks.json`        | Codex       | hook registration             |
 | `hooks/crush-hooks.json`        | Crush       | hook registration, merged by hand |
 | `hooks/*.sh`                    | the three   | the reports themselves        |
+| `hooks/win-run.cmd`             | Codex       | runs a script on Windows      |
 | `opencode/lich.js`              | opencode    | the whole client, as a module |
 | `skills/`                       | all         | skills, same layout           |
 
@@ -101,6 +102,17 @@ waits.
   `hooks/hooks.json` when a plugin manifest declares none; this one declares
   `./hooks/codex-hooks.json`, so the Claude Code registration sitting beside it
   is not also loaded — a session reports each event once, not twice.
+- **The plugin root is spelled `${CLAUDE_PLUGIN_ROOT}`, braces included.** Codex
+  substitutes the braced form and nothing else before handing the line to a
+  shell, so a bare `$CLAUDE_PLUGIN_ROOT` only survives where the shell itself
+  expands it. That is every Unix run — hooks go to `$SHELL -lc` — and no Windows
+  one, where they go to `cmd.exe /C`.
+- **Windows runs the scripts through `hooks/win-run.cmd`.** `cmd.exe` cannot
+  execute a `.sh`, so each hook registers a `commandWindows` handing the same
+  script and the same argument to that wrapper, which looks for Git Bash — on
+  `PATH`, then at its default install — and always exits 0, bash or no bash.
+  Codex picks `commandWindows` over `command` on Windows and ignores it
+  everywhere else, so one registration still serves both.
 
 ## opencode specifics
 
