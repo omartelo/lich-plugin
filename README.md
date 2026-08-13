@@ -1,13 +1,13 @@
 # lich-plugin
 
-The agent side of the [lich](https://github.com/omartelo/lich) integration. lich is a harness that orchestrates agent CLI sessions; this companion plugin gives it eyes and hands inside each session. It installs on **Claude Code**, **OpenAI Codex**, **opencode** and **Crush** from this same repository. Every hook implements a contract that is canonical in the lich repository (`docs/hooks/` there); the docs in `docs/` here point at each contract and describe the client side:
+The agent side of the [lich](https://github.com/omartelo/lich) integration. lich is a harness that orchestrates agent CLI sessions; this companion plugin gives it eyes and hands inside each session. It installs on **Claude Code**, **OpenAI Codex**, **opencode**, **omp** (oh-my-pi) and **Crush** from this same repository. Every hook implements a contract that is canonical in the lich repository (`docs/hooks/` there); the docs in `docs/` here point at each contract and describe the client side:
 
 - **session state** — `busy`/`done` on the session card (`UserPromptSubmit`/`Stop`)
 - **session start** — persists the agent's session id on the lich session (`SessionStart`)
 - **session title** — names the card after the session's own title (`Stop`)
 - **session touched** — refreshes the card's git status right after file-mutating tools (`PostToolUse`)
 
-The four are what Claude Code, Codex and opencode report. **Crush reports two of them** — its session id and the git-status refresh — because `PreToolUse` is the only event it has, and a state nothing can end is worse on a card than no state. [docs/providers.md](docs/providers.md) has the event mapping per harness.
+The four are what Claude Code, Codex, opencode and omp report. **Crush reports two of them** — its session id and the git-status refresh — because `PreToolUse` is the only event it has, and a state nothing can end is worse on a card than no state. **omp reports all four minus the bell**: no event of its own for "your turn" has been measured yet, so its card shows a spinner while the agent waits on you. [docs/providers.md](docs/providers.md) has the event mapping per harness.
 
 On **opencode** it also carries the other direction: the seven operations lich
 offers a session for driving the sessions beside it — list, send, wait, reply,
@@ -37,12 +37,13 @@ hooks/report-session-start.sh     # session-start hook
 hooks/report-title.sh             # session-title hook
 hooks/report-touched.sh           # session-touched hook
 opencode/lich.js                  # opencode client: all four reports plus the seven tools, one module
+omp/lich.js                       # omp client: the reports, one module
 docs/                             # client-side docs, one per contract
 skills/theme/                     # theme skill: SKILL.md, template.json, validate.mjs
 tests/                            # hook payloads asserted against lich's fixtures
 ```
 
-One set of hook scripts serves Claude Code, Codex and Crush — they live in `hooks/` and are referenced via `$CLAUDE_PLUGIN_ROOT/hooks/<script>`, a variable Codex sets too. opencode runs no commands: a plugin there is a module its server imports, so its client is the single file `opencode/lich.js`, sending the same payloads to the same endpoints. [docs/providers.md](docs/providers.md) maps the layout and every harness's event names.
+One set of hook scripts serves Claude Code, Codex and Crush — they live in `hooks/` and are referenced via `$CLAUDE_PLUGIN_ROOT/hooks/<script>`, a variable Codex sets too. opencode and omp run no commands: in both, what gets loaded is a JavaScript module, so each has a single-file client — `opencode/lich.js` and `omp/lich.js` — sending the same payloads to the same endpoints. [docs/providers.md](docs/providers.md) maps the layout and every harness's event names.
 
 ## Installation
 
@@ -77,6 +78,18 @@ curl -fsSL -o ~/.config/opencode/plugin/lich.js \
 ```
 
 Per project instead of globally, use `.opencode/plugin/lich.js`. Updating means fetching the file again.
+
+### omp (oh-my-pi)
+
+omp has no marketplace of its own either, and its `--hook` and `--extension` flags are one list of modules. It scans `~/.omp/agent/extensions/` without being told, so dropping the file there is the install:
+
+```bash
+mkdir -p ~/.omp/agent/extensions
+curl -fsSL -o ~/.omp/agent/extensions/lich.js \
+  https://raw.githubusercontent.com/omartelo/lich-plugin/main/omp/lich.js
+```
+
+To keep it somewhere else, name the path instead — `omp config set extensions '["/path/to/lich.js"]'`, which writes `extensions:` in `~/.omp/agent/config.yml` — or pass `--hook /path/to/lich.js` for a single run. Per project, `.omp/extensions/lich.js` works the same way. Updating means fetching the file again.
 
 ### Crush
 
@@ -131,4 +144,4 @@ claude --plugin-dir .
 node --test tests/*.test.mjs
 ```
 
-Every hook script runs as a real subprocess, from the command line its registration spells, against a stub HTTP server — and the body it POSTs is asserted against [lich's contract fixtures](https://github.com/omartelo/lich/tree/main/docs/hooks/fixtures): an accepted shape, never a rejected one, the right endpoint and token, plus the client rules (no lich environment → no report; exit 0 when lich answers 500 or refuses the connection). The opencode module is imported instead of spawned and fed the events a real opencode run emits, against the same fixtures. Both share `tests/contract.mjs`. The fixtures are vendored in `tests/fixtures/` by `tests/refresh-fixtures.sh`; CI diffs them against upstream so a contract that moves in lich goes red here.
+Every hook script runs as a real subprocess, from the command line its registration spells, against a stub HTTP server — and the body it POSTs is asserted against [lich's contract fixtures](https://github.com/omartelo/lich/tree/main/docs/hooks/fixtures): an accepted shape, never a rejected one, the right endpoint and token, plus the client rules (no lich environment → no report; exit 0 when lich answers 500 or refuses the connection). The opencode and omp modules are imported instead of spawned and fed the events a real run of each emits, against the same fixtures. All three share `tests/contract.mjs`. The fixtures are vendored in `tests/fixtures/` by `tests/refresh-fixtures.sh`; CI diffs them against upstream so a contract that moves in lich goes red here.

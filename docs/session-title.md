@@ -8,9 +8,9 @@ Reports the title the agent CLI gives its own session, so lich can name the
 session card after it. lich only applies it while the card's label is still
 automatic, so re-sending on every `Stop` is idempotent.
 
-| script            | action                    | Claude Code hook | Codex hook | opencode event    | Crush hook |
-|-------------------|---------------------------|------------------|------------|-------------------|------------|
-| `report-title.sh` | send the session's title  | `Stop`           | `Stop`     | `session.updated` | —          |
+| script            | action                    | Claude Code hook | Codex hook | opencode event    | omp event                    | Crush hook |
+|-------------------|---------------------------|------------------|------------|-------------------|------------------------------|------------|
+| `report-title.sh` | send the session's title  | `Stop`           | `Stop`     | `session.updated` | `session_stop`, `turn_start` | —          |
 
 `POST /session-title` with `{"session_id": $LICH_SESSION_ID, "title": <title>}`.
 Both providers keep the title in the transcript file (`transcript_path` on
@@ -31,5 +31,13 @@ and the hook no-ops. Requires `jq`; absent → no-op.
   session is created with is a placeholder built from its timestamp, so the
   module keeps that first value and reports only a title that differs from it.
   It arrives more than once per turn, which the idempotence above covers.
+- **omp** — no transcript to read either: the title is on the session manager
+  every handler is handed, as `ctx.sessionManager.getSessionName()`. omp writes
+  it asynchronously after a turn, so the turn that produced it may well settle
+  before it exists — which is why `omp/lich.js` reads it at both ends, when a
+  turn settles and when the next one starts, and sends it only when it differs
+  from the last one sent. A session whose only turn is its last still reports
+  its title, one turn late; a session that never gets a second turn reports
+  none.
 - **Crush** — nothing to report. Its one event, `PreToolUse`, is about the tool;
   a Crush card keeps the name lich gave it.

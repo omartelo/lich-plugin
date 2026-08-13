@@ -20,6 +20,7 @@ This repository is one plugin, packaged for each harness it supports:
 | `hooks/*.sh`                    | the three   | the reports themselves        |
 | `hooks/win-run.cmd`             | Codex       | runs a script on Windows      |
 | `opencode/lich.js`              | opencode    | the whole client, as a module |
+| `omp/lich.js`                   | omp         | the whole client, as a module |
 | `skills/`                       | all         | skills, same layout           |
 
 The repository root is the plugin root for Claude Code and Codex, so a single
@@ -30,26 +31,29 @@ on stdin with `session_id` and `transcript_path` (and `tool_name` /
 the installed plugin — Codex sets that same variable, so the command lines are
 identical.
 
-**opencode is the exception, and it is a packaging one.** It has no notion of a
-hook command: a plugin there is a JavaScript module the opencode server imports,
-which subscribes to an event bus instead of being spawned per event. So the four
-reports live in one file, `opencode/lich.js`, which posts the same payloads to
-the same endpoints. Nothing about the contracts changes; what changes is that
-there is no process to exit 0 from, so the module swallows its own errors and
-never awaits a report.
+**opencode and omp are the exceptions, and both are packaging ones.** Neither
+has a notion of a hook command. In opencode a plugin is a JavaScript module the
+server imports, which subscribes to an event bus instead of being spawned per
+event. omp arrives at the same place from the other side: it *has* a `--hook`
+flag, but `--hook` and `--extension` are one list and every entry is loaded with
+`import()` — even the files it calls hooks are modules, never scripts fed a
+payload on stdin. So each gets one file, `opencode/lich.js` and `omp/lich.js`,
+posting the same payloads to the same endpoints. Nothing about the contracts
+changes; what changes is that there is no process to exit 0 from, so the module
+swallows its own errors and never awaits a report.
 
 ## Event vocabulary
 
-| Report              | Claude Code                  | Codex                        | opencode                  | Crush                       |
-|---------------------|------------------------------|------------------------------|---------------------------|-----------------------------|
-| session id          | `SessionStart`               | `SessionStart`               | `session.created`         | `PreToolUse`                |
-| `busy`              | `UserPromptSubmit`, `PostToolUse` | `UserPromptSubmit`, `PostToolUse` | `session.status` (`busy`) | —              |
-| `busy` + tool       | `PreToolUse`                 | `PreToolUse`                 | `tool.execute.before`     | —                           |
-| `waiting`           | `Notification`               | `PermissionRequest`          | any `*.asked`             | —                           |
-| `done`              | `Stop`                       | `Stop`                       | `session.status` (`idle`) | —                           |
-| title               | `Stop`                       | `Stop`                       | `session.updated`         | —                           |
-| `idle`              | `SessionEnd`                 | — (registered, never fires)  | — (nothing outlives it)   | —                           |
-| touched             | `PostToolUse` (write tools)  | `PostToolUse` (write tools)  | `file.edited`             | `PreToolUse` (write tools)  |
+| Report              | Claude Code                  | Codex                        | opencode                  | omp                      | Crush                       |
+|---------------------|------------------------------|------------------------------|---------------------------|--------------------------|-----------------------------|
+| session id          | `SessionStart`               | `SessionStart`               | `session.created`         | `session_start`          | `PreToolUse`                |
+| `busy`              | `UserPromptSubmit`, `PostToolUse` | `UserPromptSubmit`, `PostToolUse` | `session.status` (`busy`) | `input`, `turn_start` | —              |
+| `busy` + tool       | `PreToolUse`                 | `PreToolUse`                 | `tool.execute.before`     | `tool_call`              | —                           |
+| `waiting`           | `Notification`               | `PermissionRequest`          | any `*.asked`             | — (see below)            | —                           |
+| `done`              | `Stop`                       | `Stop`                       | `session.status` (`idle`) | `session_stop`           | —                           |
+| title               | `Stop`                       | `Stop`                       | `session.updated`         | `session_stop`, `turn_start` | —                       |
+| `idle`              | `SessionEnd`                 | — (registered, never fires)  | — (nothing outlives it)   | — (nothing outlives it)  | —                           |
+| touched             | `PostToolUse` (write tools)  | `PostToolUse` (write tools)  | `file.edited`             | `tool_result` (write tools) | `PreToolUse` (write tools) |
 
 Every cell above was taken off a real run of that harness against a stub
 listener, not off its documentation.
@@ -140,6 +144,61 @@ waits.
   would sit in front of the agent's next step. Every `fetch` here is fired and
   dropped, with a 1s timeout, and its failure is swallowed — the module's version
   of "always exit 0".
+
+## omp specifics
+
+Everything below was measured against omp v17.3.0
+(`@oh-my-pi/pi-coding-agent`), driving a real `omp --hook … -p …` run at a stub
+listener. 17.x moves fast — re-measure before trusting a name.
+
+- **`--hook` is `--extension`.** omp merges both flags into one list of
+  extension paths and imports every entry, so a "hook" there is a module
+  exporting a default factory, called with omp's API object. Its *other*
+  hooks — `hooks/pre/<tool>.sh` — are imported the same way rather than run, so
+  there is no script-and-stdin path anywhere in omp to reuse the `hooks/*.sh`
+  scripts from.
+- **It loads only `module.default`.** Unlike opencode, which calls every export
+  of a plugin file, omp reads one and warns if it is not a function.
+- **The session id is on the context, not in the environment.** omp exports
+  nothing about the running session to its own process env; every handler gets
+  `ctx.sessionManager`, whose `getSessionId()` is the id, and `getSessionFile()`
+  the transcript path. `omp -r <id>` resumes from that id.
+- **The gate is inside the module.** omp discovers configuration from `~/.omp`,
+  `~/.claude`, `~/.codex` and `~/.gemini` wholesale, and there is no per-harness
+  registration to key on, so a global install is loaded by every omp run on the
+  machine. Outside lich the factory subscribes to nothing at all.
+- **`input` is interactive-only.** It fires when the user submits a prompt,
+  which is what lich spawns — but a `-p` run has no `input` at all, so
+  `turn_start` carries `busy` there. It is also the recovery the script
+  harnesses get from `PostToolUse`: every turn passes through it.
+- **Nothing reports `waiting`.** omp raises `tool_approval_requested` when it
+  asks to run something, but that was not observed on a real run here (the
+  measured runs never reached an approval), and an unmeasured event name is a
+  report that silently never fires. Until it is measured, an omp card shows the
+  spinner while the agent waits on you.
+- **Nothing reports `idle` either.** The event that would say "the CLI has left"
+  is the process exiting with this module inside it. Like a Codex or an opencode
+  card, an omp card holds its last indicator until lich respawns its terminal.
+- **Never awaited.** omp awaits its extension handlers, so a report that blocked
+  would sit in front of the agent's next step. Every `fetch` is fired and
+  dropped, with a 1s timeout, and its failure is swallowed — the module's version
+  of "always exit 0". Handlers are synchronous and return nothing: `tool_call`
+  returning `{block: true}` would refuse the user's tool call.
+- **Install is a file plus a line.** Drop the module anywhere and name it in
+  `~/.omp/agent/config.yml` under `extensions:`, or drop it straight into
+  `~/.omp/agent/extensions/`, which omp scans without being told. Both were
+  measured; there is no manifest and no marketplace entry of omp's own.
+- **omp reads Claude Code plugins, but not their hooks.** It loads
+  `~/.claude/plugins/cache/` and takes skills, slash commands, custom tools and
+  MCP servers from them — honouring `.omp-plugin/plugin.json` before
+  `.claude-plugin/plugin.json`. `hooks/hooks.json` is read by nothing there, so
+  installing this repository as a Claude plugin gives an omp session the skills
+  and none of the reports.
+- **MCP has no command-line flag.** omp reads Claude-Desktop-shaped
+  `{"mcpServers": …}` from `~/.omp/agent/mcp.json` (and `.omp/mcp.json`,
+  `<cwd>/.mcp.json`), expanding `${VAR}` and `${VAR:-default}` from the process
+  environment — so a session token can ride in on the variables lich already
+  injects. The `--config` overlay does *not* take MCP servers.
 
 ## Crush specifics
 

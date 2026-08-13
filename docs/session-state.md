@@ -8,20 +8,30 @@ Reports the session's processing state so the lich card shows a spinner while
 the agent works, a check when the turn ends, and a bell (plus an actionable
 toast) when the agent is blocked on the user.
 
-| script                    | state            | Claude Code hook   | Codex hook          | opencode event            |
-|---------------------------|------------------|--------------------|---------------------|---------------------------|
-| `report-state.sh busy`    | `busy`           | `UserPromptSubmit` | `UserPromptSubmit`  | `session.status` (`busy`) |
-| `report-tool.sh`          | `busy` + `tool`  | `PreToolUse`       | `PreToolUse`        | `tool.execute.before`     |
-| `report-state.sh busy`    | `busy`           | `PostToolUse`      | `PostToolUse`       | `session.status` (`busy`) |
-| `report-state.sh done`    | `done`           | `Stop`             | `Stop`              | `session.status` (`idle`) |
-| `report-state.sh waiting` | `waiting`        | `Notification`     | `PermissionRequest` | any `*.asked`             |
-| `report-state.sh idle`    | `idle`           | `SessionEnd`       | — (never fires)     | — (never fires)           |
+| script                    | state            | Claude Code hook   | Codex hook          | opencode event            | omp event       |
+|---------------------------|------------------|--------------------|---------------------|---------------------------|-----------------|
+| `report-state.sh busy`    | `busy`           | `UserPromptSubmit` | `UserPromptSubmit`  | `session.status` (`busy`) | `input`         |
+| `report-tool.sh`          | `busy` + `tool`  | `PreToolUse`       | `PreToolUse`        | `tool.execute.before`     | `tool_call`     |
+| `report-state.sh busy`    | `busy`           | `PostToolUse`      | `PostToolUse`       | `session.status` (`busy`) | `turn_start`    |
+| `report-state.sh done`    | `done`           | `Stop`             | `Stop`              | `session.status` (`idle`) | `session_stop`  |
+| `report-state.sh waiting` | `waiting`        | `Notification`     | `PermissionRequest` | any `*.asked`             | — (not measured)|
+| `report-state.sh idle`    | `idle`           | `SessionEnd`       | — (never fires)     | — (never fires)           | — (never fires) |
 
-opencode runs no scripts: `opencode/lich.js` sends the same payloads off the
-event bus, and its `session.status` carries the state rather than implying it —
-`idle` there is the turn ending, which is this contract's `done`. **Crush is
+opencode and omp run no scripts: `opencode/lich.js` and `omp/lich.js` send the
+same payloads off the events their harness hands a loaded module. opencode's
+`session.status` carries the state rather than implying it — `idle` there is the
+turn ending, which is this contract's `done`. omp implies it like the script
+harnesses do, and its `turn_start` is the `PostToolUse → busy` of that column:
+every turn passes through it, including the ones no `input` precedes. **Crush is
 absent from the table on purpose**: its only event is `PreToolUse`, and a `busy`
 nothing can end would pin a spinner to a card. See [providers.md](providers.md).
+
+**omp reports no `waiting`.** It raises `tool_approval_requested` when it asks to
+run something, but that event was never observed on a real run here, and a name
+taken off a type declaration is a report that silently never fires. An omp card
+therefore shows a spinner, not a bell, while the agent waits on you — one state
+late, never wrong. The event is the first thing to measure when someone can drive
+an approval prompt.
 
 `POST /hook` with `{"session_id": $LICH_SESSION_ID, "state":
 "busy"|"done"|"waiting"|"idle"}`, plus the optional `tool` / `detail` pair the
@@ -79,19 +89,23 @@ always exit 0) stop being merely polite here.
 What the two harnesses actually send, taken off a real run of each against a
 stub listener rather than off their documentation:
 
-| Action        | Claude Code       | Codex                     | opencode         |
-|---------------|-------------------|---------------------------|------------------|
-| run a command | `Bash`            | `Bash`                    | `bash`           |
-| edit a file   | `Edit` / `Write`  | `apply_patch`             | `edit` / `write` |
-| read a file   | `Read`            | — (goes through `Bash`)   | `read`           |
-| search        | `Grep` / `Glob`   | — (goes through `Bash`)   | `grep` / `glob`  |
+| Action        | Claude Code       | Codex                     | opencode         | omp              |
+|---------------|-------------------|---------------------------|------------------|------------------|
+| run a command | `Bash`            | `Bash`                    | `bash`           | `bash`           |
+| edit a file   | `Edit` / `Write`  | `apply_patch`             | `edit` / `write` | `edit` / `write` |
+| read a file   | `Read`            | — (goes through `Bash`)   | `read`           | `read`           |
+| search        | `Grep` / `Glob`   | — (goes through `Bash`)   | `grep` / `glob`  | `grep` / `glob`  |
 
 The `detail` is read by field, never by tool name — `command`, then
 `file_path` / `path`, then `pattern` / `url` / `query` — which is what makes one
 rule cover both: a Codex shell call arrives as `Bash` carrying the same
 `command` string Claude Code sends. opencode spells the same fields in camel
 case (`filePath`) and hands over paths already relative to the session, so
-`lich.js` reads the same list and skips the shortening below.
+`lich.js` reads the same list and skips the shortening below. omp's built-ins
+spell it `path` (read, write, edit, glob), `command` (bash) or `pattern`
+(grep) — also already relative — and `omp/lich.js` keeps the camel-case and
+`query` / `url` spellings after them, for the tools omp does not define itself:
+an extension's or an MCP server's, named however their author named them.
 
 Two shapes need more than the plain rule:
 
