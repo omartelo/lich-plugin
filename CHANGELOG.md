@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.10.0] - 2026-08-13
+
 ### Added
 
 - **omp (oh-my-pi) sessions report to lich.** A fifth harness, and the second
@@ -338,7 +340,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   plugin is safe to install globally. Requests time out after ~1s and errors
   are swallowed — the hook never blocks or fails the turn.
 
-[Unreleased]: https://github.com/omartelo/lich-plugin/compare/v0.9.2...HEAD
+[Unreleased]: https://github.com/omartelo/lich-plugin/compare/v0.10.0...HEAD
+[0.10.0]: https://github.com/omartelo/lich-plugin/compare/v0.9.2...v0.10.0
 [0.9.2]: https://github.com/omartelo/lich-plugin/compare/v0.9.1...v0.9.2
 [0.9.1]: https://github.com/omartelo/lich-plugin/compare/v0.9.0...v0.9.1
 [0.9.0]: https://github.com/omartelo/lich-plugin/compare/v0.8.0...v0.9.0
