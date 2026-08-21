@@ -3,7 +3,7 @@
 The other contracts in this directory are about **reporting**: they tell lich
 what a session is doing. This one is the other direction — what a session can
 *do* to the sessions beside it: list them, hand one a task, answer one, open a
-new one, close one, look at the worktrees.
+new one, rename one, close one, look at the worktrees.
 
 lich exposes those operations twice, and both are documented in
 [`docs/cli.md`](https://github.com/omartelo/lich/blob/main/docs/cli.md) there:
@@ -14,7 +14,7 @@ What it can do is define tools, so that is what `opencode/lich.js` does.
 
 ## What is registered
 
-The same seven the MCP server offers, under the same names, because an agent
+The same eight the MCP server offers, under the same names, because an agent
 that learns one surface should find the other under the names it already knows:
 
 | Tool | What it does |
@@ -25,6 +25,7 @@ that learns one surface should find the other under the names it already knows:
 | `reply_to_session` | Answer a task another session sent you. |
 | `open_session` | Open a session, optionally on a fresh git worktree. |
 | `close_session` | Close one, and settle what happens to its checkout. |
+| `rename_session` | Rename one — or your own card, which is the form an agent has. |
 | `list_worktrees` | The checkouts, what is uncommitted, who is in them. |
 
 ## They shell out to `lich`
@@ -50,8 +51,8 @@ Two cases, both deliberate, and in both the **reports keep working** — they ne
 neither of the things below:
 
 - **Outside lich.** No `LICH_PORT` / `LICH_TOKEN` / `LICH_SESSION_ID` in the
-  environment means no tools registered at all. Seven tools that could only
-  answer "no lich is running" would be seven tools in the prompt of every
+  environment means no tools registered at all. Tools that could only answer
+  "no lich is running" would be that many tools in the prompt of every
   unrelated opencode session on the machine.
 - **Without opencode's plugin package.** The `tool` helper is imported at run
   time, inside a `try`: it resolves from opencode's own plugin dependencies, and

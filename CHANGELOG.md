@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **An opencode session can rename a lich card.** `rename_session` is the eighth
+  tool, beside the seven that were already there: with a session it renames that
+  one, with only a name it renames the session the agent is running in — which is
+  the form an agent has, since `list_sessions` shows it every session but its
+  own. Like the rest it shells out to the `lich` binary (`lich rename`), so every
+  refusal is worded once, upstream. Needs lich 0.40.0 or newer; on an older one
+  the tool answers with that lich's own "not a command" line.
+
 ## [0.10.0] - 2026-08-13
 
 ### Added

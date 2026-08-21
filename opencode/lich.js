@@ -96,8 +96,8 @@ function runner($) {
 // Two guards, both about not breaking what already works:
 //
 //   - Nothing is registered outside lich. The module is a no-op there by
-//     design, and seven tools that could only answer "no lich is running" would
-//     be seven tools in every unrelated opencode session's prompt.
+//     design, and tools that could only answer "no lich is running" would be
+//     that many tools in every unrelated opencode session's prompt.
 //   - The helper is imported at run time, inside a try. It resolves from
 //     opencode's own plugin dependencies, and a plugin dropped somewhere they
 //     do not reach would otherwise fail at import — taking the reports, which
@@ -229,6 +229,37 @@ async function lichTools($, helper) {
           ...flag("--worktree", args.worktree),
           ...(args.force === true ? ["--force"] : []),
           args.session,
+        ]),
+    }),
+
+    rename_session: tool({
+      description:
+        "Rename a lich session: the name on its card, which is also the name it is addressed " +
+        "by. Omit the session to rename your own — the way a card comes to say what the work in " +
+        "it is rather than the number it was born with. A name another session in that project " +
+        "already holds is refused, because two sessions under one name is the one thing " +
+        "send_to_session cannot resolve. The name becomes the user's: the provider's own " +
+        "auto-title never overwrites it again.",
+      args: {
+        label: s.string().describe("The new name for the card."),
+        session: s
+          .string()
+          .optional()
+          .describe(
+            "Session to rename, by the label on its card or the name it answers to. " +
+              "Omit to rename the session you are running in.",
+          ),
+        project,
+      },
+      execute: (args) =>
+        run([
+          "rename",
+          ...flag("--project", args.project),
+          // The target is positional and optional, so it is dropped rather than
+          // sent empty: `lich rename "" x` would look for a session named "",
+          // where one argument is the label for the caller's own session.
+          ...(typeof args.session === "string" && args.session !== "" ? [args.session] : []),
+          args.label,
         ]),
     }),
 
