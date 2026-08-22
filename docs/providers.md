@@ -49,7 +49,7 @@ swallows its own errors and never awaits a report.
 | session id          | `SessionStart`               | `SessionStart`               | `session.created`         | `session_start`          | `PreToolUse`                |
 | `busy`              | `UserPromptSubmit`, `PostToolUse` | `UserPromptSubmit`, `PostToolUse` | `session.status` (`busy`) | `input`, `turn_start` | —              |
 | `busy` + tool       | `PreToolUse`                 | `PreToolUse`                 | `tool.execute.before`     | `tool_call`              | —                           |
-| `waiting`           | `Notification`               | `PermissionRequest`          | any `*.asked`             | — (see below)            | —                           |
+| `waiting` + reason  | `Notification`               | `PermissionRequest`          | any `*.asked`             | — (see below)            | —                           |
 | `done`              | `Stop`                       | `Stop`                       | `session.status` (`idle`) | `session_stop`           | —                           |
 | title               | `Stop`                       | `Stop`                       | `session.updated`         | `session_stop`, `turn_start` | —                       |
 | `idle`              | `SessionEnd`                 | — (registered, never fires)  | — (nothing outlives it)   | — (nothing outlives it)  | —                           |
@@ -75,7 +75,13 @@ It asks the user in more than one way — `permission.asked` and `question.asked
 each with a `.v2.` spelling published beside it — and its catalogue is not
 exhaustive: a real run emits types (`server.heartbeat`) absent from its own
 schema. Enumerating names there is how a prompt goes unreported, so the module
-matches the suffix. See [session-state.md](session-state.md).
+matches the suffix, and reads what the prompt is about by field for the same
+reason. See [session-state.md](session-state.md).
+
+A `waiting` report says what the session is blocked on, and each harness hands
+over something different to say it with — a sentence, a tool name, a permission.
+The per-harness table is in [session-state.md](session-state.md#the-reason);
+omp and Crush have no cell there, because neither reports `waiting` at all.
 
 The session id carries the provider that reported it (`report-session-start.sh
 codex`), which is what puts Codex's icon rather than Claude's on the card, and

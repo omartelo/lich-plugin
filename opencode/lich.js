@@ -36,6 +36,18 @@ function detailOf(args) {
   return undefined
 }
 
+// What an opencode prompt is blocking on. Read by field, the way detailOf
+// above reads a tool call: the four `.asked` events spell it four ways
+// (`permission`, the v2 `action`, and a question's own short `header` with its
+// full text behind it), and a field rule covers the next one too. A type that
+// carries none of them still reports `waiting` with no reason, which is the
+// documented degrade rather than a bug.
+function reasonOf(properties) {
+  const first = properties?.questions?.[0]
+  const reason = properties?.permission ?? properties?.action ?? first?.header ?? first?.question
+  return typeof reason === "string" && reason.trim() !== "" ? reason : undefined
+}
+
 // The lich command every tool below shells out to. lich exports it into each
 // PTY it spawns, and the contract says to call *that* one rather than whatever
 // `lich` resolves to on PATH: a machine running an installed lich beside a
@@ -345,7 +357,7 @@ export const LichPlugin = async ({ $ } = {}, helper) => {
           // next status report, which follows a reply within ~100ms; a missing
           // one costs the user the session.
           if (event?.type?.endsWith(".asked") && !subSessions.has(properties.sessionID)) {
-            report("hook", { state: "waiting" })
+            report("hook", { state: "waiting", reason: reasonOf(properties) })
           }
       }
     },

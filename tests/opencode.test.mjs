@@ -145,23 +145,50 @@ const ASKED_EVENTS = {
   },
 }
 
+// What each of those must put on the card: the permission itself, the v2
+// `action` under its own name, and a question's own short label — opencode
+// builds `header` for exactly this kind of surface, with the full question
+// behind it when a caller left it out.
+const ASKED_REASON = {
+  'permission.asked': 'edit',
+  'question.asked': 'Hot drink preference',
+  'permission.v2.asked': 'edit',
+  'question.v2.asked': 'coffee or tea?',
+}
+
 for (const [type, properties] of Object.entries(ASKED_EVENTS)) {
-  test(`${type} reports waiting`, async () => {
+  test(`${type} reports waiting and what it is blocked on`, async () => {
     const requests = await reportsFor(({ event }) => event(type, properties))
     assert.equal(requests.length, 1)
     const { body } = assertContractHonoured('/hook', requests[0])
     assert.equal(body.state, 'waiting')
+    assert.equal(body.reason, ASKED_REASON[type])
   })
 }
 
 // The point of the suffix rule: a prompt opencode adds later, under a name
 // nothing here knows, still reaches the card.
-test('an unknown .asked event reports waiting', async () => {
+test('an unknown .asked event reports waiting with no reason', async () => {
   const requests = await reportsFor(({ event }) =>
     event('elicitation.asked', { id: 'eli_1', sessionID: OPENCODE_SESSION_ID }),
   )
   assert.equal(requests.length, 1)
-  assert.equal(assertContractHonoured('/hook', requests[0]).body.state, 'waiting')
+  const { body } = assertContractHonoured('/hook', requests[0])
+  assert.equal(body.state, 'waiting')
+  // The documented degrade: a payload nothing here can destructure still rings
+  // the bell. A reason is optional; a missing bell costs the user the session.
+  assert.ok(!('reason' in body), `named a reason it cannot know: ${requests[0].raw}`)
+})
+
+// A field of the right name but the wrong shape is not a reason either.
+test('an .asked event whose reason is blank reports waiting alone', async () => {
+  const requests = await reportsFor(({ event }) =>
+    event('permission.asked', { id: 'per_1', sessionID: OPENCODE_SESSION_ID, permission: '   ' }),
+  )
+  assert.equal(requests.length, 1)
+  const { body } = assertContractHonoured('/hook', requests[0])
+  assert.equal(body.state, 'waiting')
+  assert.ok(!('reason' in body), `sent a blank reason: ${requests[0].raw}`)
 })
 
 // ...and its bound: the suffix is the whole rule, so an event merely mentioning
