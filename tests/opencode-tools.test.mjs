@@ -92,13 +92,14 @@ async function inLich(shell, body) {
 test('every operation lich offers is a tool', async () => {
   const shell = fakeShell()
   await inLich(shell, (tools) => {
-  // The same seven the MCP server registers for Claude Code and Codex: an agent
+  // The same set the MCP server registers for Claude Code and Codex: an agent
   // that learns one surface should find the other one under the same names.
   assert.deepEqual(Object.keys(tools).sort(), [
     'close_session',
     'list_sessions',
     'list_worktrees',
     'open_session',
+    'rename_session',
     'reply_to_session',
     'send_to_session',
     'wait_for_answer',
@@ -168,6 +169,23 @@ test('force is only passed when it is really true', async () => {
   })
 
   assert.deepEqual(shell.calls.at(-1).args, ['close', '--worktree', 'remove', '--force', 'auth-fix'])
+})
+
+test('a rename sends the target only when it names one', async () => {
+  const shell = fakeShell({ stdout: 'Renamed "auth-fix" to "the login bug".' })
+  await inLich(shell, async (tools) => {
+    const answer = await tools.rename_session.execute({ session: 'auth-fix', label: 'the login bug' })
+    assert.equal(answer, 'Renamed "auth-fix" to "the login bug".')
+    // One argument is the new name for the caller's own session, which is the
+    // form an agent has: list_sessions shows it every session but its own. An
+    // empty target sent along would be a session named "" instead.
+    await tools.rename_session.execute({ label: 'planner' })
+    await tools.rename_session.execute({ project: 'lich', session: 'docs', label: 'planner' })
+  })
+
+  assert.deepEqual(shell.calls[0].args, ['rename', 'auth-fix', 'the login bug'])
+  assert.deepEqual(shell.calls[1].args, ['rename', 'planner'])
+  assert.deepEqual(shell.calls[2].args, ['rename', '--project', 'lich', 'docs', 'planner'])
 })
 
 test('a refusal comes back as lich worded it', async () => {
