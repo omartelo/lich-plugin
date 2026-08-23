@@ -292,7 +292,7 @@ test('the vendored fixtures parse and carry exactly one body and one verdict', (
     }
   }
   assert.deepEqual([...STATES].sort(), ['busy', 'done', 'idle', 'waiting'])
-  assert.deepEqual([...PROVIDERS].sort(), ['claude', 'codex', 'crush', 'opencode'])
+  assert.deepEqual([...PROVIDERS].sort(), ['claude', 'codex', 'crush', 'omp', 'opencode'])
 })
 
 test('every rejected case is modelled by a client-side rule', () => {
