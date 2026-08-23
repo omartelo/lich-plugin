@@ -3,22 +3,22 @@
     "PreInvocation": [
       {
         "type": "command",
-        "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/report-session-start.sh\" antigravity",
+        "command": "hooks/report-session-start.sh antigravity; printf '{}'",
         "timeout": 5
       },
       {
         "type": "command",
-        "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/report-state.sh\" busy",
+        "command": "hooks/report-state.sh busy; printf '{}'",
         "timeout": 5
       }
     ],
     "PreToolUse": [
       {
-        "matcher": ".*",
+        "matcher": "",
         "hooks": [
           {
             "type": "command",
-            "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/report-tool.sh\"",
+            "command": "hooks/report-tool.sh; printf '{\"decision\":\"allow\"}'",
             "timeout": 5
           }
         ]
@@ -26,11 +26,11 @@
     ],
     "PostToolUse": [
       {
-        "matcher": "write_to_file|replace_file_content|run_command",
+        "matcher": "propose_code|file_change|edit_notebook|write_blob|delete_directory|run_command",
         "hooks": [
           {
             "type": "command",
-            "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/report-touched.sh\"",
+            "command": "hooks/report-touched.sh; printf '{}'",
             "timeout": 5
           }
         ]
@@ -39,12 +39,12 @@
     "Stop": [
       {
         "type": "command",
-        "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/report-state.sh\" done",
+        "command": "hooks/report-state.sh done; printf '{\"decision\":\"\"}'",
         "timeout": 5
       },
       {
         "type": "command",
-        "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/report-title.sh\"",
+        "command": "hooks/report-title.sh; printf '{\"decision\":\"\"}'",
         "timeout": 5
       }
     ]

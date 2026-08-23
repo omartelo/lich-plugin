@@ -130,15 +130,16 @@ always exit 0) stop being merely polite here.
 What the two harnesses actually send, taken off a real run of each against a
 stub listener rather than off their documentation:
 
-| Action        | Claude Code       | Codex                     | Antigravity             | opencode         | omp              |
-|---------------|-------------------|---------------------------|-------------------------|------------------|------------------|
-| run a command | `Bash`            | `Bash`                    | `run_command`           | `bash`           | `bash`           |
-| edit a file   | `Edit` / `Write`  | `apply_patch`             | `write_to_file` / `replace_file_content` | `edit` / `write` | `edit` / `write` |
-| read a file   | `Read`            | — (goes through `Bash`)   | `view_file`             | `read`           | `read`           |
-| search        | `Grep` / `Glob`   | — (goes through `Bash`)   | `grep_search` / `find_by_name` | `grep` / `glob` | `grep` / `glob` |
+| Action        | Claude Code       | Codex                     | Antigravity                        | opencode         | omp              |
+|---------------|-------------------|---------------------------|------------------------------------|------------------|------------------|
+| run a command | `Bash`            | `Bash`                    | `run_command`                      | `bash`           | `bash`           |
+| edit a file   | `Edit` / `Write`  | `apply_patch`             | `propose_code` / `file_change`     | `edit` / `write` | `edit` / `write` |
+| read a file   | `Read`            | — (goes through `Bash`)   | `view_file`                        | `read`           | `read`           |
+| search        | `Grep` / `Glob`   | — (goes through `Bash`)   | `grep_search` / `code_search`      | `grep` / `glob`  | `grep` / `glob`  |
 
-The `detail` is read by field, never by tool name — `command`, then
-`file_path` / `path`, then `pattern` / `url` / `query` — which is what makes one
+The `detail` is read by field, never by tool name — `command` / `CommandLine`,
+then `file_path` / `path` / `TargetFile`, then `url` / `query` / `Query` — one
+chain over both spellings, which is what makes one
 rule cover both: a Codex shell call arrives as `Bash` carrying the same
 `command` string Claude Code sends. opencode spells the same fields in camel
 case (`filePath`) and hands over paths already relative to the session, so

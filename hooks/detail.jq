@@ -16,8 +16,13 @@
 # with the part every card shares. Outside that directory only the file name is
 # left, which at least names the file. Commands are never shortened — a leading
 # slash there belongs to a binary, not to a path worth cutting.
-.cwd as $legacy_cwd
-| (.workspacePaths[0] // $legacy_cwd) as $cwd
+#
+# Antigravity spells the same two things differently: the session's directory is
+# the first of `workspacePaths`, and the arguments are PascalCase under
+# `toolCall.args`. Field names only — they join the fallback chain below rather
+# than forking it. The names are the ones the CLI binary carries; a field it
+# never sends is a rung the chain falls straight through.
+(.workspacePaths[0]? // .cwd) as $cwd
 | def short: if ($cwd // "") != "" and startswith($cwd + "/") then ltrimstr($cwd + "/")
              elif startswith("/") then sub(".*/"; "")
              else . end;
@@ -28,5 +33,7 @@
        then ((capture("\\*\\*\\* (?:Add|Update|Delete) File: (?<p>[^\n]*)") // {}) | .p // "")
        else . end)
   else
-    ((.TargetFile? // .AbsolutePath? // .DirectoryPath? // .SearchPath? // .file_path? // .path? // .Pattern? // .pattern? // .Url? // .url? // .Query? // .query? // "") | tostring | short)
+    ((.TargetFile? // .FilePath? // .AbsolutePath? // .NotebookPath? // .DirectoryPath?
+      // .SearchPath? // .SearchDirectory? // .file_path? // .path?
+      // .Url? // .url? // .Query? // .query? // .pattern? // "") | tostring | short)
   end

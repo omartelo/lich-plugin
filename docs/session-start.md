@@ -18,7 +18,8 @@ the *provider* session id — the field is provider-agnostic.
 
 The provider id comes from the registration, not from the payload: the scripts
 are shared, the hook files are not, so `hooks.json` passes `claude`,
-`codex-hooks.json` passes `codex`, `antigravity-hooks.json` passes `antigravity` and `crush-hooks.json` passes `crush`.
+`codex-hooks.json` passes `codex`, the root `hooks.json` passes `antigravity`
+and `crush-hooks.json` passes `crush`.
 `opencode/lich.js` and `omp/lich.js` have no registration to read it from and
 spell their own.
 lich keys the card's icon on it — a hand-run `codex` inside a shell session

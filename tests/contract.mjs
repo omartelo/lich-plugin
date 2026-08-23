@@ -49,6 +49,21 @@ export const rejected = (endpoint) => CASES[endpoint].filter((c) => c.reject)
 export const STATES = new Set(accepted('/hook').map((c) => c.accept.state))
 export const PROVIDERS = new Set(accepted('/session-start').map((c) => c.accept.provider))
 
+/**
+ * Providers this plugin already reports for, and lich does not accept yet.
+ *
+ * A contract moves in lich first — prose, then fixtures, then the endpoint —
+ * and only then here, so a client that lands ahead of its endpoint is declared
+ * here rather than smuggled in by editing a fixture. lich answers 400 to a
+ * provider it has not registered, so what this set really records is a report
+ * that does not arrive yet; the plugin side is still held to every other line.
+ *
+ * Emptying it is the last step of adding a provider, not an optional one: the
+ * suites fail the moment a refreshed fixture registers one, so the marker
+ * cannot outlive the gap it names.
+ */
+export const PENDING_UPSTREAM = new Set(['antigravity'])
+
 export const isObject = (v) => v !== null && typeof v === 'object' && !Array.isArray(v)
 export const blank = (v) => typeof v !== 'string' || v.trim() === ''
 
@@ -72,7 +87,8 @@ export const REJECT_RULES = {
     'missing session_id': (b) => !('session_id' in b),
     'missing provider_session_id': (b) => !('provider_session_id' in b) && !('claude_session_id' in b),
     'empty provider_session_id': (b) => b.provider_session_id === '',
-    'unregistered provider': (b) => 'provider' in b && !PROVIDERS.has(b.provider),
+    'unregistered provider': (b) =>
+      'provider' in b && !PROVIDERS.has(b.provider) && !PENDING_UPSTREAM.has(b.provider),
     'malformed json': (b, raw) => !isJsonObject(raw),
   },
   '/session-title': {

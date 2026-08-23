@@ -28,9 +28,10 @@ It also ships skills for the parts of lich you configure from inside a session:
 .claude-plugin/marketplace.json   # marketplace, Claude Code
 .codex-plugin/plugin.json         # plugin manifest, Codex
 .agents/plugins/marketplace.json  # marketplace, Codex
+plugin.json                       # plugin manifest, Antigravity (name fixed, must sit at the root)
+hooks.json                        # hook registration, Antigravity (likewise)
 hooks/hooks.json                  # hook registration, Claude Code
 hooks/codex-hooks.json            # hook registration, Codex
-hooks/antigravity-hooks.json      # hook registration, Antigravity CLI
 hooks/crush-hooks.json            # hook registration, Crush (merged into crush.json by hand)
 hooks/report-state.sh             # session-state hook
 hooks/report-tool.sh              # session-state hook: the tool a turn is running
@@ -44,7 +45,7 @@ skills/theme/                     # theme skill: SKILL.md, template.json, valida
 tests/                            # hook payloads asserted against lich's fixtures
 ```
 
-One set of hook scripts serves Claude Code, Codex, Antigravity and Crush — they live in `hooks/` and are referenced via `$CLAUDE_PLUGIN_ROOT/hooks/<script>`, a variable Codex sets too. opencode and omp run no commands: in both, what gets loaded is a JavaScript module, so each has a single-file client — `opencode/lich.js` and `omp/lich.js` — sending the same payloads to the same endpoints. [docs/providers.md](docs/providers.md) maps the layout and every harness's event names.
+One set of hook scripts serves Claude Code, Codex, Antigravity and Crush — they live in `hooks/`. Claude Code and Codex reach them through `$CLAUDE_PLUGIN_ROOT/hooks/<script>`, a variable Codex sets too; Crush ships a placeholder the user replaces. Antigravity sets no such variable — it runs a hook with the working directory set to the plugin root, so its registration spells `hooks/<script>` relative to that, and it is the reason `plugin.json` and `hooks.json` sit at the root: Antigravity fixes both names and looks for them nowhere else. opencode and omp run no commands: in both, what gets loaded is a JavaScript module, so each has a single-file client — `opencode/lich.js` and `omp/lich.js` — sending the same payloads to the same endpoints. [docs/providers.md](docs/providers.md) maps the layout and every harness's event names.
 
 ## Installation
 
@@ -70,14 +71,16 @@ Then start a new session and run `/hooks` to review and trust the plugin's hooks
 
 ### Antigravity CLI
 
-Link or copy the clone into Antigravity's plugin directory:
+A plugin is a directory holding a `plugin.json`, under a `plugins/` folder in a customization root. Symlink the clone into one — globally, or into a project's `.agents/` to share it with the team:
 
 ```bash
-mkdir -p ~/.gemini/config/plugins/lich
-cp -r . ~/.gemini/config/plugins/lich/
+mkdir -p ~/.gemini/config/plugins
+ln -s "$PWD" ~/.gemini/config/plugins/lich
 ```
 
-Or merge [`hooks/antigravity-hooks.json`](hooks/antigravity-hooks.json) into `~/.gemini/config/hooks.json` (global) or `.agents/hooks.json` (per project).
+That is the whole install: the hooks come from `hooks.json` beside the manifest, and the `theme` skill from `skills/`. `agy plugin validate .` checks the bundle from the clone before you link it, `agy plugin list` shows it afterwards, and `agy plugin disable lich` turns it off again.
+
+Without the plugin, [`hooks.json`](hooks.json) can be merged into `~/.gemini/config/hooks.json` (global) or `.agents/hooks.json` (per project) — but a hook's working directory is the folder holding the `hooks.json` that declared it, so replace each `hooks/` prefix with the absolute path to this clone.
 
 ### opencode
 

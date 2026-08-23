@@ -18,6 +18,7 @@ import {
   CASES,
   LICH_SESSION_ID,
   PROVIDERS,
+  PENDING_UPSTREAM,
   ROOT,
   REJECT_RULES,
   STATES,
@@ -36,12 +37,20 @@ const BASE_ENV = Object.fromEntries(
 
 /**
  * Runs a hook exactly as its registration spells it: the command string from
- * hooks.json / codex-hooks.json, through a shell, with $CLAUDE_PLUGIN_ROOT set.
+ * the harness's own hook file, through a shell.
+ *
+ * `pluginRoot` is what the harness gives the command to find the scripts with.
+ * Claude Code, Codex and Crush get $CLAUDE_PLUGIN_ROOT. Antigravity expands no
+ * such variable — it runs the command with the working directory set to the
+ * folder holding hooks.json — so it is run here with the variable unset, which
+ * is the regression test for a registration that reaches for it anyway: the
+ * command resolves to /hooks/<script> and exits 127.
  */
-function runHook(command, { env = {}, stdin = '' } = {}) {
+function runHook(command, { env = {}, stdin = '', pluginRoot = true } = {}) {
   return new Promise((resolve) => {
     const child = spawn('/bin/sh', ['-c', command], {
-      env: { ...BASE_ENV, CLAUDE_PLUGIN_ROOT: ROOT, ...env },
+      cwd: ROOT,
+      env: { ...BASE_ENV, ...(pluginRoot ? { CLAUDE_PLUGIN_ROOT: ROOT } : {}), ...env },
       stdio: ['pipe', 'pipe', 'pipe'],
     })
     let stdout = ''
@@ -58,12 +67,18 @@ function runHook(command, { env = {}, stdin = '' } = {}) {
   })
 }
 
-// A hook that reports never speaks on stdout: on Codex the session-state hook
-// rides PermissionRequest, where output and a non-zero exit are an answer to
-// the request rather than an observation.
-function assertSilentSuccess(result) {
+// A hook script never speaks on stdout: on Codex the session-state hook rides
+// PermissionRequest, where output and a non-zero exit are an answer to the
+// request rather than an observation.
+//
+// Antigravity is the harness that needs one anyway — it reads a JSON object off
+// stdout and acts on it, and a PreToolUse handler that says nothing leaves the
+// tool call without the `decision` its contract makes required. So the verdict
+// is appended by the registration, not printed by the shared script, and what
+// arrives on stdout is exactly that verdict and nothing the script added.
+function assertHookSucceeded(result, stdout = '') {
   assert.equal(result.code, 0, `exited ${result.code}: ${result.stderr}`)
-  assert.equal(result.stdout, '', `wrote to stdout: ${result.stdout}`)
+  assert.equal(result.stdout, stdout, `stdout was ${JSON.stringify(result.stdout)}`)
 }
 
 // ------------------------------------------------------------ registrations --
@@ -72,7 +87,10 @@ const HOOK_FILES = [
   { provider: 'claude', file: 'hooks/hooks.json' },
   { provider: 'codex', file: 'hooks/codex-hooks.json' },
   { provider: 'crush', file: 'hooks/crush-hooks.json' },
-  { provider: 'antigravity', file: 'hooks/antigravity-hooks.json' },
+  // Antigravity fixes both the name and the place: a plugin's hooks are read
+  // from `hooks.json` beside its `plugin.json`, so this one alone sits at the
+  // plugin root rather than in hooks/ (docs/providers.md).
+  { provider: 'antigravity', file: 'hooks.json', pluginRoot: false },
 ]
 
 // Crush has no plugin root to expand, so its registration ships the clone's
@@ -88,9 +106,10 @@ const SCRIPTS = {
 }
 
 /**
- * What each harness registers. Claude Code, Codex and Antigravity carry every report; Crush
- * carries the two its single `PreToolUse` event can honour, because a `busy`
- * nothing can end would pin a spinner to a card (docs/providers.md).
+ * What each harness registers. Claude Code, Codex and Antigravity carry every
+ * report; Crush carries the two its single `PreToolUse` event can honour,
+ * because a `busy` nothing can end would pin a spinner to a card
+ * (docs/providers.md).
  */
 const REGISTERED_SCRIPTS = {
   claude: Object.keys(SCRIPTS),
@@ -101,30 +120,56 @@ const REGISTERED_SCRIPTS = {
 
 /**
  * A registration group is either Claude Code's shape (a matcher wrapping a
- * `hooks` array) or Crush's (the hook itself, matcher included).
+ * `hooks` array) or Crush's (the hook itself, matcher included). Antigravity
+ * uses both, one per event: `PreToolUse`/`PostToolUse` are grouped behind a
+ * matcher, `PreInvocation`/`Stop` are flat lists of handlers.
  */
 const hooksIn = (group) => (Array.isArray(group.hooks) ? group.hooks : [group])
 
+/**
+ * Every hook file maps events to handlers; only the key it hangs that map on
+ * differs. Claude Code, Codex and Crush use `hooks`; an Antigravity file is
+ * keyed by hook *name* instead, so several integrations can merge into one
+ * file — lich's is `lich`.
+ */
+const eventsIn = (json) => json.hooks ?? json.lich
+
+/**
+ * Antigravity reads a JSON object off the hook's stdout and acts on it, so its
+ * registration appends the verdict the event's contract asks for. Split back
+ * off here, so every assertion below stays about the report the script sent.
+ */
+function splitVerdict(command) {
+  const m = command.match(/;\s*printf\s+'(.*)'\s*$/)
+  return m
+    ? { report: command.slice(0, m.index), stdout: m[1] }
+    : { report: command, stdout: '' }
+}
+
 function registrations() {
   const out = []
-  for (const { provider, file } of HOOK_FILES) {
+  for (const { provider, file, pluginRoot = true } of HOOK_FILES) {
     const json = JSON.parse(readFileSync(path.join(ROOT, file), 'utf8'))
-    const hooksMap = json.hooks ?? json.lich ?? Object.values(json)[0]
-    for (const [event, groups] of Object.entries(hooksMap)) {
+    const events = eventsIn(json)
+    assert.ok(events, `${file} hangs its events on no key this suite knows`)
+    for (const [event, groups] of Object.entries(events)) {
       for (const group of groups) {
         for (const hook of hooksIn(group)) {
           const script = Object.keys(SCRIPTS).find((s) => hook.command.includes(s))
           assert.ok(script, `unknown script in ${file}: ${hook.command}`)
           const command = hook.command.split(PLUGIN_ROOT_PLACEHOLDER).join(ROOT)
+          const { report, stdout } = splitVerdict(command)
           out.push({
             provider,
             file,
             event,
             matcher: group.matcher,
             command,
+            pluginRoot,
+            stdout,
             script,
             endpoint: SCRIPTS[script],
-            argument: command.trim().split(/\s+/).slice(1).join(' '),
+            argument: report.trim().split(/\s+/).slice(1).join(' '),
           })
         }
       }
@@ -323,10 +368,7 @@ test('the vendored fixtures parse and carry exactly one body and one verdict', (
     }
   }
   assert.deepEqual([...STATES].sort(), ['busy', 'done', 'idle', 'waiting'])
-  assert.deepEqual(
-    [...PROVIDERS].sort(),
-    ['antigravity', 'claude', 'codex', 'crush', 'omp', 'opencode'],
-  )
+  assert.deepEqual([...PROVIDERS].sort(), ['claude', 'codex', 'crush', 'omp', 'opencode'])
 })
 
 test('every rejected case is modelled by a client-side rule', () => {
@@ -384,6 +426,55 @@ test("Codex's registration runs every hook through the wrapper on Windows", () =
   }
 })
 
+// Antigravity expands no plugin-root variable of any kind. It runs the command
+// through `sh -c` with the working directory set to the folder holding
+// hooks.json — which, for a plugin, is the plugin root — so the paths are
+// relative to that and nothing else. A ${CLAUDE_PLUGIN_ROOT} borrowed from the
+// Claude Code registration expands to nothing there and every hook exits 127
+// on a path that starts at the filesystem root.
+test("Antigravity's registration reaches for no plugin root", () => {
+  const raw = readFileSync(path.join(ROOT, 'hooks.json'), 'utf8')
+  assert.ok(
+    !/PLUGIN_ROOT/.test(raw),
+    'hooks.json must not name a plugin-root variable: Antigravity sets none',
+  )
+  for (const r of REGISTRATIONS.filter((r) => r.provider === 'antigravity')) {
+    assert.match(
+      r.command,
+      /^hooks\/[a-z-]+\.sh\b/,
+      `command must be relative to the plugin root: ${r.command}`,
+    )
+  }
+})
+
+// Antigravity reads a JSON object off the hook's stdout and acts on it, so
+// silence is not the neutral answer it is everywhere else: `decision` is
+// required on PreToolUse, and an unanswered tool call is a turn this plugin
+// interfered with. The shared scripts stay silent — Codex reads their stdout as
+// an answer to a permission request — so the verdict belongs to the
+// registration, and every handler carries one.
+const ANTIGRAVITY_VERDICT = {
+  // Let the tool run: this is an observation, never a gate.
+  PreToolUse: '{"decision":"allow"}',
+  // Anything other than "continue" lets the loop end, and a card must be able
+  // to reach `done`.
+  Stop: '{"decision":""}',
+  PostToolUse: '{}',
+  PreInvocation: '{}',
+}
+
+test("Antigravity's registration answers every event with its verdict", () => {
+  const registered = REGISTRATIONS.filter((r) => r.provider === 'antigravity')
+  assert.ok(registered.length > 0)
+  for (const r of registered) {
+    assert.equal(
+      r.stdout,
+      ANTIGRAVITY_VERDICT[r.event],
+      `${r.event} hook answers ${JSON.stringify(r.stdout)}`,
+    )
+  }
+})
+
 test('every registered state argument is an accepted state', () => {
   const sent = REGISTRATIONS.filter((r) => r.script === 'report-state.sh').map((r) => r.argument)
   assert.ok(sent.length > 0)
@@ -413,8 +504,21 @@ test('every registered state argument is an accepted state', () => {
 
 test('every registered provider argument is a registered provider', () => {
   for (const r of REGISTRATIONS.filter((r) => r.script === 'report-session-start.sh')) {
-    assert.ok(PROVIDERS.has(r.argument), `registration reports unknown provider "${r.argument}"`)
+    assert.ok(
+      PROVIDERS.has(r.argument) || PENDING_UPSTREAM.has(r.argument),
+      `registration reports unknown provider "${r.argument}"`,
+    )
     assert.equal(r.argument, r.provider, `${r.file} reports the wrong provider`)
+  }
+})
+
+test('the pending set is still pending upstream', () => {
+  for (const provider of PENDING_UPSTREAM) {
+    assert.ok(
+      !PROVIDERS.has(provider),
+      `lich registers "${provider}" now — drop it from PENDING_UPSTREAM and let the ` +
+        `fixtures enumerate it like every other provider`,
+    )
   }
 })
 
@@ -432,7 +536,7 @@ for (const registration of REGISTRATIONS) {
         env: lichEnv(stub.port),
         stdin: stdinFor(registration),
       })
-      assertSilentSuccess(result)
+      assertHookSucceeded(result, registration.stdout ?? '')
       assert.equal(stub.requests.length, 1, `sent ${stub.requests.length} requests, expected 1`)
 
       const { body } = assertContractHonoured(endpoint, stub.requests[0])
@@ -463,7 +567,7 @@ test('session-start falls back to claude when the registration passes no provide
       env: lichEnv(stub.port),
       stdin: stdinFor({ provider: 'claude', event: 'SessionStart' }),
     })
-    assertSilentSuccess(result)
+    assertHookSucceeded(result)
     const { body } = assertContractHonoured('/session-start', stub.requests[0])
     assert.equal(body.provider, 'claude')
   })
@@ -485,7 +589,7 @@ for (const [label, payload] of NO_REASON) {
         env: lichEnv(stub.port),
         stdin: JSON.stringify({ cwd: ROOT, ...payload }),
       })
-      assertSilentSuccess(result)
+      assertHookSucceeded(result)
       assert.equal(stub.requests.length, 1, 'a reason it could not build cost the report')
       const { body } = assertContractHonoured('/hook', stub.requests[0])
       assert.equal(body.state, 'waiting')
@@ -503,7 +607,7 @@ test('waiting reports the tool name as its reason without jq', async () => {
       env: { ...lichEnv(stub.port), PATH: binWithout('jq') },
       stdin: stdinFor({ provider: 'codex', event: 'PermissionRequest' }),
     })
-    assertSilentSuccess(result)
+    assertHookSucceeded(result)
     const { body } = assertContractHonoured('/hook', stub.requests[0])
     assert.equal(body.reason, TOOL_CALL.codex.tool_name)
   })
@@ -515,7 +619,7 @@ test('waiting sends no message-shaped reason without jq', async () => {
       env: { ...lichEnv(stub.port), PATH: binWithout('jq') },
       stdin: stdinFor({ provider: 'claude', event: 'Notification' }),
     })
-    assertSilentSuccess(result)
+    assertHookSucceeded(result)
     const { body } = assertContractHonoured('/hook', stub.requests[0])
     assert.equal(body.state, 'waiting')
     assert.ok(!('reason' in body), `escaped nothing and sent it anyway: ${stub.requests[0].raw}`)
@@ -549,7 +653,7 @@ test('session-start parses the payload without jq', async () => {
       env: { ...lichEnv(stub.port), PATH: binWithout('jq') },
       stdin: stdinFor({ provider: 'claude', event: 'SessionStart' }),
     })
-    assertSilentSuccess(result)
+    assertHookSucceeded(result)
     assert.equal(stub.requests.length, 1)
     const { body } = assertContractHonoured('/session-start', stub.requests[0])
     assert.equal(body.provider_session_id, PROVIDER_SESSION_ID.claude)
@@ -562,7 +666,7 @@ test('session-start no-ops when the payload carries no session id', async () => 
       env: lichEnv(stub.port),
       stdin: JSON.stringify({ transcript_path: TRANSCRIPT.codex }),
     })
-    assertSilentSuccess(result)
+    assertHookSucceeded(result)
     assert.equal(stub.requests.length, 0, 'sent a report with no provider session id')
   })
 })
@@ -587,7 +691,7 @@ for (const [label, make] of NO_TITLE) {
         env: lichEnv(stub.port),
         stdin: JSON.stringify({ session_id: 's', transcript_path: make() }),
       })
-      assertSilentSuccess(result)
+      assertHookSucceeded(result)
       assert.equal(
         stub.requests.length,
         0,
@@ -604,7 +708,7 @@ test('session-title trims the title it reports', async () => {
       env: lichEnv(stub.port),
       stdin: JSON.stringify({ session_id: 's', transcript_path: file }),
     })
-    assertSilentSuccess(result)
+    assertHookSucceeded(result)
     const { body } = assertContractHonoured('/session-title', stub.requests[0])
     assert.equal(body.title, 'Fix the replay ring overflow')
   })
@@ -617,7 +721,7 @@ test('session-title escapes a title that would break the JSON body', async () =>
       env: lichEnv(stub.port),
       stdin: JSON.stringify({ session_id: 's', transcript_path: file }),
     })
-    assertSilentSuccess(result)
+    assertHookSucceeded(result)
     const { body } = assertContractHonoured('/session-title', stub.requests[0])
     assert.equal(body.title, 'Fix "quoted" \\ and \ttabbed')
   })
@@ -629,7 +733,7 @@ test('session-title no-ops when the transcript is missing', async () => {
       env: lichEnv(stub.port),
       stdin: JSON.stringify({ session_id: 's', transcript_path: path.join(TMP, 'absent.jsonl') }),
     })
-    assertSilentSuccess(result)
+    assertHookSucceeded(result)
     assert.equal(stub.requests.length, 0)
   })
 })
@@ -643,7 +747,7 @@ async function runToolHook(payload, { env = {} } = {}) {
       env: { ...lichEnv(stub.port), ...env },
       stdin: JSON.stringify({ session_id: 's', hook_event_name: 'PreToolUse', ...payload }),
     })
-    assertSilentSuccess(result)
+    assertHookSucceeded(result)
     return { requests: stub.requests }
   })
 }
@@ -718,10 +822,10 @@ const DETAILS = [
     'pnpm test',
   ],
   [
-    'an antigravity write_to_file',
+    'an antigravity propose_code',
     {
       workspacePaths: ['/w'],
-      toolCall: { name: 'write_to_file', args: { TargetFile: '/w/internal/terminal/usage.go' } },
+      toolCall: { name: 'propose_code', args: { TargetFile: '/w/internal/terminal/usage.go' } },
     },
     'internal/terminal/usage.go',
   ],
@@ -827,7 +931,7 @@ for (const { script, argument, event } of EVERY_SCRIPT) {
           env: { ...env, ...(('LICH_PORT' in env) ? { LICH_PORT: String(stub.port) } : {}) },
           stdin: stdinFor({ provider: 'claude', event }),
         })
-        assertSilentSuccess(result)
+        assertHookSucceeded(result)
         assert.equal(stub.requests.length, 0, 'reported without a full lich environment')
       })
     })
@@ -840,7 +944,7 @@ for (const { script, argument, event } of EVERY_SCRIPT) {
           env: lichEnv(stub.port),
           stdin: stdinFor({ provider: 'claude', event }),
         })
-        assertSilentSuccess(result)
+        assertHookSucceeded(result)
         assert.equal(stub.requests.length, 1)
       },
       { status: 500 },
@@ -855,6 +959,6 @@ for (const { script, argument, event } of EVERY_SCRIPT) {
       env: lichEnv(port),
       stdin: stdinFor({ provider: 'claude', event }),
     })
-    assertSilentSuccess(result)
+    assertHookSucceeded(result)
   })
 }

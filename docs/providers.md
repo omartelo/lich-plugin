@@ -14,9 +14,10 @@ This repository is one plugin, packaged for each harness it supports:
 | `.claude-plugin/marketplace.json` | Claude Code | marketplace, points at `./` |
 | `.codex-plugin/plugin.json`     | Codex       | plugin manifest               |
 | `.agents/plugins/marketplace.json` | Codex    | marketplace, points at `./`   |
+| `plugin.json`                   | Antigravity | plugin manifest               |
 | `hooks/hooks.json`              | Claude Code | hook registration             |
 | `hooks/codex-hooks.json`        | Codex       | hook registration             |
-| `hooks/antigravity-hooks.json`  | Antigravity | hook registration             |
+| `hooks.json`                    | Antigravity | hook registration, name and place both fixed |
 | `hooks/crush-hooks.json`        | Crush       | hook registration, merged by hand |
 | `hooks/*.sh`                    | the four    | the reports themselves        |
 | `hooks/win-run.cmd`             | Codex       | runs a script on Windows      |
@@ -24,13 +25,24 @@ This repository is one plugin, packaged for each harness it supports:
 | `omp/lich.js`                   | omp         | the whole client, as a module |
 | `skills/`                       | all         | skills, same layout           |
 
-The repository root is the plugin root for Claude Code and Codex, so a single
-clone installs on either CLI. The scripts are shared because those harnesses —
-and Crush and Antigravity — expose the same things a report needs: the payload arrives as JSON
-on stdin with `session_id` / `conversationId` and `transcript_path` / `transcriptPath` (and `tool_name` /
-`toolCall` / `cwd` / `workspacePaths` on a pre-tool event), and `$CLAUDE_PLUGIN_ROOT` points at
-the installed plugin — Codex sets that same variable, so the command lines are
-identical.
+The repository root is the plugin root for Claude Code, Codex and Antigravity,
+so a single clone installs on any of the three. The scripts are shared because
+those harnesses — and Crush — expose the same things a report needs: the payload
+arrives as JSON on stdin naming the session (`session_id`, or `conversationId`
+on Antigravity), the transcript (`transcript_path` / `transcriptPath`) and, on a
+pre-tool event, the call (`tool_name` + `tool_input` + `cwd`, or `toolCall` +
+`workspacePaths`). Every script reads both spellings, so one script still serves
+every harness.
+
+**How the command finds the script is where Antigravity parts company.** Claude
+Code, Codex and Crush all give the command line a plugin root to start from:
+`$CLAUDE_PLUGIN_ROOT` for the first two, a `<lich-plugin>` placeholder the user
+replaces for Crush. Antigravity sets no such variable — it runs the command
+through `sh -c` with the working directory set to the folder holding
+`hooks.json`, which for a plugin is the plugin root. So its registration alone
+spells relative paths (`hooks/report-state.sh busy`), and a `${CLAUDE_PLUGIN_ROOT}`
+copied in from the Claude Code file expands to nothing there: every hook then
+runs `/hooks/<script>` and exits 127, silently, on every event.
 
 **opencode and omp are the exceptions, and both are packaging ones.** Neither
 has a notion of a hook command. In opencode a plugin is a JavaScript module the
@@ -235,27 +247,89 @@ listener. 17.x moves fast — re-measure before trusting a name.
 
 ## Antigravity specifics
 
-- **Hooks are defined in `hooks.json` (or `hooks/antigravity-hooks.json`).**
-  Antigravity CLI reads lifecycle hooks under named entries (such as `"lich"`).
-- **Payloads use camelCase.** `conversationId` is the session id, `workspacePaths`
-  contains the active workspace roots, and `transcriptPath` is the JSONL log.
-- **Tools are reported via `toolCall.name`.** Tool arguments arrive under
-  `toolCall.args` with PascalCase fields (`CommandLine`, `TargetFile`, `AbsolutePath`, etc.).
-- **Session title is read from the first `USER_INPUT` entry in `transcriptPath`.**
-- **Lifecycle mapping**: `PreInvocation` reports `session-start` and `busy`; `PreToolUse`
-  reports `busy` with the tool name; `PostToolUse` with write matchers (`write_to_file|replace_file_content|run_command`)
-  reports `touched`; `Stop` reports `done` and `session-title`.
+Antigravity is the one harness whose *packaging* the plugin has to satisfy as
+well as its events. Everything below comes off the guide the CLI itself ships
+(`~/.gemini/antigravity-cli/builtin/skills/agy-customizations/docs/`) and a run
+against a stub listener — not off a name that reads plausibly.
+
+- **A plugin is a directory, and both its files are named for it.** Antigravity
+  discovers `plugins/<name>/plugin.json` under a customization root and loads the
+  `hooks.json`, `skills/` and `rules/` sitting beside it. Neither name is
+  configurable: a `hooks/<harness>-hooks.json` named the way every other
+  registration here is would be discovered by nothing at all.
+  That is why the manifest and the registration are the two files in this
+  repository that live at the root rather than in a namespaced folder — the root
+  *is* the plugin directory once the clone is installed as one, and `skills/` is
+  picked up from there for free.
+- **The registration is keyed by hook name, not by `hooks`.** Every top-level key
+  in a `hooks.json` is one integration's name, so several merge into one file;
+  lich's is `lich`. `PreToolUse` and `PostToolUse` group handlers behind a
+  `matcher`; `PreInvocation` and `Stop` are flat lists of handlers.
+- **Commands are relative to the plugin root.** See above — no plugin-root
+  variable exists.
+- **A hook answers on stdout, and the answer is acted on.** Antigravity reads a
+  JSON object back: `PreToolUse` requires a `decision`, and `Stop` takes one too,
+  where `continue` refuses to let the loop end. Silence is not the neutral
+  answer it is on every other harness, so the registration appends the verdict
+  the event asks for — `{"decision":"allow"}` before a tool, `{"decision":""}` on
+  `Stop`, `{}` elsewhere. The scripts stay silent, because on Codex their stdout
+  would answer a permission request instead.
+- **Payloads are camelCase** (protojson): `conversationId` is the session id,
+  `workspacePaths[0]` the session's directory, `transcriptPath` the JSONL log.
+  Tool calls arrive as `toolCall.name` with PascalCase arguments under
+  `toolCall.args` (`CommandLine`, `TargetFile`, `AbsolutePath`, `Query`, `Url`).
+- **The title is the first `USER_INPUT` line of the transcript**, unwrapped from
+  its `<USER_REQUEST>` tags — the same shape Codex's first user message has, so
+  `report-title.sh` reads it in the same pass.
+- **`PreInvocation` fires before every model call, not once per turn.** Session
+  id and `busy` therefore go out several times a turn. Both are idempotent, so
+  the card is right either way, and it is what makes `busy` cheap enough to leave
+  on the same event as the session id.
+- **Tool names come from the step-type enum**, lowercased with the
+  `CORTEX_STEP_TYPE_` prefix dropped: `run_command`, `view_file`, `grep_search`,
+  `propose_code`, `file_change`, `edit_notebook`, `write_blob`,
+  `delete_directory`. The Windsurf-flavoured names that read like they belong
+  (`write_to_file`, `replace_file_content`, `find_by_name`) are not in it, and a
+  matcher naming them matches nothing — which costs a report rather than raising
+  an error.
+- **Not reported: `waiting` and `idle`.** No event has been measured for either.
+  `PermissionRequest` has no counterpart here — `PreToolUse` could gate a call,
+  but a hook that answers `ask` to ring a bell would be changing the turn rather
+  than observing it. `Stop` ends one execution loop, not the conversation, so it
+  is `done` and never `idle`. `PostInvocation` exists and is unregistered:
+  nothing is left for it to say.
+- **lich does not register the provider yet.** `/session-start` answers 400 to
+  `provider: "antigravity"` until it does, which is why no fixture enumerates it
+  and `PENDING_UPSTREAM` in `tests/contract.mjs` names the gap instead. The
+  contract moves in lich first — prose, then fixtures, then the endpoint.
 
 ## Adding a provider
 
 1. Confirm the harness exposes the session lifecycle to something it will run or
    load, and that it names the session id.
 2. Add its manifest and marketplace file if it has them, and a hook-registration
-   file mapping its events onto the existing scripts.
-3. Only write a new script if a report cannot be derived from what the existing
-   ones read — extend one instead (`report-title.sh` reads two transcript
+   file mapping its events onto the existing scripts. Take the filenames, the
+   event names, the payload fields and the tool names a matcher lists from the
+   harness itself — its own docs, its binary, a run against a stub — never from
+   what they resemble on a harness already supported here. Every one of those
+   fails the same silent way: a hook that does not run reports nothing to
+   disagree with.
+3. Answer the harness on the terms it addresses the command with. Two things
+   differ per harness and neither has a default worth assuming: how the command
+   finds the script (`$CLAUDE_PLUGIN_ROOT`, a placeholder, or a working directory
+   and relative paths), and what it expects back (silence, an exit code, or a
+   JSON verdict on stdout). Run its registration in the suite the way *that*
+   harness runs it — a test that exports what the harness does not is a test that
+   proves nothing.
+4. Register the provider id in lich before the client reports it: prose, then
+   fixtures, then the endpoint, then here. A fixture is never edited to make a
+   run green — until lich accepts the id, declare it in `PENDING_UPSTREAM`
+   (`tests/contract.mjs`), which fails the moment a refreshed fixture registers
+   it.
+5. Only write a new script if a report cannot be derived from what the existing
+   ones read — extend one instead (`report-title.sh` reads three transcript
    formats). A harness that takes no commands at all is the one case for a
    client of its own, which is what `opencode/lich.js` is.
-4. Register only the reports the harness can actually close. A state nothing can
+6. Register only the reports the harness can actually close. A state nothing can
    end is worse on a card than no state.
-5. Add the provider's column to each doc in this directory.
+7. Add the provider's column to each doc in this directory.

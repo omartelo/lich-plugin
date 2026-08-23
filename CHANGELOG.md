@@ -9,13 +9,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- **Antigravity CLI sessions report to lich.** A sixth harness: Antigravity CLI
-  supports native lifecycle hooks (`hooks/antigravity-hooks.json`), progressive
-  skills, and plugins. It reports session start (`PreInvocation`), session state
-  (`busy` on `PreInvocation`, `done` on `Stop`), tool executions (`PreToolUse` with
-  tool details extracted from `toolCall.name` and `toolCall.args`), git-status
-  refresh (`PostToolUse`), and session title from the first `USER_INPUT` prompt
-  in `transcriptPath`.
+- **Antigravity CLI sessions report to lich.** A sixth harness, and the first
+  whose packaging the plugin has to satisfy as well as its events: an Antigravity
+  plugin is a directory holding a `plugin.json`, whose `hooks.json` and `skills/`
+  are loaded from beside it. Both names are fixed, so those two files are the
+  ones in this repository that live at the root — `agy plugin validate .` passes
+  on the clone, and linking it into `plugins/` installs the hooks and the `theme`
+  skill in one step.
+
+  It reports the session id and `busy` on `PreInvocation`, the running tool on
+  `PreToolUse`, the git-status refresh on `PostToolUse`, and `done` plus the
+  title on `Stop` — the title being the transcript's first `USER_INPUT` line,
+  unwrapped from its `<USER_REQUEST>` tags. `waiting` and `idle` are not
+  reported: no event has been measured for either, and `Stop` ends one execution
+  loop rather than the conversation.
+
+  Two Antigravity rules the shared scripts had to learn. Its hooks are run
+  through `sh -c` with the working directory set to the plugin root and no
+  plugin-root variable of any kind, so the registration spells relative paths.
+  And a hook answers on stdout, where the answer is acted on — `decision` is
+  required before a tool call — so the registration appends the verdict each
+  event asks for, leaving the scripts silent for Codex, which reads their stdout
+  as an answer to a permission request.
+
+  lich does not register the provider yet, so `/session-start` answers 400 until
+  it does; `PENDING_UPSTREAM` in `tests/contract.mjs` names that gap rather than
+  a fixture being edited to hide it.
 
 - **A waiting card says what the session is waiting for.** The `waiting` report
   now carries a `reason`, so the bell says *why* rather than only *that*. Each

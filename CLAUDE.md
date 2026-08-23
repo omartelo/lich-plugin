@@ -1,6 +1,6 @@
 # lich-plugin
 
-The agent side of the integration with **lich** — a harness that orchestrates agent CLI sessions. This companion plugin is how lich observes and acts inside a running session. It ships hooks — each following a contract documented in `docs/` — plus skills for work that targets lich itself. One plugin, packaged for **Claude Code**, **OpenAI Codex**, **opencode**, **omp** (oh-my-pi) and **Crush** from the same repository root.
+The agent side of the integration with **lich** — a harness that orchestrates agent CLI sessions. This companion plugin is how lich observes and acts inside a running session. It ships hooks — each following a contract documented in `docs/` — plus skills for work that targets lich itself. One plugin, packaged for **Claude Code**, **OpenAI Codex**, **Antigravity CLI**, **opencode**, **omp** (oh-my-pi) and **Crush** from the same repository root.
 
 ## Structure
 
@@ -9,10 +9,12 @@ The agent side of the integration with **lich** — a harness that orchestrates 
 .claude-plugin/marketplace.json   # marketplace, Claude Code
 .codex-plugin/plugin.json         # plugin manifest, Codex
 .agents/plugins/marketplace.json  # marketplace, Codex
+plugin.json                       # plugin manifest, Antigravity — name and place both fixed
+hooks.json                        # hook registration, Antigravity — likewise
 hooks/hooks.json                  # hook registration, Claude Code
 hooks/codex-hooks.json            # hook registration, Codex
 hooks/crush-hooks.json            # hook registration, Crush (hand-merged into crush.json)
-hooks/                            # hook scripts ($CLAUDE_PLUGIN_ROOT/hooks/<script>, all three)
+hooks/                            # hook scripts (all four run them; only how they are addressed differs)
 hooks/detail.jq                   # what a tool call acts on, shared by two of those scripts
 hooks/win-run.cmd                 # runs one of those scripts on Windows (Codex)
 opencode/lich.js                  # opencode client: a module, not a command
@@ -21,6 +23,17 @@ docs/                             # lich ⇄ plugin communication contracts
 skills/                           # skills (skills/<name>/SKILL.md, all)
 tests/                            # hook payloads asserted against lich's fixtures
 ```
+
+**Antigravity** runs the scripts, but on its own terms, and both of them are in
+the file layout above. Its plugins are directories — `plugins/<name>/plugin.json`
+with `hooks.json` and `skills/` beside it — and neither filename is
+configurable, which is why those two sit at the repository root instead of in a
+namespaced folder: the root is the plugin directory once the clone is linked in.
+It also sets no plugin-root variable, running a hook through `sh -c` with the
+working directory set to that root, so its registration alone spells relative
+paths; and it reads a JSON verdict off the hook's stdout, so the registration
+appends one per event while the scripts stay silent. `agy plugin validate .`
+checks the bundle from a clone.
 
 Three harnesses do not fit the script model, each its own way. **opencode** runs
 no commands: a plugin there is a JavaScript module its server imports, so all
@@ -88,6 +101,8 @@ the network; CI diffs the copies against upstream and fails on drift.
 - One script per contract, shared by every provider that runs commands. Registration differs per harness, the report does not — extend a script to read a second transcript format before adding a second script. A harness that runs no commands at all is the one case for a client of its own, which is what `opencode/lich.js` and `omp/lich.js` are; they still send the same payloads to the same endpoints.
 - opencode and omp both await their plugin handlers, so neither `lich.js` ever awaits a report or throws — that is their version of "always exit 0". The omp one also subscribes to nothing outside lich: omp loads it on every run on the machine, so the gate has to be in the module.
 - **A module client names only events it was measured emitting.** A name read off a type declaration is a report that silently never fires, which is worse than an absent feature — the omp `waiting` state is left unreported for exactly this reason.
+- **The same goes for every other name a registration carries** — an event, a tool a matcher names, a payload field, a plugin-root variable. All of them fail the same way: quietly, on every event, with a green test suite, because a harness that never runs the hook reports nothing to disagree with. Take them from the harness itself (the CLI's own docs, its binary, a run against a stub) and never from what the name resembles on a harness you already support. Antigravity's write tools are `propose_code` and `file_change`, not the Windsurf-flavoured `write_to_file`; a matcher naming the latter matches nothing at all.
+- **A test that supplies what the harness supplies proves nothing.** The suite exports `$CLAUDE_PLUGIN_ROOT` because Claude Code and Codex do; running Antigravity's registration under it hid the fact that Antigravity does not. Each harness's registration is run the way *that* harness runs it — see `pluginRoot` in `tests/hooks.test.mjs`.
 
 ## Local testing
 
@@ -96,6 +111,11 @@ claude --plugin-dir .
 ```
 
 Codex has no equivalent one-shot flag; install the clone as a local marketplace instead (`codex plugin marketplace add .` then `codex plugin add lich@lich-plugin`), and trust the hooks once with `/hooks`.
+
+Antigravity has none either, but it does have a checker: `agy plugin validate .`
+reads the clone as a plugin and says what it loaded (`skills: 1`, `hooks: 1`) —
+a missing or misplaced `plugin.json` fails it outright. To run it for real,
+symlink the clone into `~/.gemini/config/plugins/lich`.
 
 ## Release
 
