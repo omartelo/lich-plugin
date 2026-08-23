@@ -9,9 +9,9 @@ session's git status immediately instead of waiting for its ~3s poll. Latency
 optimization only — without the plugin the poll catches the same changes, up
 to a poll interval later.
 
-| script              | Claude Code hook                                        | Codex hook                                              | Crush hook                                             | opencode event | omp event                                        |
-|---------------------|---------------------------------------------------------|---------------------------------------------------------|--------------------------------------------------------|----------------|--------------------------------------------------|
-| `report-touched.sh` | `PostToolUse` matcher `Edit\|Write\|NotebookEdit\|Bash`  | `PostToolUse` matcher `apply_patch\|Edit\|Write\|Bash`  | `PreToolUse` matcher `^(edit\|write\|multiedit\|bash)$` | `file.edited`  | `tool_result` for `write`/`edit`/`bash`/`notebook` |
+| script              | Claude Code hook                                        | Codex hook                                              | Antigravity hook                                        | Crush hook                                             | opencode event | omp event                                        |
+|---------------------|---------------------------------------------------------|---------------------------------------------------------|---------------------------------------------------------|--------------------------------------------------------|----------------|--------------------------------------------------|
+| `report-touched.sh` | `PostToolUse` matcher `Edit\|Write\|NotebookEdit\|Bash`  | `PostToolUse` matcher `apply_patch\|Edit\|Write\|Bash`  | `PostToolUse` matcher `write_to_file\|replace_file_content\|run_command` | `PreToolUse` matcher `^(edit\|write\|multiedit\|bash)$` | `file.edited`  | `tool_result` for `write`/`edit`/`bash`/`notebook` |
 
 `POST /session-touched` with `{"session_id": $LICH_SESSION_ID}`.
 

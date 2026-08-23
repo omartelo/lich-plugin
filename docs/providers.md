@@ -16,8 +16,9 @@ This repository is one plugin, packaged for each harness it supports:
 | `.agents/plugins/marketplace.json` | Codex    | marketplace, points at `./`   |
 | `hooks/hooks.json`              | Claude Code | hook registration             |
 | `hooks/codex-hooks.json`        | Codex       | hook registration             |
+| `hooks/antigravity-hooks.json`  | Antigravity | hook registration             |
 | `hooks/crush-hooks.json`        | Crush       | hook registration, merged by hand |
-| `hooks/*.sh`                    | the three   | the reports themselves        |
+| `hooks/*.sh`                    | the four    | the reports themselves        |
 | `hooks/win-run.cmd`             | Codex       | runs a script on Windows      |
 | `opencode/lich.js`              | opencode    | the whole client, as a module |
 | `omp/lich.js`                   | omp         | the whole client, as a module |
@@ -25,9 +26,9 @@ This repository is one plugin, packaged for each harness it supports:
 
 The repository root is the plugin root for Claude Code and Codex, so a single
 clone installs on either CLI. The scripts are shared because those harnesses —
-and Crush — expose the same things a report needs: the payload arrives as JSON
-on stdin with `session_id` and `transcript_path` (and `tool_name` /
-`tool_input` / `cwd` on a pre-tool event), and `$CLAUDE_PLUGIN_ROOT` points at
+and Crush and Antigravity — expose the same things a report needs: the payload arrives as JSON
+on stdin with `session_id` / `conversationId` and `transcript_path` / `transcriptPath` (and `tool_name` /
+`toolCall` / `cwd` / `workspacePaths` on a pre-tool event), and `$CLAUDE_PLUGIN_ROOT` points at
 the installed plugin — Codex sets that same variable, so the command lines are
 identical.
 
@@ -44,16 +45,16 @@ swallows its own errors and never awaits a report.
 
 ## Event vocabulary
 
-| Report              | Claude Code                  | Codex                        | opencode                  | omp                      | Crush                       |
-|---------------------|------------------------------|------------------------------|---------------------------|--------------------------|-----------------------------|
-| session id          | `SessionStart`               | `SessionStart`               | `session.created`         | `session_start`          | `PreToolUse`                |
-| `busy`              | `UserPromptSubmit`, `PostToolUse` | `UserPromptSubmit`, `PostToolUse` | `session.status` (`busy`) | `input`, `turn_start` | —              |
-| `busy` + tool       | `PreToolUse`                 | `PreToolUse`                 | `tool.execute.before`     | `tool_call`              | —                           |
-| `waiting` + reason  | `Notification`               | `PermissionRequest`          | any `*.asked`             | — (see below)            | —                           |
-| `done`              | `Stop`                       | `Stop`                       | `session.status` (`idle`) | `session_stop`           | —                           |
-| title               | `Stop`                       | `Stop`                       | `session.updated`         | `session_stop`, `turn_start` | —                       |
-| `idle`              | `SessionEnd`                 | — (registered, never fires)  | — (nothing outlives it)   | — (nothing outlives it)  | —                           |
-| touched             | `PostToolUse` (write tools)  | `PostToolUse` (write tools)  | `file.edited`             | `tool_result` (write tools) | `PreToolUse` (write tools) |
+| Report              | Claude Code                  | Codex                        | Antigravity                  | opencode                  | omp                      | Crush                       |
+|---------------------|------------------------------|------------------------------|------------------------------|---------------------------|--------------------------|-----------------------------|
+| session id          | `SessionStart`               | `SessionStart`               | `PreInvocation`              | `session.created`         | `session_start`          | `PreToolUse`                |
+| `busy`              | `UserPromptSubmit`, `PostToolUse` | `UserPromptSubmit`, `PostToolUse` | `PreInvocation`        | `session.status` (`busy`) | `input`, `turn_start` | —              |
+| `busy` + tool       | `PreToolUse`                 | `PreToolUse`                 | `PreToolUse`                 | `tool.execute.before`     | `tool_call`              | —                           |
+| `waiting` + reason  | `Notification`               | `PermissionRequest`          | — (not measured)             | any `*.asked`             | — (see below)            | —                           |
+| `done`              | `Stop`                       | `Stop`                       | `Stop`                       | `session.status` (`idle`) | `session_stop`           | —                           |
+| title               | `Stop`                       | `Stop`                       | `Stop`                       | `session.updated`         | `session_stop`, `turn_start` | —                       |
+| `idle`              | `SessionEnd`                 | — (registered, never fires)  | — (never fires)              | — (nothing outlives it)   | — (nothing outlives it)  | —                           |
+| touched             | `PostToolUse` (write tools)  | `PostToolUse` (write tools)  | `PostToolUse` (write tools)  | `file.edited`             | `tool_result` (write tools) | `PreToolUse` (write tools) |
 
 Every cell above was taken off a real run of that harness against a stub
 listener, not off its documentation.
@@ -231,6 +232,19 @@ listener. 17.x moves fast — re-measure before trusting a name.
 - **Tool names are lower case**: `bash`, `edit`, `write`, `multiedit`, `view`,
   `ls`, `grep`, `glob`, `mcp_*`. `view` is the read tool — the matcher for the
   touched report lists the writers only.
+
+## Antigravity specifics
+
+- **Hooks are defined in `hooks.json` (or `hooks/antigravity-hooks.json`).**
+  Antigravity CLI reads lifecycle hooks under named entries (such as `"lich"`).
+- **Payloads use camelCase.** `conversationId` is the session id, `workspacePaths`
+  contains the active workspace roots, and `transcriptPath` is the JSONL log.
+- **Tools are reported via `toolCall.name`.** Tool arguments arrive under
+  `toolCall.args` with PascalCase fields (`CommandLine`, `TargetFile`, `AbsolutePath`, etc.).
+- **Session title is read from the first `USER_INPUT` entry in `transcriptPath`.**
+- **Lifecycle mapping**: `PreInvocation` reports `session-start` and `busy`; `PreToolUse`
+  reports `busy` with the tool name; `PostToolUse` with write matchers (`write_to_file|replace_file_content|run_command`)
+  reports `touched`; `Stop` reports `done` and `session-title`.
 
 ## Adding a provider
 

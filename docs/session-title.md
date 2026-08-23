@@ -8,12 +8,12 @@ Reports the title the agent CLI gives its own session, so lich can name the
 session card after it. lich only applies it while the card's label is still
 automatic, so re-sending on every `Stop` is idempotent.
 
-| script            | action                    | Claude Code hook | Codex hook | opencode event    | omp event                    | Crush hook |
-|-------------------|---------------------------|------------------|------------|-------------------|------------------------------|------------|
-| `report-title.sh` | send the session's title  | `Stop`           | `Stop`     | `session.updated` | `session_stop`, `turn_start` | —          |
+| script            | action                    | Claude Code hook | Codex hook | Antigravity hook | opencode event    | omp event                    | Crush hook |
+|-------------------|---------------------------|------------------|------------|------------------|-------------------|------------------------------|------------|
+| `report-title.sh` | send the session's title  | `Stop`           | `Stop`     | `Stop`           | `session.updated` | `session_stop`, `turn_start` | —          |
 
 `POST /session-title` with `{"session_id": $LICH_SESSION_ID, "title": <title>}`.
-Both providers keep the title in the transcript file (`transcript_path` on
+Providers keep the title in the transcript file (`transcript_path` or `transcriptPath` on
 stdin), in their own shape — the script reads whichever is there:
 
 - **Claude Code** — the last line matching `"type":"ai-title"`, field
@@ -22,8 +22,10 @@ stdin), in their own shape — the script reads whichever is there:
   line, cut to 80 characters. Codex generates no title: it names a thread after
   its first user message verbatim (`threads.title` in its state database), so
   this reports the same label Codex shows, only trimmed to card size.
+- **Antigravity** — the first `USER_INPUT` entry's `content` text (unwrapping
+  `<USER_REQUEST>` block tags), trimmed to 80 characters.
 
-Both formats are internal and undocumented — extraction failures are swallowed
+All formats are internal and undocumented — extraction failures are swallowed
 and the hook no-ops. Requires `jq`; absent → no-op.
 
 - **opencode** — no transcript to read: `session.updated` carries the whole

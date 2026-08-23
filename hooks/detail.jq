@@ -16,16 +16,17 @@
 # with the part every card shares. Outside that directory only the file name is
 # left, which at least names the file. Commands are never shortened — a leading
 # slash there belongs to a binary, not to a path worth cutting.
-.cwd as $cwd
+.cwd as $legacy_cwd
+| (.workspacePaths[0] // $legacy_cwd) as $cwd
 | def short: if ($cwd // "") != "" and startswith($cwd + "/") then ltrimstr($cwd + "/")
              elif startswith("/") then sub(".*/"; "")
              else . end;
-  (.tool_input // {})
-| if ((.command? // "") | tostring) != "" then
-    (.command | tostring
+  (.toolCall.args // .tool_input // {})
+| if ((.CommandLine? // .command? // "") | tostring) != "" then
+    ((.CommandLine? // .command) | tostring
      | if startswith("*** Begin Patch")
        then ((capture("\\*\\*\\* (?:Add|Update|Delete) File: (?<p>[^\n]*)") // {}) | .p // "")
        else . end)
   else
-    ((.file_path? // .path? // .pattern? // .url? // .query? // "") | tostring | short)
+    ((.TargetFile? // .AbsolutePath? // .DirectoryPath? // .SearchPath? // .file_path? // .path? // .Pattern? // .pattern? // .Url? // .url? // .Query? // .query? // "") | tostring | short)
   end

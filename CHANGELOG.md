@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Antigravity CLI sessions report to lich.** A sixth harness: Antigravity CLI
+  supports native lifecycle hooks (`hooks/antigravity-hooks.json`), progressive
+  skills, and plugins. It reports session start (`PreInvocation`), session state
+  (`busy` on `PreInvocation`, `done` on `Stop`), tool executions (`PreToolUse` with
+  tool details extracted from `toolCall.name` and `toolCall.args`), git-status
+  refresh (`PostToolUse`), and session title from the first `USER_INPUT` prompt
+  in `transcriptPath`.
+
 - **A waiting card says what the session is waiting for.** The `waiting` report
   now carries a `reason`, so the bell says *why* rather than only *that*. Each
   harness hands over something different to say it with: Claude Code's

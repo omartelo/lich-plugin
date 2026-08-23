@@ -8,14 +8,14 @@ Reports the session's processing state so the lich card shows a spinner while
 the agent works, a check when the turn ends, and a bell (plus an actionable
 toast) when the agent is blocked on the user.
 
-| script                    | state            | Claude Code hook   | Codex hook          | opencode event            | omp event       |
-|---------------------------|------------------|--------------------|---------------------|---------------------------|-----------------|
-| `report-state.sh busy`    | `busy`           | `UserPromptSubmit` | `UserPromptSubmit`  | `session.status` (`busy`) | `input`         |
-| `report-tool.sh`          | `busy` + `tool`  | `PreToolUse`       | `PreToolUse`        | `tool.execute.before`     | `tool_call`     |
-| `report-state.sh busy`    | `busy`           | `PostToolUse`      | `PostToolUse`       | `session.status` (`busy`) | `turn_start`    |
-| `report-state.sh done`    | `done`           | `Stop`             | `Stop`              | `session.status` (`idle`) | `session_stop`  |
-| `report-state.sh waiting` | `waiting`+`reason`| `Notification`    | `PermissionRequest` | any `*.asked`             | — (not measured)|
-| `report-state.sh idle`    | `idle`           | `SessionEnd`       | — (never fires)     | — (never fires)           | — (never fires) |
+| script                    | state            | Claude Code hook   | Codex hook          | Antigravity hook   | opencode event            | omp event       |
+|---------------------------|------------------|--------------------|---------------------|--------------------|---------------------------|-----------------|
+| `report-state.sh busy`    | `busy`           | `UserPromptSubmit` | `UserPromptSubmit`  | `PreInvocation`    | `session.status` (`busy`) | `input`         |
+| `report-tool.sh`          | `busy` + `tool`  | `PreToolUse`       | `PreToolUse`        | `PreToolUse`       | `tool.execute.before`     | `tool_call`     |
+| `report-state.sh busy`    | `busy`           | `PostToolUse`      | `PostToolUse`       | —                  | `session.status` (`busy`) | `turn_start`    |
+| `report-state.sh done`    | `done`           | `Stop`             | `Stop`              | `Stop`             | `session.status` (`idle`) | `session_stop`  |
+| `report-state.sh waiting` | `waiting`+`reason`| `Notification`    | `PermissionRequest` | — (not measured)   | any `*.asked`             | — (not measured)|
+| `report-state.sh idle`    | `idle`           | `SessionEnd`       | — (never fires)     | — (never fires)    | — (never fires)           | — (never fires) |
 
 opencode and omp run no scripts: `opencode/lich.js` and `omp/lich.js` send the
 same payloads off the events their harness hands a loaded module. opencode's
@@ -130,12 +130,12 @@ always exit 0) stop being merely polite here.
 What the two harnesses actually send, taken off a real run of each against a
 stub listener rather than off their documentation:
 
-| Action        | Claude Code       | Codex                     | opencode         | omp              |
-|---------------|-------------------|---------------------------|------------------|------------------|
-| run a command | `Bash`            | `Bash`                    | `bash`           | `bash`           |
-| edit a file   | `Edit` / `Write`  | `apply_patch`             | `edit` / `write` | `edit` / `write` |
-| read a file   | `Read`            | — (goes through `Bash`)   | `read`           | `read`           |
-| search        | `Grep` / `Glob`   | — (goes through `Bash`)   | `grep` / `glob`  | `grep` / `glob`  |
+| Action        | Claude Code       | Codex                     | Antigravity             | opencode         | omp              |
+|---------------|-------------------|---------------------------|-------------------------|------------------|------------------|
+| run a command | `Bash`            | `Bash`                    | `run_command`           | `bash`           | `bash`           |
+| edit a file   | `Edit` / `Write`  | `apply_patch`             | `write_to_file` / `replace_file_content` | `edit` / `write` | `edit` / `write` |
+| read a file   | `Read`            | — (goes through `Bash`)   | `view_file`             | `read`           | `read`           |
+| search        | `Grep` / `Glob`   | — (goes through `Bash`)   | `grep_search` / `find_by_name` | `grep` / `glob` | `grep` / `glob` |
 
 The `detail` is read by field, never by tool name — `command`, then
 `file_path` / `path`, then `pattern` / `url` / `query` — which is what makes one

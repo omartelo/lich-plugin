@@ -7,7 +7,7 @@
 [ -n "$LICH_PORT" ] && [ -n "$LICH_TOKEN" ] && [ -n "$LICH_SESSION_ID" ] || exit 0
 command -v jq >/dev/null 2>&1 || exit 0
 
-transcript_path=$(jq -r '.transcript_path // empty' 2>/dev/null)
+transcript_path=$(jq -r '.transcriptPath // .transcript_path // empty' 2>/dev/null)
 [ -f "$transcript_path" ] || exit 0
 
 # Claude Code: ai-title is an internal transcript line; swallow extraction
@@ -22,6 +22,14 @@ if [ -z "$title" ]; then
   title=$(grep '"type":"user_message"' "$transcript_path" 2>/dev/null \
     | head -n 1 | jq -r '.payload.message // empty' 2>/dev/null \
     | head -n 1 | cut -c 1-80)
+fi
+
+# Antigravity: names a thread after its first USER_INPUT content.
+if [ -z "$title" ]; then
+  title=$(grep '"type":"USER_INPUT"' "$transcript_path" 2>/dev/null \
+    | head -n 1 | jq -r '.content // empty' 2>/dev/null \
+    | sed -e 's/<USER_REQUEST>//g' -e 's/<\/USER_REQUEST>//g' \
+    | sed -n '/[^[:space:]]/{p;q}' | cut -c 1-80)
 fi
 
 # lich rejects a blank title (400): a Codex first line can be nothing but

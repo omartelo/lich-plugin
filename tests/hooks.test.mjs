@@ -72,6 +72,7 @@ const HOOK_FILES = [
   { provider: 'claude', file: 'hooks/hooks.json' },
   { provider: 'codex', file: 'hooks/codex-hooks.json' },
   { provider: 'crush', file: 'hooks/crush-hooks.json' },
+  { provider: 'antigravity', file: 'hooks/antigravity-hooks.json' },
 ]
 
 // Crush has no plugin root to expand, so its registration ships the clone's
@@ -87,7 +88,7 @@ const SCRIPTS = {
 }
 
 /**
- * What each harness registers. Claude Code and Codex carry every report; Crush
+ * What each harness registers. Claude Code, Codex and Antigravity carry every report; Crush
  * carries the two its single `PreToolUse` event can honour, because a `busy`
  * nothing can end would pin a spinner to a card (docs/providers.md).
  */
@@ -95,6 +96,7 @@ const REGISTERED_SCRIPTS = {
   claude: Object.keys(SCRIPTS),
   codex: Object.keys(SCRIPTS),
   crush: ['report-session-start.sh', 'report-touched.sh'],
+  antigravity: Object.keys(SCRIPTS),
 }
 
 /**
@@ -107,7 +109,8 @@ function registrations() {
   const out = []
   for (const { provider, file } of HOOK_FILES) {
     const json = JSON.parse(readFileSync(path.join(ROOT, file), 'utf8'))
-    for (const [event, groups] of Object.entries(json.hooks)) {
+    const hooksMap = json.hooks ?? json.lich ?? Object.values(json)[0]
+    for (const [event, groups] of Object.entries(hooksMap)) {
       for (const group of groups) {
         for (const hook of hooksIn(group)) {
           const script = Object.keys(SCRIPTS).find((s) => hook.command.includes(s))
@@ -167,6 +170,23 @@ function codexTranscript(message, name = 'codex.jsonl') {
   return file
 }
 
+/** Antigravity names a thread after its first USER_INPUT content. */
+function antigravityTranscript(content, name = 'antigravity.jsonl') {
+  const file = path.join(TMP, name)
+  const lines = [
+    JSON.stringify({
+      step_index: 0,
+      source: 'USER_EXPLICIT',
+      type: 'USER_INPUT',
+      status: 'DONE',
+      created_at: '2026-08-23T22:05:42Z',
+      content: content === null ? '' : `<USER_REQUEST>\n${content}\n</USER_REQUEST>`,
+    }),
+  ]
+  writeFileSync(file, lines.join('\n') + '\n')
+  return file
+}
+
 /**
  * A PATH holding every tool the hooks use except the named one — for the
  * fallbacks a script keeps for machines where a tool is absent.
@@ -192,12 +212,14 @@ const PROVIDER_SESSION_ID = {
   codex: '018f9c5a-0000-7000-9a3b-1c2d3e4f5c01',
   crush: 'db3492a0-4a6b-4335-8c0b-d4cc43fc4cb0',
   opencode: 'ses_011856954ffe5NEMhsYeTuWykR',
+  antigravity: 'a1604c72-3091-449e-a60b-27da041f8ca2',
 }
 
 // Crush has no transcript to point a hook at: its payload is about the tool.
 const TRANSCRIPT = {
   claude: claudeTranscript('Fix the replay ring overflow'),
   codex: codexTranscript('Fix the replay ring overflow\nand its second line'),
+  antigravity: antigravityTranscript('Fix the replay ring overflow\nand its second line'),
 }
 
 /**
@@ -211,6 +233,7 @@ const TOOL_CALL = {
   claude: { tool_name: 'Bash', tool_input: { command: 'pnpm test', description: 'run the suite' } },
   codex: { tool_name: 'Bash', tool_input: { command: 'go test ./...' } },
   crush: { tool_name: 'write', tool_input: { file_path: 'probe.txt', content: 'ok\n' } },
+  antigravity: { toolCall: { name: 'run_command', args: { CommandLine: 'pnpm test' } } },
 }
 
 /** The event each harness raises a `waiting` report from. */
@@ -258,6 +281,14 @@ function stdinFor({ provider, event }) {
       ...(event === 'PreToolUse' ? TOOL_CALL.crush : {}),
     })
   }
+  if (provider === 'antigravity') {
+    return JSON.stringify({
+      conversationId: PROVIDER_SESSION_ID.antigravity,
+      transcriptPath: TRANSCRIPT.antigravity,
+      workspacePaths: [ROOT],
+      ...(event === 'PreToolUse' ? TOOL_CALL.antigravity : {}),
+    })
+  }
   return JSON.stringify({
     session_id: PROVIDER_SESSION_ID[provider],
     transcript_path: TRANSCRIPT[provider],
@@ -292,7 +323,10 @@ test('the vendored fixtures parse and carry exactly one body and one verdict', (
     }
   }
   assert.deepEqual([...STATES].sort(), ['busy', 'done', 'idle', 'waiting'])
-  assert.deepEqual([...PROVIDERS].sort(), ['claude', 'codex', 'crush', 'omp', 'opencode'])
+  assert.deepEqual(
+    [...PROVIDERS].sort(),
+    ['antigravity', 'claude', 'codex', 'crush', 'omp', 'opencode'],
+  )
 })
 
 test('every rejected case is modelled by a client-side rule', () => {
@@ -355,8 +389,13 @@ test('every registered state argument is an accepted state', () => {
   assert.ok(sent.length > 0)
   for (const state of sent) assert.ok(STATES.has(state), `registration reports unknown state "${state}"`)
   // A harness that reports state at all wires up the whole vocabulary; Codex's
-  // SessionEnd never fires today, but the entry is deliberate. Crush reports no
-  // state at all — see docs/providers.md for both.
+  // SessionEnd never fires today, but the entry is deliberate. Antigravity reports
+  // busy and done. Crush reports no state at all — see docs/providers.md for all three.
+  const EXPECTED_STATES = {
+    claude: STATES,
+    codex: STATES,
+    antigravity: new Set(['busy', 'done']),
+  }
   for (const [provider, scripts] of Object.entries(REGISTERED_SCRIPTS)) {
     if (!scripts.includes('report-state.sh')) continue
     const states = new Set(
@@ -364,7 +403,11 @@ test('every registered state argument is an accepted state', () => {
         (r) => r.argument,
       ),
     )
-    assert.deepEqual([...states].sort(), [...STATES].sort(), `${provider} misses a state`)
+    assert.deepEqual(
+      [...states].sort(),
+      [...(EXPECTED_STATES[provider] ?? STATES)].sort(),
+      `${provider} misses a state`,
+    )
   }
 })
 
@@ -403,7 +446,7 @@ for (const registration of REGISTRATIONS) {
       }
       if (script === 'report-tool.sh') {
         assert.equal(body.state, 'busy')
-        assert.equal(body.tool, TOOL_CALL[provider].tool_name)
+        assert.equal(body.tool, TOOL_CALL[provider].tool_name ?? TOOL_CALL[provider].toolCall?.name)
       }
       if (script === 'report-session-start.sh') {
         assert.equal(body.provider, provider)
@@ -533,6 +576,8 @@ const NO_TITLE = [
   ['codex rollout without a user message', () => codexTranscript(null, 'no-message.jsonl')],
   ['codex first line that is whitespace', () => codexTranscript('   \nreal work', 'blank-line.jsonl')],
   ['codex message that is a newline', () => codexTranscript('\nreal work', 'leading-nl.jsonl')],
+  ['antigravity transcript without user input', () => antigravityTranscript(null, 'no-user-input.jsonl')],
+  ['antigravity user input that is whitespace', () => antigravityTranscript('   ', 'blank-user-input.jsonl')],
 ]
 
 for (const [label, make] of NO_TITLE) {
@@ -667,6 +712,37 @@ const DETAILS = [
     { tool_name: 'WebFetch', tool_input: { url: 'https://example.com/a' } },
     'https://example.com/a',
   ],
+  [
+    'an antigravity run_command',
+    { toolCall: { name: 'run_command', args: { CommandLine: 'pnpm test' } } },
+    'pnpm test',
+  ],
+  [
+    'an antigravity write_to_file',
+    {
+      workspacePaths: ['/w'],
+      toolCall: { name: 'write_to_file', args: { TargetFile: '/w/internal/terminal/usage.go' } },
+    },
+    'internal/terminal/usage.go',
+  ],
+  [
+    'an antigravity view_file outside workspace',
+    {
+      workspacePaths: ['/w'],
+      toolCall: { name: 'view_file', args: { AbsolutePath: '/etc/hosts' } },
+    },
+    'hosts',
+  ],
+  [
+    'an antigravity grep_search',
+    { toolCall: { name: 'grep_search', args: { Query: 'statusEvent' } } },
+    'statusEvent',
+  ],
+  [
+    'an antigravity read_url_content',
+    { toolCall: { name: 'read_url_content', args: { Url: 'https://example.com/a' } } },
+    'https://example.com/a',
+  ],
 ]
 
 for (const [label, payload, want] of DETAILS) {
@@ -674,7 +750,7 @@ for (const [label, payload, want] of DETAILS) {
     const { requests } = await runToolHook(payload)
     const { body } = assertContractHonoured('/hook', requests[0])
     assert.equal(body.state, 'busy')
-    assert.equal(body.tool, payload.tool_name)
+    assert.equal(body.tool, payload.tool_name ?? payload.toolCall?.name)
     assert.equal(body.detail, want)
   })
 }
