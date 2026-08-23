@@ -133,9 +133,9 @@ stub listener rather than off their documentation:
 | Action        | Claude Code       | Codex                     | Antigravity                        | opencode         | omp              |
 |---------------|-------------------|---------------------------|------------------------------------|------------------|------------------|
 | run a command | `Bash`            | `Bash`                    | `run_command`                      | `bash`           | `bash`           |
-| edit a file   | `Edit` / `Write`  | `apply_patch`             | `propose_code` / `file_change`     | `edit` / `write` | `edit` / `write` |
+| edit a file   | `Edit` / `Write`  | `apply_patch`             | `write_to_file` / `replace_file_content` | `edit` / `write` | `edit` / `write` |
 | read a file   | `Read`            | — (goes through `Bash`)   | `view_file`                        | `read`           | `read`           |
-| search        | `Grep` / `Glob`   | — (goes through `Bash`)   | `grep_search` / `code_search`      | `grep` / `glob`  | `grep` / `glob`  |
+| search        | `Grep` / `Glob`   | — (goes through `Bash`)   | `grep_search`                      | `grep` / `glob`  | `grep` / `glob`  |
 
 The `detail` is read by field, never by tool name — `command` / `CommandLine`,
 then `file_path` / `path` / `TargetFile`, then `url` / `query` / `Query` — one

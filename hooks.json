@@ -26,7 +26,7 @@
     ],
     "PostToolUse": [
       {
-        "matcher": "propose_code|file_change|edit_notebook|write_blob|delete_directory|run_command",
+        "matcher": "write_to_file|replace_file_content|run_command",
         "hooks": [
           {
             "type": "command",

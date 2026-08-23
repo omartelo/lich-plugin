@@ -822,10 +822,13 @@ const DETAILS = [
     'pnpm test',
   ],
   [
-    'an antigravity propose_code',
+    'an antigravity write_to_file',
     {
       workspacePaths: ['/w'],
-      toolCall: { name: 'propose_code', args: { TargetFile: '/w/internal/terminal/usage.go' } },
+      toolCall: {
+        name: 'write_to_file',
+        args: { TargetFile: '/w/internal/terminal/usage.go', CodeContent: 'package terminal' },
+      },
     },
     'internal/terminal/usage.go',
   ],
@@ -841,6 +844,19 @@ const DETAILS = [
     'an antigravity grep_search',
     { toolCall: { name: 'grep_search', args: { Query: 'statusEvent' } } },
     'statusEvent',
+  ],
+  // Every MCP server's tools reach a hook as the one tool `call_mcp_tool`, so
+  // the detail is the only thing telling two of them apart — including lich's
+  // own, which is what a card is most likely to be showing.
+  [
+    'an antigravity MCP call',
+    {
+      toolCall: {
+        name: 'call_mcp_tool',
+        args: { ServerName: 'lich', ToolName: 'open_session', Arguments: {} },
+      },
+    },
+    'lich/open_session',
   ],
   [
     'an antigravity read_url_content',

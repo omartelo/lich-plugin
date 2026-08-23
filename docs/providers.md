@@ -285,13 +285,19 @@ against a stub listener — not off a name that reads plausibly.
   id and `busy` therefore go out several times a turn. Both are idempotent, so
   the card is right either way, and it is what makes `busy` cheap enough to leave
   on the same event as the session id.
-- **Tool names come from the step-type enum**, lowercased with the
-  `CORTEX_STEP_TYPE_` prefix dropped: `run_command`, `view_file`, `grep_search`,
-  `propose_code`, `file_change`, `edit_notebook`, `write_blob`,
-  `delete_directory`. The Windsurf-flavoured names that read like they belong
-  (`write_to_file`, `replace_file_content`, `find_by_name`) are not in it, and a
-  matcher naming them matches nothing — which costs a report rather than raising
-  an error.
+- **Tool names can only be measured, never derived.** The CLI's own guide says
+  a tool name is its step type lowercased with the `CORTEX_STEP_TYPE_` prefix
+  dropped — and that is not what arrives: the enum's `MCP_TOOL` reaches a hook
+  as `call_mcp_tool`, so something maps names on top of it. What a real turn
+  sends is `run_command`, `write_to_file`, `replace_file_content`, `view_file`,
+  `list_dir` and `call_mcp_tool`, with PascalCase arguments (`CommandLine`,
+  `TargetFile`, `AbsolutePath`, `DirectoryPath`, `ServerName`/`ToolName`). A
+  matcher built from the enum instead matches nothing at all, silently — which
+  is how the git-status refresh can stop firing on a write with the suite still
+  green.
+- **Every MCP tool arrives as the one tool `call_mcp_tool`**, the server and the
+  tool it called being arguments. `detail.jq` reads them, so the card can tell
+  two MCP calls apart — lich's own tools reach a session this way.
 - **Not reported: `waiting` and `idle`.** No event has been measured for either.
   `PermissionRequest` has no counterpart here — `PreToolUse` could gate a call,
   but a hook that answers `ask` to ring a bell would be changing the turn rather
