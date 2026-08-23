@@ -14,7 +14,7 @@ toast) when the agent is blocked on the user.
 | `report-tool.sh`          | `busy` + `tool`  | `PreToolUse`       | `PreToolUse`        | `tool.execute.before`     | `tool_call`     |
 | `report-state.sh busy`    | `busy`           | `PostToolUse`      | `PostToolUse`       | `session.status` (`busy`) | `turn_start`    |
 | `report-state.sh done`    | `done`           | `Stop`             | `Stop`              | `session.status` (`idle`) | `session_stop`  |
-| `report-state.sh waiting` | `waiting`        | `Notification`     | `PermissionRequest` | any `*.asked`             | — (not measured)|
+| `report-state.sh waiting` | `waiting`+`reason`| `Notification`    | `PermissionRequest` | any `*.asked`             | — (not measured)|
 | `report-state.sh idle`    | `idle`           | `SessionEnd`       | — (never fires)     | — (never fires)           | — (never fires) |
 
 opencode and omp run no scripts: `opencode/lich.js` and `omp/lich.js` send the
@@ -33,9 +33,10 @@ therefore shows a spinner, not a bell, while the agent waits on you — one stat
 late, never wrong. The event is the first thing to measure when someone can drive
 an approval prompt.
 
-`POST /hook` with `{"session_id": $LICH_SESSION_ID, "state":
-"busy"|"done"|"waiting"|"idle"}`, plus the optional `tool` / `detail` pair the
-pre-tool report adds.
+The endpoint, the accepted states and the optional fields (`tool` / `detail`
+on the pre-tool report, `reason` on the waiting one) are spelled out once, in
+[lich's contract](https://github.com/omartelo/lich/blob/main/docs/hooks/session-state.md).
+What is below is only what each harness gives this plugin to fill them with.
 
 `Notification` fires when Claude needs a permission decision or has been idle
 waiting for input — both mean "your turn". A later `busy` or `done` clears it.
@@ -56,6 +57,46 @@ nobody enumerated leaves a session waiting behind a card that shows a spinner.
 Answering (`question.replied` → `session.status busy`) and dismissing
 (`question.rejected` → `session.status idle`) both re-arm the card on their own,
 which is why neither is registered here.
+
+## The reason
+
+A `waiting` report carries what the agent is blocked on, so the bell on the card
+says *why* rather than only *that*. It rides `waiting` alone — lich drops it on
+every other state — and it is optional in both directions: the bell has to land
+whether or not a reason could be built, so no shape below is ever a reason to
+refuse the report.
+
+| harness     | where the reason comes from                                            |
+|-------------|------------------------------------------------------------------------|
+| Claude Code | the `Notification` payload's `message`                                  |
+| Codex       | `tool_name`, qualified with the same `detail` a busy report would carry |
+| opencode    | `permission`, the v2 `action`, or a question's `header`                 |
+| omp, Crush  | — neither reports `waiting` at all                                      |
+
+Claude Code is the only harness that hands over a sentence written for a human
+("Claude needs your permission to use Bash"), and it writes one for the plain
+idle-at-the-prompt nudge too — which is a reason as much as a permission is, so
+both go out unchanged and lich still decides which arrived. Codex's
+`PermissionRequest` has no message field at all: its payload is the `PreToolUse`
+envelope plus `model`, `permission_mode` and `turn_id`, so the report is the
+tool it is asking about with the words the busy report already puts on the card
+behind it — `apply_patch: internal/terminal/usage.go`. That second half is
+[`detail.jq`](../hooks/detail.jq), shared with `report-tool.sh` so the two
+readings of a tool call cannot drift.
+
+opencode's four `.asked` events spell it four ways, so `lich.js` reads it by
+field the way it reads a tool call's detail: `permission`, then the v2 `action`,
+then the first question's `header` — opencode's own ≤30-character label, built
+for exactly this kind of surface — with the full question behind it when a
+caller left the header out. A field rule covers the next prompt type too, and
+one that carries none of them still reports `waiting` with nothing attached,
+which is the documented degrade rather than a bug.
+
+Nothing here measures the reason's length: lich caps it, and a cap is not a
+refusal. Without `jq` (Windows, usually) the message stays home for the same
+reason the detail does — a hand-built body cannot escape arbitrary text — but
+Codex's tool name is an identifier and goes out alone, and Codex is the harness
+that needs the Windows wrapper.
 
 `SessionEnd → idle` clears the card's indicator (no spinner/check/bell). It
 fires when the session ends or is reset, so a stale state does not linger on a
@@ -107,7 +148,9 @@ spell it `path` (read, write, edit, glob), `command` (bash) or `pattern`
 `query` / `url` spellings after them, for the tools omp does not define itself:
 an extension's or an MCP server's, named however their author named them.
 
-Two shapes need more than the plain rule:
+Two shapes need more than the plain rule, and both live in
+[`detail.jq`](../hooks/detail.jq) — one copy, because the waiting report reads
+the same tool call for the second half of its reason:
 
 - **`apply_patch`** passes the *whole patch* as its command, so the plain rule
   would put `*** Begin Patch` on the card. The file its `*** Add/Update/Delete

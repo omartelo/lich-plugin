@@ -9,6 +9,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **A waiting card says what the session is waiting for.** The `waiting` report
+  now carries a `reason`, so the bell says *why* rather than only *that*. Each
+  harness hands over something different to say it with: Claude Code's
+  `Notification` message, which is already a sentence written for a human
+  ("Claude needs your permission to use Bash") and covers the plain idle nudge
+  too; the tool Codex's `PermissionRequest` is asking about, qualified with the
+  same words a busy report puts on the card (`apply_patch:
+  internal/terminal/usage.go`); and, on opencode, the permission, the v2 action
+  or a question's own short header. Read by field rather than by event name, so
+  a prompt type nobody enumerated still rings the bell — the reason is optional
+  in the contract, and a missing one is never a reason to drop the report. omp
+  and Crush report no `waiting` at all, so neither gains anything here. No
+  minimum lich: the field is additive in both directions, so an older lich
+  ignores it and rings the bell exactly as before.
 - **An opencode session can rename a lich card.** `rename_session` is the eighth
   tool, beside the seven that were already there: with a session it renames that
   one, with only a name it renames the session the agent is running in — which is

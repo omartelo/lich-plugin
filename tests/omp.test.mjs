@@ -18,13 +18,8 @@ import assert from 'node:assert/strict'
 
 import {
   LICH_SESSION_ID,
-  PROVIDERS,
-  REJECT_RULES,
-  TOKEN,
   assertContractHonoured,
-  isJsonObject,
   lichEnv,
-  matchingAcceptCase,
   startStub,
   withStub,
 } from './contract.mjs'
@@ -104,35 +99,12 @@ async function settle(stub, expected) {
 
 const only = (requests, endpoint) => requests.filter((r) => r.url.startsWith(endpoint + '?'))
 
-/**
- * lich has not registered `omp` as a provider id yet: the vendored
- * tests/fixtures/session-start.jsonl carries claude, codex, opencode and crush,
- * so the contract's own "unregistered provider" rule fires on this client's
- * otherwise correct payload. The fixture is upstream truth and is never edited
- * here to make a run green — so until the case lands in lich (and
- * refresh-fixtures.sh brings it down) this asserts every rule except that one,
- * and goes back to the shared assertion on its own the day it does.
- */
-function assertSessionStart(request) {
-  if (PROVIDERS.has('omp')) return assertContractHonoured('/session-start', request)
-
-  assert.equal(request.method, 'POST')
-  assert.equal(request.url, `/session-start?token=${TOKEN}`)
-  assert.match(request.headers['content-type'] ?? '', /application\/json/)
-  assert.ok(isJsonObject(request.raw), `body is not a JSON object: ${request.raw}`)
-
-  const body = JSON.parse(request.raw)
-  assert.ok(!('claude_session_id' in body), `body still sends claude_session_id: ${request.raw}`)
-  assert.ok(
-    matchingAcceptCase('/session-start', body),
-    `body matches no accepted shape for /session-start: ${request.raw}`,
-  )
-  for (const [name, violates] of Object.entries(REJECT_RULES['/session-start'])) {
-    if (name === 'unregistered provider') continue
-    assert.ok(!violates(body, request.raw), `body is the rejected shape "${name}": ${request.raw}`)
-  }
-  return { body }
-}
+// lich has registered `omp` as a provider id, so this client answers to the
+// same assertion every other one does. It did not always: while the case was
+// missing from the vendored fixtures the contract's own "unregistered provider"
+// rule fired on an otherwise correct payload, and this skipped that one rule
+// rather than edit upstream truth to make a run green.
+const assertSessionStart = (request) => assertContractHonoured('/session-start', request)
 
 // ------------------------------------------------------------------ reports --
 

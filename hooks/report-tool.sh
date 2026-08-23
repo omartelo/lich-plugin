@@ -10,6 +10,7 @@
 # Outside lich (vars absent) → no-op. Safe to install globally.
 [ -n "$LICH_PORT" ] && [ -n "$LICH_TOKEN" ] && [ -n "$LICH_SESSION_ID" ] || exit 0
 
+here=$(dirname "$0")
 payload=$(cat)
 command -v jq >/dev/null 2>&1 && has_jq=1 || has_jq=
 
@@ -25,36 +26,11 @@ fi
 [ -n "$tool" ] || exit 0
 
 # What the call is about, taken from whichever field the harness filled rather
-# than from the tool's name: one rule then covers both, because a Codex shell
-# call arrives as `Bash` with the same `command` field Claude Code uses. Only
-# with jq — the value is arbitrary text, and a hand-built body cannot escape it.
-#
-# `apply_patch` is the exception. Codex passes the whole patch as the command,
-# so the plain rule would put "*** Begin Patch" on the card; the file the patch
-# names is the readable half of it. A patch touching several files shows the
-# first, which is the one the eye would land on anyway.
-#
-# A path is shortened against the session's own directory, because a card is
-# 240px wide and both harnesses report absolute ones: a full path fills the line
-# with the part every card shares. Outside that directory only the file name is
-# left, which at least names the file. Commands are never shortened — a leading
-# slash there belongs to a binary, not to a path worth cutting.
+# than from the tool's name — detail.jq, shared with the waiting report. Only
+# with jq: the value is arbitrary text, and a hand-built body cannot escape it.
 detail=""
 if [ -n "$has_jq" ]; then
-  detail=$(printf '%s' "$payload" | jq -r '
-    .cwd as $cwd
-    | def short: if ($cwd // "") != "" and startswith($cwd + "/") then ltrimstr($cwd + "/")
-                 elif startswith("/") then sub(".*/"; "")
-                 else . end;
-      (.tool_input // {})
-    | if ((.command? // "") | tostring) != "" then
-        (.command | tostring
-         | if startswith("*** Begin Patch")
-           then ((capture("\\*\\*\\* (?:Add|Update|Delete) File: (?<p>[^\n]*)") // {}) | .p // "")
-           else . end)
-      else
-        ((.file_path? // .path? // .pattern? // .url? // .query? // "") | tostring | short)
-      end' 2>/dev/null | head -n 1)
+  detail=$(printf '%s' "$payload" | jq -r -f "$here/detail.jq" 2>/dev/null | head -n 1)
 fi
 
 # The detail is omitted rather than sent empty: the contract's optional field is

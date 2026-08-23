@@ -213,6 +213,37 @@ const TOOL_CALL = {
   crush: { tool_name: 'write', tool_input: { file_path: 'probe.txt', content: 'ok\n' } },
 }
 
+/** The event each harness raises a `waiting` report from. */
+const WAITING_EVENT = { claude: 'Notification', codex: 'PermissionRequest' }
+
+/**
+ * The payload behind a `waiting` report, per harness. Claude Code's
+ * `Notification` is the only one carrying a sentence written for a human, and
+ * it fires for the plain idle nudge with the same fields; Codex's
+ * `PermissionRequest` has no message at all — its required fields (measured
+ * against the schema in the codex 0.149.0 binary) are the PreToolUse envelope
+ * plus `model`, `permission_mode` and `turn_id`.
+ */
+const WAITING = {
+  claude: {
+    message: 'Claude needs your permission to use Bash',
+    title: 'Claude Code',
+    notification_type: 'permission_prompt',
+  },
+  codex: {
+    ...TOOL_CALL.codex,
+    model: 'gpt-5.1-codex',
+    permission_mode: 'default',
+    turn_id: 'turn_01',
+  },
+}
+
+/** The reason each of those payloads must put on the card. */
+const WAITING_REASON = {
+  claude: WAITING.claude.message,
+  codex: 'Bash: go test ./...',
+}
+
 /**
  * What the harness puts on stdin for the event this registration rides. Crush's
  * envelope is Claude Code's with two differences, both taken off a real run: it
@@ -233,8 +264,10 @@ function stdinFor({ provider, event }) {
     cwd: ROOT,
     hook_event_name: event,
     ...(event === 'PreToolUse' ? TOOL_CALL[provider] : {}),
+    ...(WAITING_EVENT[provider] === event ? WAITING[provider] : {}),
   })
 }
+
 
 // ----------------------------------------------------------------- the suite --
 
@@ -259,7 +292,7 @@ test('the vendored fixtures parse and carry exactly one body and one verdict', (
     }
   }
   assert.deepEqual([...STATES].sort(), ['busy', 'done', 'idle', 'waiting'])
-  assert.deepEqual([...PROVIDERS].sort(), ['claude', 'codex', 'crush', 'opencode'])
+  assert.deepEqual([...PROVIDERS].sort(), ['claude', 'codex', 'crush', 'omp', 'opencode'])
 })
 
 test('every rejected case is modelled by a client-side rule', () => {
@@ -361,7 +394,13 @@ for (const registration of REGISTRATIONS) {
 
       const { body } = assertContractHonoured(endpoint, stub.requests[0])
       assert.equal(body.session_id, LICH_SESSION_ID)
-      if (script === 'report-state.sh') assert.equal(body.state, argument)
+      if (script === 'report-state.sh') {
+        assert.equal(body.state, argument)
+        // Only `waiting` carries a reason — lich drops it on every other state,
+        // so sending one there would be noise the contract throws away.
+        if (argument === 'waiting') assert.equal(body.reason, WAITING_REASON[provider])
+        else assert.ok(!('reason' in body), `${argument} sent a reason: ${stub.requests[0].raw}`)
+      }
       if (script === 'report-tool.sh') {
         assert.equal(body.state, 'busy')
         assert.equal(body.tool, TOOL_CALL[provider].tool_name)
@@ -386,6 +425,79 @@ test('session-start falls back to claude when the registration passes no provide
     assert.equal(body.provider, 'claude')
   })
 })
+
+// The reason is what a bell on a card says the session is blocked on. It is
+// optional in the contract, and the bell has to land either way — so every
+// shape that cannot produce one still sends the plain `waiting`.
+const NO_REASON = [
+  ['a payload with neither a message nor a tool', { hook_event_name: 'Notification' }],
+  ['a message that is whitespace', { message: '   ' }],
+  ['a message that is not a string', { message: { text: 'permission' } }],
+]
+
+for (const [label, payload] of NO_REASON) {
+  test(`waiting still rings the bell for ${label}`, async () => {
+    await withStub(async (stub) => {
+      const result = await runHook(`"${ROOT}/hooks/report-state.sh" waiting`, {
+        env: lichEnv(stub.port),
+        stdin: JSON.stringify({ cwd: ROOT, ...payload }),
+      })
+      assertSilentSuccess(result)
+      assert.equal(stub.requests.length, 1, 'a reason it could not build cost the report')
+      const { body } = assertContractHonoured('/hook', stub.requests[0])
+      assert.equal(body.state, 'waiting')
+      assert.ok(!('reason' in body), `sent a reason it has no words for: ${stub.requests[0].raw}`)
+    })
+  })
+}
+
+// Windows ships sed (Git Bash) but rarely jq. A message is arbitrary text a
+// hand-built body cannot escape, so it stays home; Codex's tool name is an
+// identifier, and Codex is the harness that needs the Windows wrapper.
+test('waiting reports the tool name as its reason without jq', async () => {
+  await withStub(async (stub) => {
+    const result = await runHook(`"${ROOT}/hooks/report-state.sh" waiting`, {
+      env: { ...lichEnv(stub.port), PATH: binWithout('jq') },
+      stdin: stdinFor({ provider: 'codex', event: 'PermissionRequest' }),
+    })
+    assertSilentSuccess(result)
+    const { body } = assertContractHonoured('/hook', stub.requests[0])
+    assert.equal(body.reason, TOOL_CALL.codex.tool_name)
+  })
+})
+
+test('waiting sends no message-shaped reason without jq', async () => {
+  await withStub(async (stub) => {
+    const result = await runHook(`"${ROOT}/hooks/report-state.sh" waiting`, {
+      env: { ...lichEnv(stub.port), PATH: binWithout('jq') },
+      stdin: stdinFor({ provider: 'claude', event: 'Notification' }),
+    })
+    assertSilentSuccess(result)
+    const { body } = assertContractHonoured('/hook', stub.requests[0])
+    assert.equal(body.state, 'waiting')
+    assert.ok(!('reason' in body), `escaped nothing and sent it anyway: ${stub.requests[0].raw}`)
+  })
+})
+
+// Only `waiting` reads stdin. The other three states are reported from events
+// whose payload says nothing about a reason, and a script waiting on a pipe
+// nobody writes to would hold the turn it must never block.
+for (const state of ['busy', 'done', 'idle']) {
+  test(`${state} reports without reading stdin`, async () => {
+    await withStub(async (stub) => {
+      const child = spawn('/bin/sh', ['-c', `"${ROOT}/hooks/report-state.sh" ${state}`], {
+        env: { ...BASE_ENV, ...lichEnv(stub.port) },
+        stdio: ['pipe', 'ignore', 'ignore'],
+      })
+      child.stdin.on('error', () => {})
+      const code = await new Promise((resolve) => child.on('close', resolve))
+      child.stdin.destroy()
+      assert.equal(code, 0)
+      assert.equal(stub.requests.length, 1)
+      assert.equal(assertContractHonoured('/hook', stub.requests[0]).body.state, state)
+    })
+  })
+}
 
 test('session-start parses the payload without jq', async () => {
   // Windows ships sed (Git Bash) but rarely jq; the script falls back to sed.
