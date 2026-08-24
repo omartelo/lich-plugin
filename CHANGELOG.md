@@ -32,9 +32,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   event asks for, leaving the scripts silent for Codex, which reads their stdout
   as an answer to a permission request.
 
-  lich does not register the provider yet, so `/session-start` answers 400 until
-  it does; `PENDING_UPSTREAM` in `tests/contract.mjs` names that gap rather than
-  a fixture being edited to hide it.
+  The provider id is registered in lich (omartelo/lich#370), so the fixtures
+  enumerate `antigravity` like every other provider and the suite holds this
+  client to it.
 
 - **A waiting card says what the session is waiting for.** The `waiting` report
   now carries a `reason`, so the bell says *why* rather than only *that*. Each

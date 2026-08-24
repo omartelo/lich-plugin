@@ -60,9 +60,12 @@ export const PROVIDERS = new Set(accepted('/session-start').map((c) => c.accept.
  *
  * Emptying it is the last step of adding a provider, not an optional one: the
  * suites fail the moment a refreshed fixture registers one, so the marker
- * cannot outlive the gap it names.
+ * cannot outlive the gap it names. Antigravity was the first entry and is gone
+ * from it — lich registered the provider, `refresh-fixtures.sh` brought the
+ * fixture down, and the enumerations went back to coming from the fixtures
+ * alone. Empty is the resting state.
  */
-export const PENDING_UPSTREAM = new Set(['antigravity'])
+export const PENDING_UPSTREAM = new Set([])
 
 export const isObject = (v) => v !== null && typeof v === 'object' && !Array.isArray(v)
 export const blank = (v) => typeof v !== 'string' || v.trim() === ''

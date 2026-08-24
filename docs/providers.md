@@ -304,10 +304,10 @@ against a stub listener — not off a name that reads plausibly.
   than observing it. `Stop` ends one execution loop, not the conversation, so it
   is `done` and never `idle`. `PostInvocation` exists and is unregistered:
   nothing is left for it to say.
-- **lich does not register the provider yet.** `/session-start` answers 400 to
-  `provider: "antigravity"` until it does, which is why no fixture enumerates it
-  and `PENDING_UPSTREAM` in `tests/contract.mjs` names the gap instead. The
-  contract moves in lich first — prose, then fixtures, then the endpoint.
+- **The provider id is `antigravity`**, registered in lich and enumerated by
+  `tests/fixtures/session-start.jsonl` like every other one. It landed there
+  first: the contract moves in lich — prose, then fixtures, then the endpoint —
+  and only then here.
 
 ## Adding a provider
 
