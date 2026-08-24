@@ -123,6 +123,6 @@ symlink the clone into `~/.gemini/config/plugins/lich`.
 Same standard as the `lich` repository (Keep a Changelog + SemVer). Releases are cut by tagging `vX.Y.Z`:
 
 1. Move the `[Unreleased]` entries in `CHANGELOG.md` under the new version heading (with date) and refresh the compare links at the bottom.
-2. Align `version` in `.claude-plugin/plugin.json` **and** `.codex-plugin/plugin.json` with the tag.
+2. Align `version` in `.claude-plugin/plugin.json` **and** `.codex-plugin/plugin.json` with the tag. The root `plugin.json` is not a third one to bump: Antigravity's manifest takes only a `name`, and lich writes its own carrying the tag when it installs a release.
 3. Annotated tag `vX.Y.Z` + push with the tag.
 4. `gh release create vX.Y.Z` with the notes taken from the matching `CHANGELOG.md` section.

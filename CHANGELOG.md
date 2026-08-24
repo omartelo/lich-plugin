@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.11.0] - 2026-08-23
+
 ### Added
 
 - **Antigravity CLI sessions report to lich.** A sixth harness, and the first
@@ -391,7 +393,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   plugin is safe to install globally. Requests time out after ~1s and errors
   are swallowed — the hook never blocks or fails the turn.
 
-[Unreleased]: https://github.com/omartelo/lich-plugin/compare/v0.10.0...HEAD
+[Unreleased]: https://github.com/omartelo/lich-plugin/compare/v0.11.0...HEAD
+[0.11.0]: https://github.com/omartelo/lich-plugin/compare/v0.10.0...v0.11.0
 [0.10.0]: https://github.com/omartelo/lich-plugin/compare/v0.9.2...v0.10.0
 [0.9.2]: https://github.com/omartelo/lich-plugin/compare/v0.9.1...v0.9.2
 [0.9.1]: https://github.com/omartelo/lich-plugin/compare/v0.9.0...v0.9.1
