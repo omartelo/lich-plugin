@@ -704,6 +704,37 @@ for (const [label, make] of NO_TITLE) {
   })
 }
 
+// A hook inherits the harness's locale, and under a C one `cut -c` counts
+// bytes: a title cut mid-character reaches lich as a replacement glyph, with
+// nothing anywhere returning non-zero. The cap is a jq slice for that reason, so
+// this runs in the locale that breaks the other spelling — and asserts the title
+// survives the round trip character for character, which is what a byte cut
+// cannot do. A title written in English would pass either way.
+for (const [provider, make] of [
+  ['codex', codexTranscript],
+  ['antigravity', antigravityTranscript],
+]) {
+  test(`session-title caps ${provider} by character, not by byte`, async () => {
+    // Accented, so a byte cut lands mid-character: 40 * 3 bytes, cut at 80.
+    const long = 'ação '.repeat(40).trim()
+    await withStub(async (stub) => {
+      const result = await runHook(`"${ROOT}/hooks/report-title.sh"`, {
+        env: { ...lichEnv(stub.port), LC_ALL: 'C', LANG: 'C' },
+        stdin: JSON.stringify({
+          session_id: 's',
+          transcript_path: make(long, `long-${provider}.jsonl`),
+        }),
+      })
+      assertHookSucceeded(result)
+      assert.equal(stub.requests.length, 1)
+      const { body } = assertContractHonoured('/session-title', stub.requests[0])
+      assert.equal([...body.title].length, 80, 'title is not 80 characters')
+      assert.equal(body.title, [...long].slice(0, 80).join(''))
+      assert.ok(!body.title.includes('\uFFFD'), `title carries a broken character: ${body.title}`)
+    })
+  })
+}
+
 test('session-title trims the title it reports', async () => {
   await withStub(async (stub) => {
     const file = claudeTranscript('  Fix the replay ring overflow  ', 'padded-title.jsonl')

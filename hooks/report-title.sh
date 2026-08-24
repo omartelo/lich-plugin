@@ -21,7 +21,7 @@ title=$(grep '"type":"ai-title"' "$transcript_path" 2>/dev/null | tail -n 1 \
 if [ -z "$title" ]; then
   title=$(grep '"type":"user_message"' "$transcript_path" 2>/dev/null \
     | head -n 1 | jq -r '.payload.message // empty' 2>/dev/null \
-    | head -n 1 | cut -c 1-80)
+    | head -n 1)
 fi
 
 # Antigravity: names a thread after its first USER_INPUT content.
@@ -29,7 +29,7 @@ if [ -z "$title" ]; then
   title=$(grep '"type":"USER_INPUT"' "$transcript_path" 2>/dev/null \
     | head -n 1 | jq -r '.content // empty' 2>/dev/null \
     | sed -e 's/<USER_REQUEST>//g' -e 's/<\/USER_REQUEST>//g' \
-    | sed -n '/[^[:space:]]/{p;q}' | cut -c 1-80)
+    | sed -n '/[^[:space:]]/{p;q}')
 fi
 
 # lich rejects a blank title (400): a Codex first line can be nothing but
@@ -38,8 +38,15 @@ fi
 title=$(printf '%s' "$title" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
 [ -n "$title" ] || exit 0
 
+# Capped to a card's worth, in jq rather than with `cut -c`: a hook inherits
+# whatever locale the harness spawned it with, and `cut -c` counts bytes under a
+# C locale — enough to slice a title mid-character and put a replacement glyph on
+# the card. Nothing errors when that happens (jq substitutes, lich accepts, the
+# hook exits 0), so it shows up only as a mangled tail, and only on a title long
+# enough to cut. That makes it a bug that a title written in English never sees.
+# jq slices by codepoint whatever the locale, and it is already required above.
 body=$(jq -cn --arg sid "$LICH_SESSION_ID" --arg title "$title" \
-  '{session_id: $sid, title: $title}')
+  '{session_id: $sid, title: ($title[0:80])}')
 
 curl -s -o /dev/null --max-time 1 \
   -X POST "http://127.0.0.1:${LICH_PORT}/session-title?token=${LICH_TOKEN}" \

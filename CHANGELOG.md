@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.11.1] - 2026-08-23
+
+### Fixed
+
+- **A session title with an accent no longer reaches the card broken.** The
+  title was capped with `cut -c`, which counts characters only in a UTF-8
+  locale; a hook inherits whatever locale the harness spawned it with, and under
+  a C one the cap counted bytes and could slice a title mid-character. Nothing
+  returned non-zero when it did — jq substituted the broken character, lich
+  accepted the body, the hook exited 0 — so the only symptom was a replacement
+  glyph on the end of the card, on titles long enough to be cut. The cap is now
+  a `jq` slice, which counts codepoints whatever the locale, in the one place
+  that builds the body: 80 characters for Claude Code, Codex and Antigravity
+  alike. A title written in English was never affected, which is why this went
+  several releases unnoticed.
+
 ## [0.11.0] - 2026-08-23
 
 ### Added
@@ -393,7 +409,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   plugin is safe to install globally. Requests time out after ~1s and errors
   are swallowed — the hook never blocks or fails the turn.
 
-[Unreleased]: https://github.com/omartelo/lich-plugin/compare/v0.11.0...HEAD
+[Unreleased]: https://github.com/omartelo/lich-plugin/compare/v0.11.1...HEAD
+[0.11.1]: https://github.com/omartelo/lich-plugin/compare/v0.11.0...v0.11.1
 [0.11.0]: https://github.com/omartelo/lich-plugin/compare/v0.10.0...v0.11.0
 [0.10.0]: https://github.com/omartelo/lich-plugin/compare/v0.9.2...v0.10.0
 [0.9.2]: https://github.com/omartelo/lich-plugin/compare/v0.9.1...v0.9.2

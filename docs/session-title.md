@@ -19,14 +19,22 @@ stdin), in their own shape — the script reads whichever is there:
 - **Claude Code** — the last line matching `"type":"ai-title"`, field
   `aiTitle`. An actual generated title.
 - **Codex** — the first `user_message` event, field `payload.message`, first
-  line, cut to 80 characters. Codex generates no title: it names a thread after
-  its first user message verbatim (`threads.title` in its state database), so
-  this reports the same label Codex shows, only trimmed to card size.
-- **Antigravity** — the first `USER_INPUT` entry's `content` text (unwrapping
-  `<USER_REQUEST>` block tags), trimmed to 80 characters.
+  line. Codex generates no title: it names a thread after its first user message
+  verbatim (`threads.title` in its state database), so this reports the same
+  label Codex shows, only trimmed to card size.
+- **Antigravity** — the first `USER_INPUT` entry's `content` text, unwrapping
+  `<USER_REQUEST>` block tags and keeping the first non-blank line.
 
 All formats are internal and undocumented — extraction failures are swallowed
 and the hook no-ops. Requires `jq`; absent → no-op.
+
+Whatever the source, the title is capped at **80 characters** on the way out —
+characters, not bytes. The cap is a `jq` slice on the body rather than a
+`cut -c`: a hook inherits the harness's locale, and `cut -c` counts bytes under a
+C one, which slices a title mid-character and puts a replacement glyph on the
+card. Nothing returns non-zero when that happens, so it surfaces only as a
+mangled tail — and only on a title long enough to be cut, which is why a title
+written in English never shows it.
 
 - **opencode** — no transcript to read: `session.updated` carries the whole
   session, title included, so `opencode/lich.js` forwards it. The title a
