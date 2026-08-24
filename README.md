@@ -1,13 +1,13 @@
 # lich-plugin
 
-The agent side of the [lich](https://github.com/omartelo/lich) integration. lich is a harness that orchestrates agent CLI sessions; this companion plugin gives it eyes and hands inside each session. It installs on **Claude Code**, **OpenAI Codex**, **opencode**, **omp** (oh-my-pi) and **Crush** from this same repository. Every hook implements a contract that is canonical in the lich repository (`docs/hooks/` there); the docs in `docs/` here point at each contract and describe the client side:
+The agent side of the [lich](https://github.com/omartelo/lich) integration. lich is a harness that orchestrates agent CLI sessions; this companion plugin gives it eyes and hands inside each session. It installs on **Claude Code**, **OpenAI Codex**, **Antigravity CLI**, **opencode**, **omp** (oh-my-pi) and **Crush** from this same repository. Every hook implements a contract that is canonical in the lich repository (`docs/hooks/` there); the docs in `docs/` here point at each contract and describe the client side:
 
-- **session state** — `busy`/`done` on the session card (`UserPromptSubmit`/`Stop`)
-- **session start** — persists the agent's session id on the lich session (`SessionStart`)
+- **session state** — `busy`/`done` on the session card (`UserPromptSubmit`/`PreInvocation`/`Stop`)
+- **session start** — persists the agent's session id on the lich session (`SessionStart`/`PreInvocation`)
 - **session title** — names the card after the session's own title (`Stop`)
 - **session touched** — refreshes the card's git status right after file-mutating tools (`PostToolUse`)
 
-The four are what Claude Code, Codex, opencode and omp report. **Crush reports two of them** — its session id and the git-status refresh — because `PreToolUse` is the only event it has, and a state nothing can end is worse on a card than no state. **omp reports all four minus the bell**: no event of its own for "your turn" has been measured yet, so its card shows a spinner while the agent waits on you. [docs/providers.md](docs/providers.md) has the event mapping per harness.
+The four are what Claude Code, Codex, Antigravity, opencode and omp report. **Crush reports two of them** — its session id and the git-status refresh — because `PreToolUse` is the only event it has, and a state nothing can end is worse on a card than no state. **omp reports all four minus the bell**: no event of its own for "your turn" has been measured yet, so its card shows a spinner while the agent waits on you. [docs/providers.md](docs/providers.md) has the event mapping per harness.
 
 On **opencode** it also carries the other direction: the seven operations lich
 offers a session for driving the sessions beside it — list, send, wait, reply,
@@ -19,7 +19,7 @@ two cases where they are deliberately absent.
 
 It also ships skills for the parts of lich you configure from inside a session:
 
-- **theme** (`/lich:theme` in Claude Code; on Codex the `theme` skill loads from its description) — write, port or fix a lich color theme: the app tokens, the xterm palette, where the file goes, and a validator for the rules that otherwise fail silently
+- **theme** (`/lich:theme` in Claude Code; on Codex and Antigravity the `theme` skill loads from its description) — write, port or fix a lich color theme: the app tokens, the xterm palette, where the file goes, and a validator for the rules that otherwise fail silently
 
 ## Structure
 
@@ -28,6 +28,8 @@ It also ships skills for the parts of lich you configure from inside a session:
 .claude-plugin/marketplace.json   # marketplace, Claude Code
 .codex-plugin/plugin.json         # plugin manifest, Codex
 .agents/plugins/marketplace.json  # marketplace, Codex
+plugin.json                       # plugin manifest, Antigravity (name fixed, must sit at the root)
+hooks.json                        # hook registration, Antigravity (likewise)
 hooks/hooks.json                  # hook registration, Claude Code
 hooks/codex-hooks.json            # hook registration, Codex
 hooks/crush-hooks.json            # hook registration, Crush (merged into crush.json by hand)
@@ -43,7 +45,7 @@ skills/theme/                     # theme skill: SKILL.md, template.json, valida
 tests/                            # hook payloads asserted against lich's fixtures
 ```
 
-One set of hook scripts serves Claude Code, Codex and Crush — they live in `hooks/` and are referenced via `$CLAUDE_PLUGIN_ROOT/hooks/<script>`, a variable Codex sets too. opencode and omp run no commands: in both, what gets loaded is a JavaScript module, so each has a single-file client — `opencode/lich.js` and `omp/lich.js` — sending the same payloads to the same endpoints. [docs/providers.md](docs/providers.md) maps the layout and every harness's event names.
+One set of hook scripts serves Claude Code, Codex, Antigravity and Crush — they live in `hooks/`. Claude Code and Codex reach them through `$CLAUDE_PLUGIN_ROOT/hooks/<script>`, a variable Codex sets too; Crush ships a placeholder the user replaces. Antigravity sets no such variable — it runs a hook with the working directory set to the plugin root, so its registration spells `hooks/<script>` relative to that, and it is the reason `plugin.json` and `hooks.json` sit at the root: Antigravity fixes both names and looks for them nowhere else. opencode and omp run no commands: in both, what gets loaded is a JavaScript module, so each has a single-file client — `opencode/lich.js` and `omp/lich.js` — sending the same payloads to the same endpoints. [docs/providers.md](docs/providers.md) maps the layout and every harness's event names.
 
 ## Installation
 
@@ -66,6 +68,19 @@ codex plugin add lich@lich-plugin
 ```
 
 Then start a new session and run `/hooks` to review and trust the plugin's hooks — Codex does not run a plugin's hooks until you do, so until then the plugin is installed but silent. Hooks themselves are stable and on by default in current Codex; on older versions set `[features] hooks = true` in `~/.codex/config.toml`.
+
+### Antigravity CLI
+
+A plugin is a directory holding a `plugin.json`, under a `plugins/` folder in a customization root. Symlink the clone into one — globally, or into a project's `.agents/` to share it with the team:
+
+```bash
+mkdir -p ~/.gemini/config/plugins
+ln -s "$PWD" ~/.gemini/config/plugins/lich
+```
+
+That is the whole install: the hooks come from `hooks.json` beside the manifest, and the `theme` skill from `skills/`. `agy plugin validate .` checks the bundle from the clone before you link it, `agy plugin list` shows it afterwards, and `agy plugin disable lich` turns it off again.
+
+Without the plugin, [`hooks.json`](hooks.json) can be merged into `~/.gemini/config/hooks.json` (global) or `.agents/hooks.json` (per project) — but a hook's working directory is the folder holding the `hooks.json` that declared it, so replace each `hooks/` prefix with the absolute path to this clone.
 
 ### opencode
 

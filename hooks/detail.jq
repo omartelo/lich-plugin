@@ -16,16 +16,34 @@
 # with the part every card shares. Outside that directory only the file name is
 # left, which at least names the file. Commands are never shortened — a leading
 # slash there belongs to a binary, not to a path worth cutting.
-.cwd as $cwd
+#
+# Antigravity spells the same two things differently: the session's directory is
+# the first of `workspacePaths`, and the arguments are PascalCase under
+# `toolCall.args`. Field names only — they join the fallback chain below rather
+# than forking it, so a field a harness never sends is a rung it falls straight
+# through. Every one of these names was read off a payload from a real turn: the
+# step-type enum in the binary is *not* what arrives here (its `MCP_TOOL` is
+# `call_mcp_tool` on the wire), so it cannot be used to derive them.
+#
+# An MCP call is the one that needs a branch rather than a rung. Every server's
+# tools arrive as the single tool `call_mcp_tool`, so the name on the card says
+# nothing on its own; the server and the tool it called are arguments, and
+# together they are the readable half — lich's own tools would otherwise all
+# read alike.
+(.workspacePaths[0]? // .cwd) as $cwd
 | def short: if ($cwd // "") != "" and startswith($cwd + "/") then ltrimstr($cwd + "/")
              elif startswith("/") then sub(".*/"; "")
              else . end;
-  (.tool_input // {})
-| if ((.command? // "") | tostring) != "" then
-    (.command | tostring
+  (.toolCall.args // .tool_input // {})
+| if ((.ToolName? // "") | tostring) != "" then
+    ([.ServerName?, .ToolName?] | map(select(type == "string" and . != "")) | join("/"))
+  elif ((.CommandLine? // .command? // "") | tostring) != "" then
+    ((.CommandLine? // .command) | tostring
      | if startswith("*** Begin Patch")
        then ((capture("\\*\\*\\* (?:Add|Update|Delete) File: (?<p>[^\n]*)") // {}) | .p // "")
        else . end)
   else
-    ((.file_path? // .path? // .pattern? // .url? // .query? // "") | tostring | short)
+    ((.TargetFile? // .AbsolutePath? // .DirectoryPath?
+      // .file_path? // .path? // .pattern?
+      // .Url? // .url? // .Query? // .query? // "") | tostring | short)
   end

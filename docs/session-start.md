@@ -8,17 +8,18 @@ Reports the agent CLI's own session id so lich can persist the link between its
 session (the card) and the agent session running inside it. lich stores it as
 the *provider* session id — the field is provider-agnostic.
 
-| script                             | action                          | Claude Code hook | Codex hook     | opencode event    | omp event       | Crush hook   |
-|------------------------------------|---------------------------------|------------------|----------------|-------------------|-----------------|--------------|
-| `report-session-start.sh <provider>` | send the CLI's `session_id`   | `SessionStart`   | `SessionStart` | `session.created` | `session_start` | `PreToolUse` |
+| script                             | action                          | Claude Code hook | Codex hook     | Antigravity hook | opencode event    | omp event       | Crush hook   |
+|------------------------------------|---------------------------------|------------------|----------------|------------------|-------------------|-----------------|--------------|
+| `report-session-start.sh <provider>` | send the CLI's `session_id`   | `SessionStart`   | `SessionStart` | `PreInvocation`  | `session.created` | `session_start` | `PreToolUse` |
 
 `POST /session-start` with `{"session_id": $LICH_SESSION_ID,
-"provider_session_id": <session_id from the hook payload on stdin>, "provider":
+"provider_session_id": <session_id/conversationId from the hook payload on stdin>, "provider":
 <$1>}`.
 
 The provider id comes from the registration, not from the payload: the scripts
 are shared, the hook files are not, so `hooks.json` passes `claude`,
-`codex-hooks.json` passes `codex` and `crush-hooks.json` passes `crush`.
+`codex-hooks.json` passes `codex`, the root `hooks.json` passes `antigravity`
+and `crush-hooks.json` passes `crush`.
 `opencode/lich.js` and `omp/lich.js` have no registration to read it from and
 spell their own.
 lich keys the card's icon on it — a hand-run `codex` inside a shell session

@@ -9,9 +9,10 @@ provider=${1:-claude}
 # Parse session_id from the stdin payload. Prefer jq; fall back to sed so the
 # hook works on Windows, where jq is usually absent but sed (Git Bash) is not.
 if command -v jq >/dev/null 2>&1; then
-  provider_session_id=$(jq -r '.session_id // empty' 2>/dev/null)
+  provider_session_id=$(jq -r '.conversationId // .session_id // empty' 2>/dev/null)
 else
-  provider_session_id=$(sed -n 's/.*"session_id"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p')
+  provider_session_id=$(sed -n -e 's/.*"conversationId"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' \
+                               -e 's/.*"session_id"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -n 1)
 fi
 [ -n "$provider_session_id" ] || exit 0
 

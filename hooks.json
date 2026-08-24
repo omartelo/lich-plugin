@@ -1,0 +1,52 @@
+{
+  "lich": {
+    "PreInvocation": [
+      {
+        "type": "command",
+        "command": "hooks/report-session-start.sh antigravity; printf '{}'",
+        "timeout": 5
+      },
+      {
+        "type": "command",
+        "command": "hooks/report-state.sh busy; printf '{}'",
+        "timeout": 5
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "hooks/report-tool.sh; printf '{\"decision\":\"allow\"}'",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "write_to_file|replace_file_content|run_command",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "hooks/report-touched.sh; printf '{}'",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "type": "command",
+        "command": "hooks/report-state.sh done; printf '{\"decision\":\"\"}'",
+        "timeout": 5
+      },
+      {
+        "type": "command",
+        "command": "hooks/report-title.sh; printf '{\"decision\":\"\"}'",
+        "timeout": 5
+      }
+    ]
+  }
+}

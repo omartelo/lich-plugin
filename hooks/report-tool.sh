@@ -18,10 +18,11 @@ command -v jq >/dev/null 2>&1 && has_jq=1 || has_jq=
 # absent but sed (Git Bash) is not. A tool name is an identifier, so sed reading
 # it out of the raw payload is safe in a way arbitrary text would not be.
 if [ -n "$has_jq" ]; then
-  tool=$(printf '%s' "$payload" | jq -r '.tool_name // empty' 2>/dev/null)
+  tool=$(printf '%s' "$payload" | jq -r '.toolCall.name // .tool_name // empty' 2>/dev/null)
 else
   tool=$(printf '%s' "$payload" | \
-    sed -n 's/.*"tool_name"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p')
+    sed -n -e 's/.*"tool_name"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' \
+           -e 's/.*"toolCall"[[:space:]]*:[[:space:]]*{[^}]*"name"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -n 1)
 fi
 [ -n "$tool" ] || exit 0
 

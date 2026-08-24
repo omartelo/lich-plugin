@@ -28,7 +28,7 @@ if [ "$state" = waiting ]; then
       # Codex's PermissionRequest has no message field at all, so its report is
       # the tool it is asking about, qualified with the words the busy report
       # already puts on the card.
-      tool=$(printf '%s' "$payload" | jq -r '.tool_name // empty' 2>/dev/null | head -n 1)
+      tool=$(printf '%s' "$payload" | jq -r '.toolCall.name // .tool_name // empty' 2>/dev/null | head -n 1)
       detail=$(printf '%s' "$payload" | \
         jq -r -f "$(dirname "$0")/detail.jq" 2>/dev/null | head -n 1)
       if [ -n "$tool" ]; then
