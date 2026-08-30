@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Report a session's title from the first event of the turn that can carry it,
+  instead of waiting for the turn to end. Claude Code writes its generated title
+  about three seconds into a turn, so a long first turn showed the card's
+  placeholder name for its whole run and an interrupted one never got a name at
+  all — both now take the title while the turn is still going. The in-turn
+  report stops scanning the transcript once lich has accepted a title, so a turn
+  with many tool calls pays for one scan rather than one per call.
+
 ## [0.11.1] - 2026-08-23
 
 ### Fixed

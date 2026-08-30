@@ -40,6 +40,14 @@
         ]
       },
       {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${CLAUDE_PLUGIN_ROOT}/hooks/report-title.sh once"
+          }
+        ]
+      },
+      {
         "matcher": "Edit|Write|NotebookEdit|Bash",
         "hooks": [
           {

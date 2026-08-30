@@ -48,6 +48,16 @@
         ]
       },
       {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/report-title.sh\" once",
+            "commandWindows": "\"${CLAUDE_PLUGIN_ROOT}/hooks/win-run.cmd\" \"${CLAUDE_PLUGIN_ROOT}/hooks/report-title.sh\" once",
+            "timeout": 5
+          }
+        ]
+      },
+      {
         "matcher": "apply_patch|Edit|Write|Bash",
         "hooks": [
           {

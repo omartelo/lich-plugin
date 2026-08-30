@@ -10,6 +10,11 @@
         "type": "command",
         "command": "hooks/report-state.sh busy; printf '{}'",
         "timeout": 5
+      },
+      {
+        "type": "command",
+        "command": "hooks/report-title.sh once; printf '{}'",
+        "timeout": 5
       }
     ],
     "PreToolUse": [
