@@ -382,7 +382,7 @@ test('the vendored fixtures parse and carry exactly one body and one verdict', (
   assert.deepEqual([...STATES].sort(), ['busy', 'done', 'idle', 'waiting'])
   assert.deepEqual(
     [...PROVIDERS].sort(),
-    ['antigravity', 'claude', 'codex', 'crush', 'omp', 'opencode'],
+    ['antigravity', 'claude', 'codex', 'crush', 'cursor', 'omp', 'opencode'],
   )
 })
 
