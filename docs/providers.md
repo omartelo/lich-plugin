@@ -284,7 +284,10 @@ against a stub listener — not off a name that reads plausibly.
 - **`PreInvocation` fires before every model call, not once per turn.** Session
   id and `busy` therefore go out several times a turn. Both are idempotent, so
   the card is right either way, and it is what makes `busy` cheap enough to leave
-  on the same event as the session id.
+  on the same event as the session id. The title rides it too — this is
+  Antigravity's earliest event, and the only one before `Stop` that is not
+  matched to write tools — and pays for the repetition with `once`, which stops
+  it re-reading the transcript after lich has taken a title.
 - **Tool names can only be measured, never derived.** The CLI's own guide says
   a tool name is its step type lowercased with the `CORTEX_STEP_TYPE_` prefix
   dropped — and that is not what arrives: the enum's `MCP_TOOL` reaches a hook

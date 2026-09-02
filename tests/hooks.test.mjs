@@ -45,12 +45,24 @@ const BASE_ENV = Object.fromEntries(
  * folder holding hooks.json — so it is run here with the variable unset, which
  * is the regression test for a registration that reaches for it anyway: the
  * command resolves to /hooks/<script> and exits 127.
+ *
+ * `tmpdir` is a scratch directory of the run's own, because a hook keeps state
+ * there: report-title.sh latches under $TMPDIR so it stops scanning once it has
+ * reported. A fresh one per call is what keeps these tests independent of each
+ * other and out of the developer's /tmp — the latch is keyed by session id, and
+ * every test here uses the same one. A test that means to exercise what carries
+ * across calls passes the same directory to both.
  */
-function runHook(command, { env = {}, stdin = '', pluginRoot = true } = {}) {
+function runHook(command, { env = {}, stdin = '', pluginRoot = true, tmpdir = null } = {}) {
   return new Promise((resolve) => {
     const child = spawn('/bin/sh', ['-c', command], {
       cwd: ROOT,
-      env: { ...BASE_ENV, ...(pluginRoot ? { CLAUDE_PLUGIN_ROOT: ROOT } : {}), ...env },
+      env: {
+        ...BASE_ENV,
+        TMPDIR: tmpdir ?? mkdtempSync(path.join(TMP, 'run-')),
+        ...(pluginRoot ? { CLAUDE_PLUGIN_ROOT: ROOT } : {}),
+        ...env,
+      },
       stdio: ['pipe', 'pipe', 'pipe'],
     })
     let stdout = ''
@@ -370,7 +382,7 @@ test('the vendored fixtures parse and carry exactly one body and one verdict', (
   assert.deepEqual([...STATES].sort(), ['busy', 'done', 'idle', 'waiting'])
   assert.deepEqual(
     [...PROVIDERS].sort(),
-    ['antigravity', 'claude', 'codex', 'crush', 'omp', 'opencode'],
+    ['antigravity', 'claude', 'codex', 'crush', 'cursor', 'omp', 'opencode'],
   )
 })
 
@@ -746,6 +758,73 @@ test('session-title trims the title it reports', async () => {
     const { body } = assertContractHonoured('/session-title', stub.requests[0])
     assert.equal(body.title, 'Fix the replay ring overflow')
   })
+})
+
+// The in-turn registrations run the script as `once`, on every tool call, and
+// finding a title means scanning a transcript that grows all turn. So `once`
+// reports the first one it finds and then stops looking, while the Stop
+// registration keeps scanning — that is the path a later retitle arrives on.
+// Both calls share a $TMPDIR here, because the latch living there is the thing
+// under test.
+test('session-title reported once per session stops scanning', async () => {
+  await withStub(async (stub) => {
+    const scratch = mkdtempSync(path.join(TMP, 'latch-'))
+    const file = claudeTranscript('Fix the replay ring overflow', 'latched.jsonl')
+    const stdin = JSON.stringify({ session_id: 's', transcript_path: file })
+    const run = () =>
+      runHook(`"${ROOT}/hooks/report-title.sh" once`, {
+        env: lichEnv(stub.port),
+        stdin,
+        tmpdir: scratch,
+      })
+
+    assertHookSucceeded(await run())
+    assertContractHonoured('/session-title', stub.requests[0])
+    assertHookSucceeded(await run())
+    assert.equal(stub.requests.length, 1, `reported ${stub.requests.length} times, expected 1`)
+  })
+})
+
+test('session-title without the latch reports every time, for a retitle', async () => {
+  await withStub(async (stub) => {
+    const scratch = mkdtempSync(path.join(TMP, 'unlatched-'))
+    const first = claudeTranscript('Fix the replay ring overflow', 'retitle-first.jsonl')
+    const second = claudeTranscript('Rewrite the replay ring', 'retitle-second.jsonl')
+    const run = (file) =>
+      runHook(`"${ROOT}/hooks/report-title.sh"`, {
+        env: lichEnv(stub.port),
+        stdin: JSON.stringify({ session_id: 's', transcript_path: file }),
+        tmpdir: scratch,
+      })
+
+    assertHookSucceeded(await run(first))
+    assertHookSucceeded(await run(second))
+    assert.equal(stub.requests.length, 2, `reported ${stub.requests.length} times, expected 2`)
+    assert.equal(assertContractHonoured('/session-title', stub.requests[1]).body.title, 'Rewrite the replay ring')
+  })
+})
+
+// A refusal must not latch: a title lich did not take is one to look for again
+// on the next tool call, where latching on it would wait for Stop instead.
+test('session-title does not latch on a report lich refused', async () => {
+  await withStub(
+    async (stub) => {
+      const scratch = mkdtempSync(path.join(TMP, 'refused-'))
+      const file = claudeTranscript('Fix the replay ring overflow', 'refused.jsonl')
+      const stdin = JSON.stringify({ session_id: 's', transcript_path: file })
+      const run = () =>
+        runHook(`"${ROOT}/hooks/report-title.sh" once`, {
+          env: lichEnv(stub.port),
+          stdin,
+          tmpdir: scratch,
+        })
+
+      assertHookSucceeded(await run())
+      assertHookSucceeded(await run())
+      assert.equal(stub.requests.length, 2, `reported ${stub.requests.length} times, expected 2`)
+    },
+    { status: 500 },
+  )
 })
 
 test('session-title escapes a title that would break the JSON body', async () => {

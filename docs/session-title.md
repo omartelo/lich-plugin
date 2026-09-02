@@ -6,11 +6,29 @@ the lich repository; this plugin only implements it.
 
 Reports the title the agent CLI gives its own session, so lich can name the
 session card after it. lich only applies it while the card's label is still
-automatic, so re-sending on every `Stop` is idempotent.
+automatic, so re-sending is idempotent.
 
-| script            | action                    | Claude Code hook | Codex hook | Antigravity hook | opencode event    | omp event                    | Crush hook |
-|-------------------|---------------------------|------------------|------------|------------------|-------------------|------------------------------|------------|
-| `report-title.sh` | send the session's title  | `Stop`           | `Stop`     | `Stop`           | `session.updated` | `session_stop`, `turn_start` | —          |
+| script            | action                    | Claude Code hook       | Codex hook             | Antigravity hook         | opencode event    | omp event                    | Crush hook |
+|-------------------|---------------------------|------------------------|------------------------|--------------------------|-------------------|------------------------------|------------|
+| `report-title.sh` | send the session's title  | `PostToolUse` + `Stop` | `PostToolUse` + `Stop` | `PreInvocation` + `Stop` | `session.updated` | `session_stop`, `turn_start` | —          |
+
+**The turn's end is too late to be the only place.** Claude Code fires its title
+call in parallel with the turn's own first model call, so the title is on disk
+about three seconds in — while a turn that runs for ten minutes used to show
+`Session 3` for all ten, and an interrupted one never got a name at all. Codex
+and Antigravity are later still by nothing: their title is the user's own first
+message, which exists before the turn does. So the report goes out from the
+turn's first event that can carry it, and again at `Stop`.
+
+The in-turn registrations pass **`once`**, and that argument is the whole
+difference: the script latches on the first title it gets lich to accept
+(an empty `$TMPDIR/lich-title-$LICH_SESSION_ID`) and stops looking. Finding a
+title means scanning a transcript that grows all turn — 324ms on a 168MB one —
+and the in-turn hook fires on every tool call, so without the latch a fifty-tool
+turn would pay that fifty times to learn what it knew after the first. A refusal
+does not latch: a title lich did not take is worth looking for again next call.
+`Stop` runs without the argument and keeps scanning, which is the path a later
+retitle arrives on.
 
 `POST /session-title` with `{"session_id": $LICH_SESSION_ID, "title": <title>}`.
 Providers keep the title in the transcript file (`transcript_path` or `transcriptPath` on
