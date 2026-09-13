@@ -28,6 +28,8 @@ const WINDOWS_DEVICES = [
   ...Array.from({ length: 9 }, (_, i) => `com${i + 1}`),
   ...Array.from({ length: 9 }, (_, i) => `lpt${i + 1}`),
 ]
+// The newest theme file format lich reads; FormatVersion in internal/themes.
+const FORMAT_VERSION = 1
 const MANIFEST = "lich-theme.json"
 const MAX_THEMES = 32
 
@@ -39,6 +41,15 @@ if (!target) {
 
 function themeErrors(theme) {
   const errors = []
+  if ("formatVersion" in theme) {
+    const version = theme.formatVersion
+    if (!Number.isInteger(version) || version < 1)
+      errors.push(`formatVersion ${JSON.stringify(version)} must be a positive integer`)
+    else if (version > FORMAT_VERSION)
+      errors.push(
+        `theme format ${version} is newer than this lich reads (up to ${FORMAT_VERSION}); update lich`,
+      )
+  }
   if (!ID.test(theme.id ?? "")) errors.push(`id ${JSON.stringify(theme.id)} must match ${ID}`)
   if (RESERVED.includes(theme.id)) errors.push(`id "${theme.id}" is bundled or reserved`)
   if (WINDOWS_DEVICES.includes(theme.id)) errors.push(`id "${theme.id}" is a Windows device name`)

@@ -1,6 +1,6 @@
 ---
 name: theme
-description: Write, port, or fix a color theme for the lich harness — the JSON that recolors lich's interface tokens and its xterm terminal palette, as a single file or as a versioned theme repository. Use when asked to build a lich theme, port a palette (Tokyo Night, Gruvbox, Catppuccin, Nord…) into lich, start or lay out a theme repository, publish or version a set of themes, ship an update to a theme somebody already installed, tweak the colors of an installed theme, or when a custom theme is rejected on import or silently missing from Settings › Appearance.
+description: Write, port, or fix a color theme for the lich harness — the JSON that recolors lich's interface tokens and its xterm terminal palette, as a single file or as a versioned theme repository. Use when asked to build a lich theme, port a palette (Tokyo Night, Gruvbox, Catppuccin, Nord…) into lich, start or lay out a theme repository, publish or version a set of themes, ship an update to a theme somebody already installed, tweak the colors of an installed theme, or when a custom theme is rejected on import, listed in Settings › Appearance as a theme that can't load, or missing from it.
 ---
 
 # lich themes
@@ -112,6 +112,11 @@ manifest**, commit, push. The user takes it with **Update** on the theme's row.
 
 ## Validation rules (the backend rejects anything else)
 
+- `formatVersion`: optional, the theme file format. Omitted means `1`, the only
+  format so far, so leave it out. When present it is a positive integer no
+  greater than the format this lich reads (currently `1`); a newer one is
+  refused by that number ("theme format 2 is newer than this lich reads (up to
+  1); update lich"). lich writes it into every theme it stores.
 - `id`: required, matches `^[a-z0-9][a-z0-9._-]{0,63}$`. Not `light`, `dark`,
   `system` or `match`; not a Windows device name (`con`, `prn`, `aux`, `nul`,
   `com1`–`com9`, `lpt1`–`lpt9`) — the id names a file.
@@ -137,10 +142,13 @@ manifest**, commit, push. The user takes it with **Update** on the theme's row.
 
 - **Copying a file into the themes directory is not installing it.** The theme
   list is read once, at page load, so nothing appears until the window is
-  reloaded — the user is told the theme is in and cannot find it in Settings.
-  And a file that fails a rule, or is named anything but `<id>.json`, is skipped
-  with a warning in the log and nothing on screen. Import is the only path that
-  ends with the theme selected and the errors spelled out.
+  reloaded, so the user is told the theme is in and cannot find it in Settings.
+  After the reload, a file that fails a rule, is named anything but its own
+  `<id>.json`, or declares a newer `formatVersion` shows up under the theme strip
+  as a theme that can't load, with the reason and a Remove action, never as a
+  theme to pick. A file whose name is not a valid theme id is only logged. Import
+  is the only path that ends with the theme selected and the errors spelled out
+  before anything is stored.
 - **A non-hex terminal color half-applies.** xterm parses hex directly;
   everything else goes through a round-trip that throws on translucency and is
   swallowed into a fallback. The backend rejects it up front — don't work around

@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **The theme skill knows `formatVersion`.** lich themes gained an optional
+  `formatVersion` (omitted means 1), and a lich refuses a format newer than it
+  reads by that number. `validate.mjs` checks it with the same bounds and the
+  same wording, and the skill's rules list carries it.
+- **A broken stored theme is no longer described as invisible.** lich now lists
+  a stored theme it cannot load under the theme strip in Settings › Appearance,
+  with the reason and a Remove action, so the skill's trap about files copied
+  into the themes directory says so instead of pointing at the log. Needs
+  omartelo/lich#598.
+
 ## [0.12.0] - 2026-09-02
 
 ### Changed
