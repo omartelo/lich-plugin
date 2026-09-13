@@ -10,7 +10,9 @@
 // clients are held to the same lines.
 
 import assert from 'node:assert/strict'
+import { once } from 'node:events'
 import { createServer } from 'node:http'
+import { connect } from 'node:net'
 import { readFileSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -173,8 +175,23 @@ export function assertContractHonoured(endpoint, request) {
 
 // ------------------------------------------------------------------ harness --
 
+const liveStubs = new Set()
+
+/**
+ * Resolves once every live stub has read each connection made to it so far.
+ *
+ * A hook exiting does not mean its report was read. When the stub's process is
+ * starved past curl's --max-time, curl gives up with the request already in the
+ * socket, and the child's exit can reach the event loop before that connection
+ * is even accepted. Connecting once more and waiting to accept it drains the
+ * listen queue, which is FIFO; each accepted socket closing means its request
+ * was read. Call it after a hook exits and before asserting on `requests`.
+ */
+export const settleStubs = () => Promise.all([...liveStubs].map((stub) => stub.settle()))
+
 export async function startStub({ status = 204 } = {}) {
   const requests = []
+  const sockets = new Set()
   const server = createServer((req, res) => {
     let raw = ''
     req.setEncoding('utf8')
@@ -186,12 +203,33 @@ export async function startStub({ status = 204 } = {}) {
       res.writeHead(status).end()
     })
   })
+  server.on('connection', (socket) => {
+    sockets.add(socket)
+    socket.on('close', () => sockets.delete(socket))
+  })
   await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve))
-  return {
-    requests,
-    port: server.address().port,
-    close: () => new Promise((resolve) => server.close(resolve)),
+  const port = server.address().port
+
+  const settle = async () => {
+    const probe = connect(port, '127.0.0.1')
+    await once(probe, 'connect')
+    const accepted = () => [...sockets].some((s) => s.remotePort === probe.localPort)
+    while (!accepted()) await once(server, 'connection')
+    probe.destroy()
+    await Promise.all([...sockets].map((s) => once(s, 'close')))
   }
+
+  const stub = {
+    requests,
+    port,
+    settle,
+    close: () => {
+      liveStubs.delete(stub)
+      return new Promise((resolve) => server.close(resolve))
+    },
+  }
+  liveStubs.add(stub)
+  return stub
 }
 
 export async function withStub(fn, options) {

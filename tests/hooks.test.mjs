@@ -26,6 +26,7 @@ import {
   assertContractHonoured,
   lichEnv,
   rejected,
+  settleStubs,
   startStub,
   withStub,
 } from './contract.mjs'
@@ -75,7 +76,9 @@ function runHook(command, { env = {}, stdin = '', pluginRoot = true, tmpdir = nu
     })
     child.stdin.on('error', () => {}) // a script that reads no stdin is fine
     child.stdin.end(stdin)
-    child.on('close', (code) => resolve({ code, stdout, stderr }))
+    child.on('close', (code) =>
+      settleStubs().then(() => resolve({ code, stdout, stderr })),
+    )
   })
 }
 
@@ -654,6 +657,7 @@ for (const state of ['busy', 'done', 'idle']) {
       child.stdin.on('error', () => {})
       const code = await new Promise((resolve) => child.on('close', resolve))
       child.stdin.destroy()
+      await settleStubs()
       assert.equal(code, 0)
       assert.equal(stub.requests.length, 1)
       assert.equal(assertContractHonoured('/hook', stub.requests[0]).body.state, state)
