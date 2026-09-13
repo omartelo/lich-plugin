@@ -13,6 +13,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `formatVersion` (omitted means 1), and a lich refuses a format newer than it
   reads by that number. `validate.mjs` checks it with the same bounds and the
   same wording, and the skill's rules list carries it.
+- **Theme repositories can name the lich they need.** The pack manifest gained
+  an optional `minLichVersion`, which an older lich refuses by version, and an
+  optional `formatVersion` under the same rule as a theme file. The skill
+  suggests `minLichVersion` for a pack that uses a token only a recent lich has,
+  and `validate.mjs` checks the shape of both. Needs omartelo/lich#600.
 - **A broken stored theme is no longer described as invisible.** lich now lists
   a stored theme it cannot load under the theme strip in Settings › Appearance,
   with the reason and a Remove action, so the skill's trap about files copied

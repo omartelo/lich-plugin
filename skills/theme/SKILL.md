@@ -130,6 +130,15 @@ manifest**, commit, push. The user takes it with **Update** on the theme's row.
   `name` and a `MAJOR.MINOR.PATCH` `version` — a pre-release like `1.0.0-rc1` is
   rejected, because the update check cannot order two of them. At least one and
   at most 32 themes beside it, each with a distinct `id`.
+- Repository only, optional in the manifest:
+  - `minLichVersion`: the oldest lich release the pack is written for, as
+    `MAJOR.MINOR.PATCH`. An older lich refuses the install or update ("theme
+    pack needs lich X or newer (this is Y); update lich") and leaves what is
+    installed alone; a dev build, or one between release tags, skips the check.
+    Set it when a theme uses a token only a recent lich has, so an older lich
+    names the version it needs instead of an unknown token.
+  - `formatVersion`: the same rule as in a theme file; a newer one is refused
+    with the error prefixed `manifest: `.
 - Color values: non-blank, ≤ 128 characters.
   - `app` accepts hex (`#rgb` … `#rrggbbaa`), a CSS color name, or
     `rgb()`/`rgba()`/`hsl()`/`hsla()`/`oklch()`/`oklab()`/`lab()`/`lch()`/`color()`.
