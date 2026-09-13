@@ -21,6 +21,12 @@ export const ROOT = path.resolve(HERE, '..')
 export const TOKEN = 'test-token'
 export const LICH_SESSION_ID = 'lich-session-1'
 
+// The release the manifests name. Every script and module carries its own copy
+// of it, and the header assertion below is what keeps those copies in step.
+export const PLUGIN_VERSION = JSON.parse(
+  readFileSync(path.join(ROOT, '.claude-plugin', 'plugin.json'), 'utf8'),
+).version
+
 // ---------------------------------------------------------------- fixtures --
 
 /** endpoint → fixture file, per lich's docs/hooks/fixtures/README.md. */
@@ -143,6 +149,11 @@ export function assertContractHonoured(endpoint, request) {
     `posted to ${request.url}, expected ${endpoint}?token=${TOKEN}`,
   )
   assert.match(request.headers['content-type'] ?? '', /application\/json/)
+  assert.equal(
+    request.headers['x-lich-plugin'],
+    PLUGIN_VERSION,
+    'every report names the release it ships in, as the manifest does',
+  )
 
   assert.ok(isJsonObject(request.raw), `body is not a JSON object: ${request.raw}`)
   const body = JSON.parse(request.raw)

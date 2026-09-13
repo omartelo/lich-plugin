@@ -21,7 +21,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Refresh from omartelo/lich@main
+      - name: Refresh from omartelo/lich at tests/lich-ref
         run: tests/refresh-fixtures.sh
       - name: Fail if the vendored copies drifted
         run: |

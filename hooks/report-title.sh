@@ -9,6 +9,9 @@
 
 # Outside lich (vars absent) → no-op. Safe to install globally.
 [ -n "$LICH_PORT" ] && [ -n "$LICH_TOKEN" ] && [ -n "$LICH_SESSION_ID" ] || exit 0
+
+# Sent as X-Lich-Plugin on every report; bumped at release (CLAUDE.md, Release).
+plugin_version=0.12.0
 command -v jq >/dev/null 2>&1 || exit 0
 
 # Checked before stdin is read, because it is the whole point: finding a title
@@ -68,6 +71,7 @@ body=$(jq -cn --arg sid "$LICH_SESSION_ID" --arg title "$title" \
 if curl -sf -o /dev/null --max-time 1 \
   -X POST "http://127.0.0.1:${LICH_PORT}/session-title?token=${LICH_TOKEN}" \
   -H 'Content-Type: application/json' \
+  -H "X-Lich-Plugin: ${plugin_version}" \
   -d "$body"
 then
   [ -n "$latch" ] && : >"$latch" 2>/dev/null

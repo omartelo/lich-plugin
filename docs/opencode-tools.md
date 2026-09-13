@@ -65,3 +65,7 @@ neither of the things below:
 lich's own MCP server. The ticket is what makes that cheap: a wait that ends
 unanswered costs one more tool call, and the answer arrives at your prompt when
 it exists.
+
+A wait that runs out exits 2 and one whose errand ended with no answer coming
+exits 3 (`docs/cli.md` in lich). Both are results, so the tool returns what lich
+printed, the ticket or the reason, rather than reporting a failure.

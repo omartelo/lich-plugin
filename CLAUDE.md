@@ -70,7 +70,8 @@ node --test tests/*.test.mjs
 subprocess — the command line taken from the registration each harness reads —
 against a stub HTTP server, and asserts the body it POSTs against lich's
 contract fixtures: an accepted shape, no rejected one, the right endpoint and
-`?token=`, no deprecated `claude_session_id`, plus the client rules (no lich
+`?token=`, the `X-Lich-Plugin` header naming the manifest's version, no
+deprecated `claude_session_id`, plus the client rules (no lich
 environment → no report, exit 0 on a 500 or a refused connection).
 [tests/opencode.test.mjs](tests/opencode.test.mjs) does the same for the
 opencode module, which is imported rather than spawned, and fed the event
@@ -87,7 +88,9 @@ dependencies.
 The fixtures are vendored in `tests/fixtures/` from lich
 (`docs/hooks/fixtures/*.jsonl` there) by
 [tests/refresh-fixtures.sh](tests/refresh-fixtures.sh), so the suite never needs
-the network; CI diffs the copies against upstream and fails on drift.
+the network. They are read at the lich release named in `tests/lich-ref`, never
+at `main`: a contract merged there is one no released lich speaks yet. CI diffs
+the copies against that release and fails on drift.
 
 ## Rules
 
@@ -123,6 +126,7 @@ symlink the clone into `~/.gemini/config/plugins/lich`.
 Same standard as the `lich` repository (Keep a Changelog + SemVer). Releases are cut by tagging `vX.Y.Z`:
 
 1. Move the `[Unreleased]` entries in `CHANGELOG.md` under the new version heading (with date) and refresh the compare links at the bottom.
-2. Align `version` in `.claude-plugin/plugin.json` **and** `.codex-plugin/plugin.json` with the tag. The root `plugin.json` is not a third one to bump: Antigravity's manifest takes only a `name`, and lich writes its own carrying the tag when it installs a release.
-3. Annotated tag `vX.Y.Z` + push with the tag.
-4. `gh release create vX.Y.Z` with the notes taken from the matching `CHANGELOG.md` section.
+2. Pick the number by what changed: a release that sends anything lich's contract did not already accept (a new endpoint, header, field or value) bumps the **minor** (the major, from 1.0); anything else bumps the **patch**. lich accepts every release below the next minor of the contract it implements, so a contract change released as a patch reaches a lich that refuses it. `docs/hooks/README.md` in lich, Versioning, is the rule.
+3. Align `version` in `.claude-plugin/plugin.json` **and** `.codex-plugin/plugin.json` with the tag, and `plugin_version` in each `hooks/report-*.sh` and `PLUGIN_VERSION` in `opencode/lich.js` and `omp/lich.js`, the header every report sends. The suite fails while any of them disagrees with the Claude Code manifest. The root `plugin.json` is not a third one to bump: Antigravity's manifest takes only a `name`, and lich writes its own carrying the tag when it installs a release.
+4. Annotated tag `vX.Y.Z` + push with the tag.
+5. `gh release create vX.Y.Z` with the notes taken from the matching `CHANGELOG.md` section.

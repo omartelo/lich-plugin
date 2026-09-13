@@ -202,6 +202,32 @@ test('a refusal comes back as lich worded it', async () => {
   })
 })
 
+// lich exits 2 when a wait runs out with a ticket, and 3 when the errand ended
+// with no answer coming. Both are results, told on stdout: whatever else lands on
+// stderr must not stand in for the ticket the agent needs.
+for (const [exitCode, stdout] of [
+  [2, 'no answer yet; ticket 4c2f47ed'],
+  [3, 'never read: the task sat at the prompt'],
+]) {
+  test(`a send or wait that exits ${exitCode} comes back as its own words`, async () => {
+    const shell = fakeShell({ exitCode, stdout: `${stdout}\n`, stderr: 'noise on stderr\n' })
+
+    await inLich(shell, async (tools) => {
+      assert.equal(await tools.send_to_session.execute({ session: 'x', prompt: 'go' }), stdout)
+      assert.equal(await tools.wait_for_answer.execute({ ticket: '4c2f47ed' }), stdout)
+    })
+  })
+}
+
+// The same codes mean nothing on any other command, where only 0 is a result.
+test('exit 2 from another command is still a failure', async () => {
+  const shell = fakeShell({ exitCode: 2 })
+
+  await inLich(shell, async (tools) => {
+    assert.equal(await tools.list_sessions.execute({}), 'lich exited 2')
+  })
+})
+
 test('nothing is registered outside a lich session', async () => {
   const shell = fakeShell()
 
