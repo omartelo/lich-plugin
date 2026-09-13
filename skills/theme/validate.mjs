@@ -28,6 +28,8 @@ const WINDOWS_DEVICES = [
   ...Array.from({ length: 9 }, (_, i) => `com${i + 1}`),
   ...Array.from({ length: 9 }, (_, i) => `lpt${i + 1}`),
 ]
+// The newest theme file format lich reads; FormatVersion in internal/themes.
+const FORMAT_VERSION = 1
 const MANIFEST = "lich-theme.json"
 const MAX_THEMES = 32
 
@@ -37,8 +39,20 @@ if (!target) {
   process.exit(2)
 }
 
+function formatVersionError(document) {
+  if (!("formatVersion" in document)) return null
+  const version = document.formatVersion
+  if (!Number.isInteger(version) || version < 1)
+    return `theme formatVersion ${JSON.stringify(version)} must be a positive integer`
+  if (version > FORMAT_VERSION)
+    return `theme format ${version} is newer than this lich reads (up to ${FORMAT_VERSION}); update lich`
+  return null
+}
+
 function themeErrors(theme) {
   const errors = []
+  const format = formatVersionError(theme)
+  if (format) errors.push(format)
   if (!ID.test(theme.id ?? "")) errors.push(`id ${JSON.stringify(theme.id)} must match ${ID}`)
   if (RESERVED.includes(theme.id)) errors.push(`id "${theme.id}" is bundled or reserved`)
   if (WINDOWS_DEVICES.includes(theme.id)) errors.push(`id "${theme.id}" is a Windows device name`)
@@ -85,12 +99,20 @@ function checkRepository(dir) {
   const manifest = read(join(dir, MANIFEST))
   if (manifest.error) return [`${manifest.error} — every theme repository needs one at its root`]
   const errors = []
+  const format = formatVersionError(manifest.value)
+  if (format) errors.push(`${MANIFEST}: manifest: ${format}`)
   if (!manifest.value.name?.trim()) errors.push(`${MANIFEST}: name is required`)
   if ([...(manifest.value.name ?? "")].length > 128)
     errors.push(`${MANIFEST}: name cannot exceed 128 characters`)
   if (!RELEASE.test(manifest.value.version ?? ""))
     errors.push(
       `${MANIFEST}: version ${JSON.stringify(manifest.value.version)} must be MAJOR.MINOR.PATCH`,
+    )
+  // Only the shape: whether the running lich is new enough is lich's call.
+  const minimum = manifest.value.minLichVersion
+  if (minimum !== undefined && minimum !== "" && !RELEASE.test(minimum))
+    errors.push(
+      `${MANIFEST}: manifest minLichVersion ${JSON.stringify(minimum)} must be MAJOR.MINOR.PATCH`,
     )
 
   const files = readdirSync(dir)
