@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.13.0] - 2026-09-13
+
 ### Added
 
 - Every report names the plugin release it comes from, in an `X-Lich-Plugin`
@@ -452,7 +454,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   plugin is safe to install globally. Requests time out after ~1s and errors
   are swallowed — the hook never blocks or fails the turn.
 
-[Unreleased]: https://github.com/omartelo/lich-plugin/compare/v0.12.0...HEAD
+[Unreleased]: https://github.com/omartelo/lich-plugin/compare/v0.13.0...HEAD
+[0.13.0]: https://github.com/omartelo/lich-plugin/compare/v0.12.0...v0.13.0
 [0.12.0]: https://github.com/omartelo/lich-plugin/compare/v0.11.1...v0.12.0
 [0.11.1]: https://github.com/omartelo/lich-plugin/compare/v0.11.0...v0.11.1
 [0.11.0]: https://github.com/omartelo/lich-plugin/compare/v0.10.0...v0.11.0
