@@ -10,6 +10,9 @@
 // slow or dead listener would sit in front of the agent's next step. The
 // environment is read per report rather than at import, so a module loaded
 // outside lich stays a no-op instead of a cached decision.
+// Sent as X-Lich-Plugin on every report; bumped at release (CLAUDE.md, Release).
+const PLUGIN_VERSION = "0.12.0"
+
 function report(path, body) {
   const port = process.env.LICH_PORT
   const token = process.env.LICH_TOKEN
@@ -18,7 +21,7 @@ function report(path, body) {
   try {
     fetch(`http://127.0.0.1:${port}/${path}?token=${token}`, {
       method: "POST",
-      headers: { "content-type": "application/json" },
+      headers: { "content-type": "application/json", "x-lich-plugin": PLUGIN_VERSION },
       body: JSON.stringify({ session_id: session, ...body }),
       signal: AbortSignal.timeout(1000),
     }).catch(() => {})
@@ -70,6 +73,10 @@ function waitSeconds(asked) {
   return Math.floor(seconds)
 }
 
+// What a send or wait exits with when it ran as it should: answered, still
+// pending under a ticket, or over with no answer coming.
+const ERRAND_OUTCOMES = [0, 2, 3]
+
 // flag builds one optional argument pair, dropping it when the value is empty —
 // an empty --project would narrow to a project named "".
 function flag(name, value) {
@@ -87,11 +94,16 @@ function flag(name, value) {
 //
 // The command's own stderr is the answer on failure: those messages are written
 // to be read by an agent — they name what was refused and what to do about it.
+//
+// `outcomes` lists the exit codes that are a result rather than a failure. A
+// send or wait exits 2 when the wait ran out and hands back a ticket, and 3 when
+// the errand ended with no answer coming (docs/cli.md in lich); both explain
+// themselves on stdout and write nothing on stderr.
 function runner($) {
-  return async (args) => {
+  return async (args, outcomes = [0]) => {
     const result = await $`${lichBin()} ${args}`.nothrow().quiet()
     const stdout = result.stdout?.toString().trim() ?? ""
-    if (result.exitCode !== 0) {
+    if (!outcomes.includes(result.exitCode)) {
       return result.stderr?.toString().trim() || stdout || `lich exited ${result.exitCode}`
     }
     return stdout
@@ -168,7 +180,7 @@ async function lichTools($, helper) {
           String(waitSeconds(args.timeout_seconds)),
           args.session,
           args.prompt,
-        ]),
+        ], ERRAND_OUTCOMES),
     }),
 
     wait_for_answer: tool({
@@ -178,7 +190,7 @@ async function lichTools($, helper) {
         timeout_seconds: s.number().optional().describe("Seconds to wait. Capped at 90."),
       },
       execute: (args) =>
-        run(["wait", "--timeout", String(waitSeconds(args.timeout_seconds)), args.ticket]),
+        run(["wait", "--timeout", String(waitSeconds(args.timeout_seconds)), args.ticket], ERRAND_OUTCOMES),
     }),
 
     reply_to_session: tool({

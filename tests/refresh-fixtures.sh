@@ -3,17 +3,21 @@
 #
 # The fixtures are canonical in the lich repository (docs/hooks/fixtures/
 # there). This repository only vendors them so the test suite never needs the
-# network. Run this after a contract change lands in lich; CI diffs the copy
-# against upstream and fails on drift.
+# network. They are read at the lich release named in tests/lich-ref, never at
+# main: a contract lich has merged but not released is one no user's lich
+# speaks yet. Move that ref when a lich release changes a contract, run this,
+# and make the scripts match; CI diffs the copy against that release and fails
+# on drift.
 #
 # Never hand-edit a fixture to get a green run — a fixture moves in lich, and
 # only because the contract moved.
 set -eu
 
-base=https://raw.githubusercontent.com/omartelo/lich/main/docs/hooks/fixtures
-dir=$(CDPATH= cd -- "$(dirname -- "$0")/fixtures" && pwd)
+here=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+ref=$(tr -d '[:space:]' <"$here/lich-ref")
+base=https://raw.githubusercontent.com/omartelo/lich/$ref/docs/hooks/fixtures
 
 for name in session-state session-start session-title session-touched; do
-  curl -fsSL "$base/$name.jsonl" -o "$dir/$name.jsonl"
-  echo "refreshed $name.jsonl"
+  curl -fsSL "$base/$name.jsonl" -o "$here/fixtures/$name.jsonl"
+  echo "refreshed $name.jsonl at $ref"
 done

@@ -5,6 +5,9 @@
 
 # Outside lich (vars absent) → no-op. Safe to install globally.
 [ -n "$LICH_PORT" ] && [ -n "$LICH_TOKEN" ] && [ -n "$LICH_SESSION_ID" ] || exit 0
+
+# Sent as X-Lich-Plugin on every report; bumped at release (CLAUDE.md, Release).
+plugin_version=0.12.0
 provider=${1:-claude}
 # Parse session_id from the stdin payload. Prefer jq; fall back to sed so the
 # hook works on Windows, where jq is usually absent but sed (Git Bash) is not.
@@ -23,6 +26,7 @@ body="{\"session_id\":\"${LICH_SESSION_ID}\",\"provider_session_id\":\"${provide
 curl -s -o /dev/null --max-time 1 \
   -X POST "http://127.0.0.1:${LICH_PORT}/session-start?token=${LICH_TOKEN}" \
   -H 'Content-Type: application/json' \
+  -H "X-Lich-Plugin: ${plugin_version}" \
   -d "$body" \
   || true
 

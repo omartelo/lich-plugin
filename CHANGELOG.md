@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Every report names the plugin release it comes from, in an `X-Lich-Plugin`
+  header. lich uses it to warn about a plugin release it does not support
+  instead of dropping its reports without a word.
+
 ### Changed
 
 - **The theme skill knows `formatVersion`.** lich themes gained an optional
@@ -23,6 +29,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   with the reason and a Remove action, so the skill's trap about files copied
   into the themes directory says so instead of pointing at the log. Needs
   omartelo/lich#598.
+
+### Fixed
+
+- opencode: `send_to_session` and `wait_for_answer` return lich's own words when
+  a wait runs out (exit 2) or an errand ends with no answer (exit 3), instead of
+  treating either as a failure.
+- The contract tests read lich's fixtures at a lich release (`tests/lich-ref`),
+  not at `main`, and now cover the `kiro` provider.
 
 ## [0.12.0] - 2026-09-02
 

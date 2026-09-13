@@ -1091,3 +1091,11 @@ for (const { script, argument, event } of EVERY_SCRIPT) {
     assertHookSucceeded(result)
   })
 }
+
+// The header every report sends is checked against the Claude Code manifest;
+// this is what holds the Codex one to the same release.
+test('both plugin manifests name the same release', () => {
+  const version = (dir) =>
+    JSON.parse(readFileSync(path.join(ROOT, dir, 'plugin.json'), 'utf8')).version
+  assert.equal(version('.codex-plugin'), version('.claude-plugin'))
+})

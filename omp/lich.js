@@ -23,6 +23,9 @@
 // so a slow or dead listener would sit in front of the agent's next step. The
 // environment is read per report rather than at import, so a module loaded
 // outside lich stays a no-op instead of a cached decision.
+// Sent as X-Lich-Plugin on every report; bumped at release (CLAUDE.md, Release).
+const PLUGIN_VERSION = "0.12.0"
+
 function report(path, body) {
   const port = process.env.LICH_PORT
   const token = process.env.LICH_TOKEN
@@ -31,7 +34,7 @@ function report(path, body) {
   try {
     fetch(`http://127.0.0.1:${port}/${path}?token=${token}`, {
       method: "POST",
-      headers: { "content-type": "application/json" },
+      headers: { "content-type": "application/json", "x-lich-plugin": PLUGIN_VERSION },
       body: JSON.stringify({ session_id: session, ...body }),
       signal: AbortSignal.timeout(1000),
     }).catch(() => {})

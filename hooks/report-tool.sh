@@ -10,6 +10,9 @@
 # Outside lich (vars absent) → no-op. Safe to install globally.
 [ -n "$LICH_PORT" ] && [ -n "$LICH_TOKEN" ] && [ -n "$LICH_SESSION_ID" ] || exit 0
 
+# Sent as X-Lich-Plugin on every report; bumped at release (CLAUDE.md, Release).
+plugin_version=0.12.0
+
 here=$(dirname "$0")
 payload=$(cat)
 command -v jq >/dev/null 2>&1 && has_jq=1 || has_jq=
@@ -46,6 +49,7 @@ fi
 curl -s -o /dev/null --max-time 1 \
   -X POST "http://127.0.0.1:${LICH_PORT}/hook?token=${LICH_TOKEN}" \
   -H 'Content-Type: application/json' \
+  -H "X-Lich-Plugin: ${plugin_version}" \
   -d "$body" \
   || true
 
