@@ -11,7 +11,7 @@
 [ -n "$LICH_PORT" ] && [ -n "$LICH_TOKEN" ] && [ -n "$LICH_SESSION_ID" ] || exit 0
 
 # Sent as X-Lich-Plugin on every report; bumped at release (CLAUDE.md, Release).
-plugin_version=0.13.0
+plugin_version=0.13.1
 
 here=$(dirname "$0")
 payload=$(cat)
