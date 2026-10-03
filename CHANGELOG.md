@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **opencode sub-agents can delegate privately.** `send_to_session` takes `private`, which
+  keeps the answer to its ticket: no note at the session's prompt, and only
+  `wait_for_answer` with that ticket returns it. Needs a lich with `lich send --private`.
+
 ## [0.13.1] - 2026-09-13
 
 ### Fixed

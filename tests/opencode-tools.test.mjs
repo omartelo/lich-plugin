@@ -154,6 +154,21 @@ test('a task carries its target, its prompt and a bounded wait', async () => {
   assert.equal(shell.calls[3].args[2], '90')
 })
 
+test('private is only passed when it is really true', async () => {
+  const shell = fakeShell()
+  await inLich(shell, async (tools) => {
+    for (const value of [undefined, false, 'true', 1]) {
+      await tools.send_to_session.execute({ session: 'docs', prompt: 'x', private: value })
+    }
+    await tools.send_to_session.execute({ session: 'docs', prompt: 'x', private: true })
+  })
+
+  for (const call of shell.calls.slice(0, -1)) {
+    assert.ok(!call.args.includes('--private'), `--private sent for ${JSON.stringify(call.args)}`)
+  }
+  assert.deepEqual(shell.calls.at(-1).args, ['send', '--private', '--timeout', '90', 'docs', 'x'])
+})
+
 test('force is only passed when it is really true', async () => {
   const shell = fakeShell()
   await inLich(shell, async (tools) => {
