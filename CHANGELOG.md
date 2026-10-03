@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **lich can drive a Claude Code session from its card.** A Claude Code mod
+  takes the commands lich sends: a prompt that starts a turn, stopping the
+  running turn, a model or effort override for every request, and compacting
+  the context. It acks each one, so the card says when a command could not be
+  applied. Needs a lich that serves the mod-control contract and Claude Code
+  2.1.280 or later with mods turned on; an older Claude Code keeps every report
+  and only goes without the controls. Only interactive sessions take commands,
+  never a `claude -p` run.
+
 ## [0.13.2] - 2026-10-03
 
 ### Added
