@@ -247,6 +247,40 @@ test('the poll stays open while a command waits on the session', async () => {
   assert.equal(mod.acks()[0].ok, true)
 })
 
+// The abort a user clicks to stop the running turn must reach that turn, not
+// wait for a queued prompt to start and then cancel the prompt's own turn.
+test('a prompt waiting on the session holds back none of the commands after it', async () => {
+  const idle = deferred()
+  const mod = load({
+    polls: [
+      ok([{ id: 'm1', kind: 'prompt', text: 'next' }]),
+      ok([
+        { id: 'm3', kind: 'model', model: 'claude-opus-4-1' },
+        { id: 'm2', kind: 'abort' },
+      ]),
+    ],
+    engine: { submit: () => idle.promise },
+  })
+  await mod.turnStart('t1')
+  await mod.start()
+  await until(() => mod.acks().length === 2, 'the model and abort acks')
+  assert.deepEqual(mod.calls, [
+    ['prompt', { text: 'next' }],
+    ['abort', { turnId: 't1' }],
+  ])
+  assert.deepEqual(
+    mod.acks().map(({ id, ok }) => ({ id, ok })),
+    [
+      { id: 'm3', ok: true },
+      { id: 'm2', ok: true },
+    ],
+  )
+  assert.equal((await mod.step()).model, 'claude-opus-4-1')
+  idle.resolve({ text: 'next' })
+  await until(() => mod.acks().length === 3, 'the prompt ack')
+  assert.deepEqual(mod.acks()[2], { session_id: LICH_SESSION_ID, id: 'm1', kind: 'prompt', ok: true })
+})
+
 // ----------------------------------------------------------------- commands --
 
 test('every command shape lich sends is applied in order and acked ok', async () => {

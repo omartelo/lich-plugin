@@ -46,10 +46,15 @@ controls are unavailable instead of waiting on nothing.
   when the session is idle and its turn starts, and lich stops queueing for a
   mod that has not polled in 30 seconds: a poll held behind that prompt would
   get the abort meant for the running turn refused.
-- **Each ack is awaited before the next command.** That is the contract's rule
-  for an `abort`: lich ends the turn it has open when the ack lands, so a late
-  one would end the turn the next `prompt` opened. An ack that cannot be sent is
-  dropped, and the next command runs.
+- **Nor does a command wait on a `prompt`.** The prompt is submitted in its
+  place and acked when its turn starts, but what comes after it runs at once:
+  an `abort` held behind it would reach the running turn only after that turn
+  ended, and then cancel the prompt's own turn instead. A `model` or `effort`
+  sent meanwhile likewise applies to the running turn's next request.
+- **Every other ack is awaited before the next command.** That is the
+  contract's rule for an `abort`: lich ends the turn it has open when the ack
+  lands, so a late one would end the turn the next `prompt` opened. An ack that
+  cannot be sent is dropped, and the next command runs.
 - **An effort outside `low`, `medium`, `high`, `xhigh` and `max` is refused**
   (`unknown effort`). Claude Code would take it and fail the hook only at the
   next model request, long after an `ok` ack. A model name has no such check

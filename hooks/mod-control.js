@@ -81,15 +81,22 @@ async function poll($, state, link) {
   }
   link.backoffMs = 0
   for (const command of commands) {
-    link.applying = link.applying.then(() => applyAndAck($, state, link, command))
+    link.applying = link.applying.then(() => {
+      const acked = applyAndAck($, state, link, command)
+      // A prompt settles only once the session is idle and its turn starts.
+      // Waiting on it would hold an abort meant for the running turn until that
+      // turn ended, and the abort would then cancel the prompt's own turn.
+      if (command.kind !== "prompt") return acked
+    })
   }
   $.clock.after(0, () => void poll($, state, link))
 }
 
 /**
- * Applies one command and acks it. The ack is awaited before the next command
- * runs: an `abort` ack makes lich end the turn it has open, so one landing after
- * the next `prompt` opened a turn would end that turn instead.
+ * Applies one command and acks it. Every command but a `prompt` holds the next
+ * one until its ack is answered: an `abort` ack makes lich end the turn it has
+ * open, so one landing after the next `prompt` opened a turn would end that turn
+ * instead.
  *
  * @param {Engine} $
  * @param {State} state

@@ -14,11 +14,11 @@ const ENV = { LICH_PORT: '47999', LICH_TOKEN: 'tok', LICH_SESSION_ID: 'lich-1' }
 const json = (body: unknown): HttpResponse => ({ status: 200, ok: true, headers: {}, text: JSON.stringify(body) })
 
 /**
- * Answers the first poll with `commands`, parks the rest, and records every
- * ack; also stands for the engine's own session start, which the kit leaves to
- * the test.
+ * Answers the first polls with `batches`, one each, parks the rest, and records
+ * every ack; also stands for the engine's own session start, which the kit
+ * leaves to the test.
  */
-function lich(on: On, commands: unknown[]) {
+function lich(on: On, ...batches: unknown[][]) {
   const acks: Record<string, unknown>[] = []
   let polls = 0
   on('session.start', async (_$, e) => ({ cwd: e.cwd }))
@@ -27,8 +27,8 @@ function lich(on: On, commands: unknown[]) {
       acks.push(JSON.parse(e.init?.body ?? '{}'))
       return { value: { status: 204, ok: true, headers: {}, text: '' } }
     }
-    polls++
-    if (polls === 1) return { value: json(commands) }
+    const batch = batches[polls++]
+    if (batch) return { value: json(batch) }
     return new Promise<never>(() => {})
   })
   return { acks, polls: () => polls }
@@ -91,4 +91,22 @@ test('the model and effort overrides reach the request the engine sends', async 
   await clock.settle()
   for await (const _ of $.turn.step({ turnId: 't1', index: 0, model: 'claude-sonnet-5-5', effort: 'medium', messageCount: 1 }));
   expect(sent).toEqual([{ model: 'claude-opus-4-1', effort: 'high' }])
+})
+
+test('an abort reaches the running turn while a prompt waits for the session', async ($, on) => {
+  mock.env(on, ENV)
+  const clock = mock.clock(on)
+  const world = lich(on, [{ id: 'm1', kind: 'prompt', text: 'next' }], [{ id: 'm2', kind: 'abort' }])
+  const aborted: string[] = []
+  on('turn.start', async (_$, e) => ({ turnId: e.turnId }))
+  on('prompt.submit', () => new Promise<never>(() => {}))
+  on('turn.abort', async (_$, e) => {
+    aborted.push(e.turnId)
+    return { value: undefined }
+  })
+  await $.turn.start({ text: 'go', turnId: 't1' })
+  await $.session.start({ cwd: '/w', surface: 'terminal', isInteractive: true })
+  await clock.settle()
+  expect(aborted).toEqual(['t1'])
+  expect(world.acks).toEqual([{ session_id: 'lich-1', id: 'm2', kind: 'abort', ok: true }])
 })
