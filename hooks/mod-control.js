@@ -12,7 +12,7 @@
 // a module that hands `$` to a nested function.
 
 // Sent as X-Lich-Plugin on every request; bumped at release (CLAUDE.md, Release).
-const PLUGIN_VERSION = "0.13.2"
+const PLUGIN_VERSION = "0.14.0"
 
 // The contract's client rule: after a network error or a 5xx, wait 1 second,
 // doubling up to 10, and start over after a 200.
