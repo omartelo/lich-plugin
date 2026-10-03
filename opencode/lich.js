@@ -171,10 +171,19 @@ async function lichTools($, helper) {
         prompt: s.string().describe("What to ask that session's agent to do."),
         project,
         timeout_seconds: s.number().optional().describe("Seconds to wait. Capped at 90."),
+        private: s
+          .boolean()
+          .optional()
+          .describe(
+            "Set this when you are a sub-agent running inside a session rather than the " +
+              "session's own agent. The answer is then yours alone: no note announces it at " +
+              "the session's prompt, and only wait_for_answer with this ticket returns it.",
+          ),
       },
       execute: (args) =>
         run([
           "send",
+          ...(args.private === true ? ["--private"] : []),
           ...flag("--project", args.project),
           "--timeout",
           String(waitSeconds(args.timeout_seconds)),
