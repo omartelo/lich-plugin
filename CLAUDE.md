@@ -100,7 +100,7 @@ the network. They are read at the lich release named in `tests/lich-ref`, never
 at `main`: a contract merged there is one no released lich speaks yet. CI diffs
 the copies against that release and fails on drift. A contract lich has not
 released at all is the one exception: `refresh-fixtures.sh` reads it at the
-commit it pins until a release ships it, and today that is mod-control.
+commit it pins until a release ships it.
 
 ## Rules
 
