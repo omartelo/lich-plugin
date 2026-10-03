@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.13.2] - 2026-10-03
+
 ### Added
 
 - **opencode sub-agents can delegate privately.** `send_to_session` takes `private`, which
@@ -469,7 +471,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   plugin is safe to install globally. Requests time out after ~1s and errors
   are swallowed — the hook never blocks or fails the turn.
 
-[Unreleased]: https://github.com/omartelo/lich-plugin/compare/v0.13.1...HEAD
+[Unreleased]: https://github.com/omartelo/lich-plugin/compare/v0.13.2...HEAD
+[0.13.2]: https://github.com/omartelo/lich-plugin/compare/v0.13.1...v0.13.2
 [0.13.1]: https://github.com/omartelo/lich-plugin/compare/v0.13.0...v0.13.1
 [0.13.0]: https://github.com/omartelo/lich-plugin/compare/v0.12.0...v0.13.0
 [0.12.0]: https://github.com/omartelo/lich-plugin/compare/v0.11.1...v0.12.0

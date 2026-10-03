@@ -24,7 +24,7 @@
 // environment is read per report rather than at import, so a module loaded
 // outside lich stays a no-op instead of a cached decision.
 // Sent as X-Lich-Plugin on every report; bumped at release (CLAUDE.md, Release).
-const PLUGIN_VERSION = "0.13.1"
+const PLUGIN_VERSION = "0.13.2"
 
 function report(path, body) {
   const port = process.env.LICH_PORT
