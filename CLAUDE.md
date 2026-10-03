@@ -17,6 +17,7 @@ hooks/crush-hooks.json            # hook registration, Crush (hand-merged into c
 hooks/                            # hook scripts (all four run them; only how they are addressed differs)
 hooks/detail.jq                   # what a tool call acts on, shared by two of those scripts
 hooks/win-run.cmd                 # runs one of those scripts on Windows (Codex)
+hooks/mod-control.js              # Claude Code mod: lich drives the session, a module hooks/hooks.json names
 opencode/lich.js                  # opencode client: a module, not a command
 omp/lich.js                       # omp client: a module, not a command
 docs/                             # lich ⇄ plugin communication contracts
@@ -52,6 +53,7 @@ Contracts are **canonical in the lich repository** (`docs/hooks/` there); this p
 - [docs/session-start.md](docs/session-start.md) — Claude session id via `SessionStart`
 - [docs/session-title.md](docs/session-title.md) — the provider's own session title, via `PostToolUse`/`PreInvocation` and `Stop`
 - [docs/session-touched.md](docs/session-touched.md) — git-status refresh signal via `PostToolUse` (file-mutating tools only)
+- [docs/mod-control.md](docs/mod-control.md): lich drives a Claude Code session (prompt, abort, model, effort, compact) through a mod that long-polls for commands and acks each one; Claude Code only, the other harnesses have no mod system
 - [docs/providers.md](docs/providers.md) — the per-harness map, including what installing on omp takes and what it cannot report
 
 Each doc carries the event mapping for **every** provider, one column each — a contract is implemented once and registered per harness. [docs/providers.md](docs/providers.md) is the map: which file each harness reads, where the event vocabularies differ, and what adding another provider takes. A harness that cannot close a state does not get that report registered: an unendable `busy` is worse on a card than a card with no indicator.
@@ -81,16 +83,24 @@ drop and the listener that never answers, which must not hold the turn.
 against the events and `ctx.sessionManager` methods measured on omp v17.3.0 —
 pinned in a comment there, because 17.x moves fast — plus the rule that outside
 lich it subscribes to nothing at all.
+[tests/mod-control.test.mjs](tests/mod-control.test.mjs) does the same for the
+Claude Code mod, handing it a fake `$` and asserting its acks against the
+mod-control fixtures and its polls against the commands lich sends.
 [tests/contract.mjs](tests/contract.mjs) is the fixtures, the assertions and the
 stub, shared so every client answers to the same lines. Node only, no
 dependencies.
+[tests/mod-control.engine.test.ts](tests/mod-control.engine.test.ts) runs the
+mod under Claude Code's own engine (`claude plugin test .`); it needs a `claude`
+binary, so CI does not run it.
 
 The fixtures are vendored in `tests/fixtures/` from lich
 (`docs/hooks/fixtures/*.jsonl` there) by
 [tests/refresh-fixtures.sh](tests/refresh-fixtures.sh), so the suite never needs
 the network. They are read at the lich release named in `tests/lich-ref`, never
 at `main`: a contract merged there is one no released lich speaks yet. CI diffs
-the copies against that release and fails on drift.
+the copies against that release and fails on drift. A contract lich has not
+released at all is the one exception: `refresh-fixtures.sh` reads it at the
+commit it pins until a release ships it.
 
 ## Rules
 
@@ -112,6 +122,8 @@ the copies against that release and fails on drift.
 
 ```bash
 claude --plugin-dir .
+claude plugin validate .claude-plugin/plugin.json   # the manifest, hooks.json and the mod
+claude plugin test .                                # the mod under Claude Code's engine
 ```
 
 Codex has no equivalent one-shot flag; install the clone as a local marketplace instead (`codex plugin marketplace add .` then `codex plugin add lich@lich-plugin`), and trust the hooks once with `/hooks`.
@@ -127,6 +139,6 @@ Same standard as the `lich` repository (Keep a Changelog + SemVer). Releases are
 
 1. Move the `[Unreleased]` entries in `CHANGELOG.md` under the new version heading (with date) and refresh the compare links at the bottom.
 2. Pick the number by what changed: a release that sends anything lich's contract did not already accept (a new endpoint, header, field or value) bumps the **minor** (the major, from 1.0); anything else bumps the **patch**. lich accepts every release below the next minor of the contract it implements, so a contract change released as a patch reaches a lich that refuses it. `docs/hooks/README.md` in lich, Versioning, is the rule.
-3. Align `version` in `.claude-plugin/plugin.json` **and** `.codex-plugin/plugin.json` with the tag, and `plugin_version` in each `hooks/report-*.sh` and `PLUGIN_VERSION` in `opencode/lich.js` and `omp/lich.js`, the header every report sends. The suite fails while any of them disagrees with the Claude Code manifest. The root `plugin.json` is not a third one to bump: Antigravity's manifest takes only a `name`, and lich writes its own carrying the tag when it installs a release.
+3. Align `version` in `.claude-plugin/plugin.json` **and** `.codex-plugin/plugin.json` with the tag, and `plugin_version` in each `hooks/report-*.sh` and `PLUGIN_VERSION` in `opencode/lich.js`, `omp/lich.js` and `hooks/mod-control.js`, the header every report sends. The suite fails while any of them disagrees with the Claude Code manifest. The root `plugin.json` is not a third one to bump: Antigravity's manifest takes only a `name`, and lich writes its own carrying the tag when it installs a release.
 4. Annotated tag `vX.Y.Z` + push with the tag.
 5. `gh release create vX.Y.Z` with the notes taken from the matching `CHANGELOG.md` section.

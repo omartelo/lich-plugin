@@ -37,6 +37,7 @@ export const FIXTURE_OF = {
   '/session-start': 'session-start',
   '/session-title': 'session-title',
   '/session-touched': 'session-touched',
+  '/mod/acks': 'mod-control',
 }
 
 const readFixture = (name) =>
@@ -56,6 +57,7 @@ export const rejected = (endpoint) => CASES[endpoint].filter((c) => c.reject)
 // state or a provider that lich stops accepting stops being accepted below too.
 export const STATES = new Set(accepted('/hook').map((c) => c.accept.state))
 export const PROVIDERS = new Set(accepted('/session-start').map((c) => c.accept.provider))
+export const MOD_KINDS = new Set(accepted('/mod/acks').map((c) => c.body.kind))
 
 /**
  * Providers this plugin already reports for, and lich does not accept yet.
@@ -112,6 +114,14 @@ export const REJECT_RULES = {
   '/session-touched': {
     'missing session_id': (b) => !('session_id' in b),
     'empty session_id': (b) => b.session_id === '',
+    'malformed json': (b, raw) => !isJsonObject(raw),
+  },
+  '/mod/acks': {
+    'missing session_id': (b) => !('session_id' in b),
+    'missing id': (b) => !('id' in b),
+    'missing kind': (b) => !('kind' in b),
+    'unknown kind': (b) => 'kind' in b && !MOD_KINDS.has(b.kind),
+    'ok is not a bool': (b) => 'ok' in b && typeof b.ok !== 'boolean',
     'malformed json': (b, raw) => !isJsonObject(raw),
   },
 }

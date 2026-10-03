@@ -17,6 +17,15 @@ be told about a server on its command line, so they are defined in the module
 instead. [docs/opencode-tools.md](docs/opencode-tools.md) has the list and the
 two cases where they are deliberately absent.
 
+On **Claude Code** it carries the other direction too, from lich to the session:
+a mod, a module Claude Code runs in its own process, takes the commands lich
+sends from the session's card (start a turn with a prompt, stop the running
+turn, override the model or the effort, compact the context) and reports how
+each one went. It needs Claude Code 2.1.280 or later with mods turned on; an
+older one keeps every report above and only goes without the controls.
+[docs/mod-control.md](docs/mod-control.md) has what it does and which releases
+run it. No other harness has a mod system, so none of them gets the controls.
+
 It also ships skills for the parts of lich you configure from inside a session:
 
 - **theme** (`/lich:theme` in Claude Code; on Codex and Antigravity the `theme` skill loads from its description) — write, port or fix a lich color theme: the app tokens, the xterm palette, where the file goes, and a validator for the rules that otherwise fail silently
@@ -38,6 +47,7 @@ hooks/report-tool.sh              # session-state hook: the tool a turn is runni
 hooks/report-session-start.sh     # session-start hook
 hooks/report-title.sh             # session-title hook
 hooks/report-touched.sh           # session-touched hook
+hooks/mod-control.js              # mod-control client, a Claude Code mod
 opencode/lich.js                  # opencode client: all four reports plus the seven tools, one module
 omp/lich.js                       # omp client: the reports, one module
 docs/                             # client-side docs, one per contract
@@ -159,4 +169,4 @@ claude --plugin-dir .
 node --test tests/*.test.mjs
 ```
 
-Every hook script runs as a real subprocess, from the command line its registration spells, against a stub HTTP server — and the body it POSTs is asserted against [lich's contract fixtures](https://github.com/omartelo/lich/tree/main/docs/hooks/fixtures): an accepted shape, never a rejected one, the right endpoint, token and `X-Lich-Plugin` header, plus the client rules (no lich environment → no report; exit 0 when lich answers 500 or refuses the connection). The opencode and omp modules are imported instead of spawned and fed the events a real run of each emits, against the same fixtures. All three share `tests/contract.mjs`. The fixtures are vendored in `tests/fixtures/` by `tests/refresh-fixtures.sh`, at the lich release named in `tests/lich-ref`; CI diffs them against that release so a contract that moves in lich goes red here.
+Every hook script runs as a real subprocess, from the command line its registration spells, against a stub HTTP server — and the body it POSTs is asserted against [lich's contract fixtures](https://github.com/omartelo/lich/tree/main/docs/hooks/fixtures): an accepted shape, never a rejected one, the right endpoint, token and `X-Lich-Plugin` header, plus the client rules (no lich environment → no report; exit 0 when lich answers 500 or refuses the connection). The opencode and omp modules and the Claude Code mod are imported instead of spawned and fed the events a real run of each emits, against the same fixtures. All of them share `tests/contract.mjs`. The fixtures are vendored in `tests/fixtures/` by `tests/refresh-fixtures.sh`, at the lich release named in `tests/lich-ref`; CI diffs them against that release so a contract that moves in lich goes red here.

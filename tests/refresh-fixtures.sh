@@ -17,7 +17,8 @@ here=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 ref=$(tr -d '[:space:]' <"$here/lich-ref")
 base=https://raw.githubusercontent.com/omartelo/lich/$ref/docs/hooks/fixtures
 
-for name in session-state session-start session-title session-touched; do
-  curl -fsSL "$base/$name.jsonl" -o "$here/fixtures/$name.jsonl"
-  echo "refreshed $name.jsonl at $ref"
+for file in session-state.jsonl session-start.jsonl session-title.jsonl \
+  session-touched.jsonl mod-control.jsonl mod-commands.json; do
+  curl -fsSL "$base/$file" -o "$here/fixtures/$file"
+  echo "refreshed $file at $ref"
 done
