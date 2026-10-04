@@ -4,21 +4,25 @@ Client side of the [mod-control contract](https://github.com/omartelo/lich/blob/
 (the endpoints, the commands and the ack are defined in the lich repository;
 this plugin only implements them).
 
-Lets lich drive a Claude Code session from its card: start a turn with a
+Lets lich drive a Claude Code session, through `lich control` on the command
+line or the `control_session` MCP tool an agent calls: start a turn with a
 prompt, stop the running turn, override the model or the effort of every
-request, and compact the context. It runs the other way from the hooks: instead
-of reporting what happened, it holds a long poll open on lich, applies the
-commands that come back, and acks each one.
+request, and run one of its slash commands. It runs the other way from the
+hooks: instead of reporting what happened, it holds a long poll open on lich,
+applies the commands that come back, and acks each one.
 
-| client                 | Claude Code                       | Codex               | Antigravity         | opencode            | omp                 | Crush               |
-|------------------------|-----------------------------------|---------------------|---------------------|---------------------|---------------------|---------------------|
-| `hooks/mod-control.js` | mod, `hooks/hooks.json` `modules` | none: no mod system | none: no mod system | none: no mod system | none: no mod system | none: no mod system |
+| client                 | Claude Code                                           | Codex               | Antigravity         | opencode            | omp                 | Crush               |
+|------------------------|-------------------------------------------------------|---------------------|---------------------|---------------------|---------------------|---------------------|
+| `hooks/mod-control.js` | mod, registered by `hooks/lich.js` (`hooks/hooks.json` `modules`) | none: no mod system | none: no mod system | none: no mod system | none: no mod system | none: no mod system |
 
 A Claude Code mod is a module Claude Code runs inside its own process, listed
 under `modules` in the same `hooks/hooks.json` that registers the scripts. Both
-kinds live in one file and both fire. lich refuses to queue a command for a
-session whose mod is not polling, so on every other harness the card says the
-controls are unavailable instead of waiting on nothing.
+kinds live in one file and both fire. Claude Code takes one entry there, so the
+entry is `hooks/lich.js`, which registers this module and
+[agent-cards](agent-cards.md). lich refuses to queue a command for a
+session whose mod is not polling, so on every other harness `lich control` and
+`control_session` fail at once, naming what to fix, instead of waiting on
+nothing.
 
 | command   | applied with                         | ack `ok: true` once                     |
 |-----------|--------------------------------------|-----------------------------------------|
@@ -26,7 +30,7 @@ controls are unavailable instead of waiting on nothing.
 | `abort`   | `$.turn.abort({ turnId })`, the id `turn.start` gave | the turn ended          |
 | `model`   | every `turn.step` sent with `model`  | the override is set, or dropped when absent |
 | `effort`  | every `turn.step` sent with `effort` | the override is set, or dropped when absent |
-| `compact` | `$.session.compact({ instructions })` | the compaction ran                     |
+| `command` | `$.command.run({ command: name, args })` | it ran, once the session was idle    |
 
 `GET /mod/commands?token=…&session_id=…` to fetch, `POST /mod/acks` with
 `{"session_id", "id", "kind", "ok", "error"?}` to ack, `X-Lich-Plugin` on both.
@@ -46,11 +50,14 @@ controls are unavailable instead of waiting on nothing.
   when the session is idle and its turn starts, and lich stops queueing for a
   mod that has not polled in 30 seconds: a poll held behind that prompt would
   get the abort meant for the running turn refused.
-- **Nor does a command wait on a `prompt`.** The prompt is submitted in its
-  place and acked when its turn starts, but what comes after it runs at once:
-  an `abort` held behind it would reach the running turn only after that turn
-  ended, and then cancel the prompt's own turn instead. A `model` or `effort`
-  sent meanwhile likewise applies to the running turn's next request.
+- **Nor does a command wait on a `prompt` or a slash command.** The prompt is
+  submitted in its place and acked when its turn starts, and a `command` is
+  acked once Claude Code ran it, which is only when the session is idle. What
+  comes after either runs at once: an `abort` held behind a prompt, or a
+  `/compact` queued during a turn, would reach the running turn only after that
+  turn ended, and behind a prompt it would then cancel the prompt's own turn
+  instead. A `model` or `effort` sent meanwhile likewise applies to the running
+  turn's next request.
 - **Every other ack is awaited before the next command.** That is the
   contract's rule for an `abort`: lich ends the turn it has open when the ack
   lands, so a late one would end the turn the next `prompt` opened. An ack that
@@ -78,8 +85,8 @@ Measured against a stub lich on each release:
 - **2.1.200** ignores the `modules` key.
 
 On every one of them the scripts keep reporting as before. What an older Claude
-Code loses is the card's controls, which lich reports as unavailable for the
-session. The same happens on a current one when the rollout switch is off: it is
+Code loses is the controls: `lich control` and `control_session` refuse the
+session, naming what to fix. The same happens on a current one when the rollout switch is off: it is
 a server-side flag Claude Code caches on disk, and an older `claude` run under
 the same home can save it off for the next session.
 
@@ -98,3 +105,12 @@ the trust prompt is answered, the module after.
 - **An effort sent to a model without effort is dropped by Claude Code**, and
   the ack still says `ok`: the override is set, it just changes nothing for that
   model.
+- **A slash command that opens a dialog never acks until someone closes it.**
+  Measured on 2.1.288 and 2.1.289: `/cost` holds Claude Code's command queue
+  until Esc is pressed in the session's terminal, and every later slash command
+  waits behind it. `abort`, `model` and `effort` still apply, since the mod
+  does not wait on a `command`, and a dialog opens only on an idle session, so
+  there is no turn behind it to abort.
+- **`/model` and `/effort` are refused by lich, not by the mod.** Run through a
+  mod, Claude Code saves what they set as the default for every new session;
+  the `model` and `effort` commands are the per-session route.

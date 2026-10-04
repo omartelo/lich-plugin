@@ -1,4 +1,5 @@
-// Lets lich drive a Claude Code session from its card. Contract: ../docs/mod-control.md,
+// Lets lich drive a Claude Code session (`lich control`, the `control_session`
+// MCP tool). Contract: ../docs/mod-control.md,
 // canonical in https://github.com/omartelo/lich/blob/main/docs/hooks/mod-control.md
 //
 // A Claude Code mod, not a hook script: hooks/hooks.json names this file under
@@ -14,6 +15,8 @@
 // Sent as X-Lich-Plugin on every request; bumped at release (CLAUDE.md, Release).
 const PLUGIN_VERSION = "0.14.0"
 
+const SETTLE_WHEN_IDLE = new Set(["prompt", "command"])
+
 // The contract's client rule: after a network error or a 5xx, wait 1 second,
 // doubling up to 10, and start over after a 200.
 const FIRST_BACKOFF_MS = 1000
@@ -27,7 +30,7 @@ const EFFORTS = new Set(["low", "medium", "high", "xhigh", "max"])
 /**
  * @typedef {import('claude-code').EngineInterface} Engine
  * @typedef {'low' | 'medium' | 'high' | 'xhigh' | 'max'} Effort
- * @typedef {{ id: string, kind: string, text?: string, model?: string, effort?: string, instructions?: string }} Command
+ * @typedef {{ id: string, kind: string, text?: string, model?: string, effort?: string, name?: string, args?: string }} Command
  * @typedef {{
  *   base: string,
  *   token: string,
@@ -83,20 +86,21 @@ async function poll($, state, link) {
   for (const command of commands) {
     link.applying = link.applying.then(() => {
       const acked = applyAndAck($, state, link, command)
-      // A prompt settles only once the session is idle and its turn starts.
-      // Waiting on it would hold an abort meant for the running turn until that
-      // turn ended, and the abort would then cancel the prompt's own turn.
-      if (command.kind !== "prompt") return acked
+      // A prompt or a slash command settles only once the session is idle and
+      // it ran. Waiting on one would hold an abort meant for the running turn
+      // until that turn ended, and a prompt's abort would then cancel the turn
+      // the prompt started instead.
+      if (!SETTLE_WHEN_IDLE.has(command.kind)) return acked
     })
   }
   $.clock.after(0, () => void poll($, state, link))
 }
 
 /**
- * Applies one command and acks it. Every command but a `prompt` holds the next
- * one until its ack is answered: an `abort` ack makes lich end the turn it has
- * open, so one landing after the next `prompt` opened a turn would end that turn
- * instead.
+ * Applies one command and acks it. Every command but a `prompt` or a `command`
+ * holds the next one until its ack is answered: an `abort` ack makes lich end
+ * the turn it has open, so one landing after the next `prompt` opened a turn
+ * would end that turn instead.
  *
  * @param {Engine} $
  * @param {State} state
@@ -119,7 +123,7 @@ async function applyAndAck($, state, link, command) {
       body: JSON.stringify({ session_id: link.session, id: command.id, kind: command.kind, ...outcome }),
     })
   } catch {
-    // The contract drops an ack that cannot be sent: lich keeps no table to retry against.
+    // The contract drops an ack that cannot be sent: lich never resends the command.
   }
 }
 
@@ -146,11 +150,9 @@ async function apply($, state, command) {
       if (command.effort !== undefined && !EFFORTS.has(command.effort)) throw new Error("unknown effort")
       state.effort = /** @type {Effort | undefined} */ (command.effort)
       return
-    case "compact": {
-      const compacted = await $.session.compact({ instructions: command.instructions })
-      if (compacted.skip !== undefined) throw new Error(compacted.skip)
+    case "command":
+      await $.command.run({ command: command.name ?? "", args: command.args })
       return
-    }
     default:
       throw new Error("unknown kind")
   }

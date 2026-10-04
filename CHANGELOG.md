@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **lich can run a Claude Code session's slash commands.** The mod takes a
+  `command` naming one (`/compact`, `/clear`, …) and its arguments, runs it once
+  the session is idle, and acks it with Claude Code's own error when the name is
+  unknown. It replaces the separate compact command. An abort sent while a slash
+  command waits for the session to go idle still reaches the running turn.
+  lich gives these commands with `lich control` or an agent's
+  `control_session` tool; there are no controls on the session's card. Needs a
+  lich that sends `command` (lich-plugin 0.15 contract).
+- **A general-purpose subagent runs as a lich session you can watch and steer.**
+  Inside lich, the Claude Code mod opens each general-purpose subagent (or one
+  started with no type) as a Claude Code session on a branch of its own, off the
+  asking session's branch, and hands its report back as the subagent's result.
+  Explore, Plan and other types stay inside Claude Code. When lich cannot take
+  the task, the subagent runs inside Claude Code as before, with a toast saying
+  why. Esc stops the wait, not the session; its report then arrives as a
+  [lich] note. Needs Claude Code 2.1.280 or later with mods on (measured on
+  2.1.289).
+
 ## [0.14.0] - 2026-10-03
 
 ### Added

@@ -52,7 +52,7 @@ async function until(predicate, what) {
 /**
  * Registers the module against a fake engine. `polls` answers each poll in
  * turn; once it runs out a poll stays parked, as lich holds one with nothing
- * queued. `engine` overrides what the prompt, turn and session calls answer.
+ * queued. `engine` overrides what the prompt, turn and command calls answer.
  */
 function load({ env = lichEnv(PORT), polls = [], engine = {} } = {}) {
   const hooks = new Map()
@@ -99,10 +99,10 @@ function load({ env = lichEnv(PORT), polls = [], engine = {} } = {}) {
         if (engine.abort) return engine.abort(args)
       },
     },
-    session: {
-      compact: async (args) => {
-        calls.push(['compact', args])
-        return engine.compact ? engine.compact(args) : { messages: [] }
+    command: {
+      run: async (args) => {
+        calls.push(['command', args])
+        return engine.command ? engine.command(args) : { text: '' }
       },
     },
   }
@@ -281,6 +281,50 @@ test('a prompt waiting on the session holds back none of the commands after it',
   assert.deepEqual(mod.acks()[2], { session_id: LICH_SESSION_ID, id: 'm1', kind: 'prompt', ok: true })
 })
 
+// `$.command.run` queues the command and runs it once the session is idle, so
+// a /compact sent during a turn settles only after that turn.
+test('the poll stays open while a slash command waits for idle', async () => {
+  const idle = deferred()
+  const mod = load({ polls: [ok([{ id: 'm7', kind: 'command', name: 'compact' }])], engine: { command: () => idle.promise } })
+  await mod.start()
+  await until(() => mod.parked() === 1, 'the poll after the command')
+  assert.equal(mod.acks().length, 0)
+  idle.resolve({ text: '' })
+  await until(() => mod.acks().length === 1, 'the command ack')
+  assert.equal(mod.acks()[0].ok, true)
+})
+
+test('a slash command waiting for idle holds back none of the commands after it', async () => {
+  const idle = deferred()
+  const mod = load({
+    polls: [
+      ok([{ id: 'm7', kind: 'command', name: 'compact' }]),
+      ok([
+        { id: 'm3', kind: 'model', model: 'claude-opus-4-1' },
+        { id: 'm2', kind: 'abort' },
+      ]),
+    ],
+    engine: { command: () => idle.promise },
+  })
+  await mod.turnStart('t1')
+  await mod.start()
+  await until(() => mod.acks().length === 2, 'the model and abort acks')
+  assert.deepEqual(mod.calls, [
+    ['command', { command: 'compact', args: undefined }],
+    ['abort', { turnId: 't1' }],
+  ])
+  assert.deepEqual(
+    mod.acks().map(({ id, ok }) => ({ id, ok })),
+    [
+      { id: 'm3', ok: true },
+      { id: 'm2', ok: true },
+    ],
+  )
+  idle.resolve({ text: '' })
+  await until(() => mod.acks().length === 3, 'the command ack')
+  assert.deepEqual(mod.acks()[2], { session_id: LICH_SESSION_ID, id: 'm7', kind: 'command', ok: true })
+})
+
 // ----------------------------------------------------------------- commands --
 
 test('every command shape lich sends is applied in order and acked ok', async () => {
@@ -288,8 +332,8 @@ test('every command shape lich sends is applied in order and acked ok', async ()
   assert.deepEqual(mod.calls, [
     ['prompt', { text: 'run the tests' }],
     ['abort', { turnId: 't1' }],
-    ['compact', { instructions: 'keep the test plan' }],
-    ['compact', { instructions: undefined }],
+    ['command', { command: 'compact', args: 'keep the test plan' }],
+    ['command', { command: 'clear', args: undefined }],
   ])
   assert.deepEqual(
     mod.acks().map(({ id, kind, ok }) => ({ id, kind, ok })),
@@ -399,18 +443,15 @@ test('what Claude Code refuses is acked with its reason', async () => {
   const mod = await applied(
     [
       { id: 'm1', kind: 'prompt', text: 'blocked' },
-      { id: 'm7', kind: 'compact' },
-      { id: 'm8', kind: 'compact' },
+      { id: 'm7', kind: 'command', name: 'nao-existe' },
       { id: 'm2', kind: 'abort' },
     ],
     {
       before: (m) => m.turnStart('t1'),
       engine: {
         submit: () => ({ drop: 'a plugin dropped it' }),
-        compact: (() => {
-          let n = 0
-          return () => (n++ === 0 ? { skip: 'PreCompact blocked it' } : Promise.reject(new Error('a turn is running')))
-        })(),
+        // Claude Code's own rejection, measured on 2.1.288.
+        command: () => Promise.reject(new Error('$.command.run: no command named /nao-existe in this session')),
         abort: () => Promise.reject(new Error('t1 is not the running turn')),
       },
     },
@@ -419,8 +460,7 @@ test('what Claude Code refuses is acked with its reason', async () => {
     mod.acks().map(({ ok, error }) => ({ ok, error })),
     [
       { ok: false, error: 'a plugin dropped it' },
-      { ok: false, error: 'PreCompact blocked it' },
-      { ok: false, error: 'a turn is running' },
+      { ok: false, error: '$.command.run: no command named /nao-existe in this session' },
       { ok: false, error: 't1 is not the running turn' },
     ],
   )
