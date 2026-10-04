@@ -28,7 +28,7 @@ done
 # module is held to the contract lich is about to ship rather than to the one
 # it replaces. Once a release ships it, move tests/lich-ref there, fold these
 # files back into the list above and delete this block.
-pending=8b06b79885bccd2cd4de04f04de07085302d8903
+pending=f6db5f95675413ec7029658d04dbb96f0bb375c0
 for file in mod-control.jsonl mod-commands.json; do
   curl -fsSL "https://raw.githubusercontent.com/omartelo/lich/$pending/docs/hooks/fixtures/$file" \
     -o "$here/fixtures/$file"
