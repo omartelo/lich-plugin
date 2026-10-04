@@ -22,7 +22,11 @@ of these hold, and every other one goes on to Claude Code untouched:
 - its `subagent_type` is `general-purpose` or absent, so Explore, Plan, project
   and plugin agent types keep their own behaviour, and an unknown type keeps
   Claude Code's own error;
-- it names no `team_name`;
+- it names no `team_name` and no `isolation: remote`, so a teammate and a
+  remote agent keep Claude Code's own route;
+- the session is not itself a worker: a branch under `subagent/` is one this
+  mod opened, and a worker's own subagents stay native instead of opening cards
+  from cards;
 - the session is interactive (`session.start` saw `isInteractive`), since a
   `claude -p` started from a tool inside a lich session inherits its variables;
 - `LICH_BIN` and `LICH_SESSION_ID` are set, which is to say the session runs
@@ -74,7 +78,7 @@ and tool counts are zero because they are the worker's session's, not this one's
 - **The branch is named from the call.** The description is slugged the way
   lich's own worktree dialog slugs a typed name (2 to 5 words, 10 to 40
   characters, letters and digits in any script), `agent` when nothing is left,
-  plus `-` and the last four letters or digits of the call's id. lich checks out
+  under `subagent/`, plus `-` and the last four letters or digits of the call's id. lich checks out
   a branch that already exists as it stands, and the suffix keeps a call from
   landing on one.
 - **The base is the asking session's branch, as last committed.** Uncommitted
@@ -82,7 +86,12 @@ and tool counts are zero because they are the worker's session's, not this one's
   cannot answer, the base is left to lich, which uses the project's current branch.
 - **The worker runs with the permissions lich opens any Claude Code session
   with**, not the asking session's mode, so a permission prompt waits on its card.
-- **A model the call names is the worker's model**, passed as `--model`.
+- **A model the call names is the worker's model**, passed as `--model`. With
+  none, the worker starts on the model lich opens Claude Code with, not the
+  asking session's, which a native agent would inherit.
+- **The worker is reached through lich.** The result tells the model to use
+  `send_to_session` or `lich send`: Claude Code's hand-back suggests
+  `SendMessage`, which cannot reach a lich session.
 
 ## Known ceilings
 

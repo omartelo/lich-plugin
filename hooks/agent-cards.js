@@ -50,6 +50,9 @@ const MAX_WORDS = 5
 const MIN_CHARS = 10
 const MAX_CHARS = 40
 const FALLBACK_SLUG = "agent"
+// Marks a worker's branch, so the mod inside that worker leaves its own
+// subagents native instead of opening cards from cards.
+const WORKER_BRANCH_PREFIX = "subagent/"
 
 // The end of the Agent call's id makes each branch new: lich checks out an
 // existing branch as it stands, so a bare slug could land on someone's work.
@@ -61,7 +64,7 @@ const SUFFIX_CHARS = 4
  * @typedef {{ label: string, name: string, path: string, delivery?: Report }} Opened
  * @typedef {{ interactive: boolean }} State
  * @typedef {{ tool: "Agent", tool_use_id: string, agentId?: string, description: string, prompt: string,
- *   subagent_type?: string, model?: string, team_name?: string }} AgentCall
+ *   subagent_type?: string, model?: string, team_name?: string, isolation?: string }} AgentCall
  */
 
 /** @param {unknown} error */
@@ -81,7 +84,8 @@ function messageOf(error) {
 function isDelegable(e, next, state) {
   const isModelOnMainLoop = next.origin.plugin === "engine" && e.agentId === undefined
   const isGeneralPurpose = e.subagent_type === undefined || e.subagent_type === "general-purpose"
-  return state.interactive && isModelOnMainLoop && isGeneralPurpose && e.team_name === undefined
+  const isLocal = e.team_name === undefined && e.isolation !== "remote"
+  return state.interactive && isModelOnMainLoop && isGeneralPurpose && isLocal
 }
 
 /** @param {string} text */
@@ -108,7 +112,7 @@ function slugOf(text) {
 /** @param {AgentCall} e */
 function branchFor(e) {
   const suffix = e.tool_use_id.replace(/[^A-Za-z0-9]/g, "").slice(-SUFFIX_CHARS).toLowerCase()
-  return `${slugOf(e.description ?? "") || FALLBACK_SLUG}-${suffix}`
+  return `${WORKER_BRANCH_PREFIX}${slugOf(e.description ?? "") || FALLBACK_SLUG}-${suffix}`
 }
 
 /**
@@ -145,10 +149,10 @@ function parsedOrUndefined(stdout) {
  * @param {string} lich
  * @param {AgentCall} e
  * @param {string} branch
+ * @param {string} base
  * @returns {Promise<Opened & { delivery: Report }>}
  */
-async function openWorker($, lich, e, branch) {
-  const base = await currentBranch($)
+async function openWorker($, lich, e, branch, base) {
   const argv = [
     lich, "open", "--kind", "claude", "--worktree", branch,
     ...(base ? ["--base", base] : []),
@@ -227,7 +231,9 @@ function completed(e, opened, branch, text, durationMs) {
 function answerFor(e, opened, branch, report, durationMs) {
   switch (report.status) {
     case "answered": {
-      const where = `The work is on branch ${branch} in ${opened.path} (lich session "${opened.label}"), not in this checkout.`
+      const where =
+        `The work is on branch ${branch} in ${opened.path} (lich session "${opened.label}"), not in this checkout. ` +
+        `Reach that session with send_to_session or lich send, not SendMessage.`
       return { result: completed(e, opened, branch, `${report.answer}\n\n${where}`, durationMs) }
     }
     case "unanswered": {
@@ -270,12 +276,14 @@ async function runAsSession($, state, e, next) {
     return runNatively($, e, next, `the task is ${bytes} bytes, over lich's ${PROMPT_LIMIT_BYTES}`)
   }
 
+  const base = await currentBranch($)
+  if (base.startsWith(WORKER_BRANCH_PREFIX)) return next(e)
   const startedMs = await $.clock.now()
   const branch = branchFor(e)
   /** @type {Opened & { delivery: Report }} */
   let opened
   try {
-    opened = await openWorker($, lich, e, branch)
+    opened = await openWorker($, lich, e, branch, base)
   } catch (error) {
     if (next.signal.aborted) {
       return {
@@ -296,8 +304,8 @@ async function runAsSession($, state, e, next) {
     }
     return {
       deny:
-        `lich stopped answering about "${opened.label}" (${messageOf(error)}). It is still running on branch ` +
-        `${branch}; a report it sends arrives here as a [lich] note.`,
+        `lich stopped answering about "${opened.label}" (${messageOf(error)}). It may still be running on branch ` +
+        `${branch}, but a report it sends reaches this session only while the lich that opened it runs: open its card.`,
     }
   }
 }

@@ -15,7 +15,7 @@ import { expect, mock, test } from 'claude-code/testing'
 import type { On, ProcessRunResult } from 'claude-code'
 
 const ENV = { LICH_BIN: '/opt/lich/bin/lich', LICH_SESSION_ID: 'lich-1' }
-const BRANCH = 'fix-the-auth-flow-ab12'
+const BRANCH = 'subagent/fix-the-auth-flow-ab12'
 const OPENED = { id: '9f8e', label: BRANCH, name: `${BRANCH}-9f8e`, kind: 'claude', path: `/wt/${BRANCH}` }
 const CALL = {
   tool: 'Agent',

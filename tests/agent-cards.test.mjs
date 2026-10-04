@@ -19,7 +19,7 @@ import { register } from '../hooks/agent-cards.js'
 const LICH_BIN = '/opt/lich/bin/lich'
 const ENV = { LICH_BIN, LICH_SESSION_ID: 'lich-1', LICH_PORT: '47999', LICH_TOKEN: 'tok' }
 const TICKET = 'a1b2c3d4'
-const BRANCH = 'fix-the-auth-flow-ab12'
+const BRANCH = 'subagent/fix-the-auth-flow-ab12'
 const OPENED = {
   id: '9f8e',
   projectId: 'p1',
@@ -143,7 +143,9 @@ function completed(text, { durationMs = 3000, prompt = AGENT.prompt } = {}) {
   }
 }
 
-const whereItIs = `\n\nThe work is on branch ${BRANCH} in ${OPENED.path} (lich session "${BRANCH}"), not in this checkout.`
+const whereItIs =
+  `\n\nThe work is on branch ${BRANCH} in ${OPENED.path} (lich session "${BRANCH}"), not in this checkout. ` +
+  `Reach that session with send_to_session or lich send, not SendMessage.`
 
 function assertNativeUntouched({ answer, passed, mod }, e = AGENT) {
   assert.deepEqual(passed, [e])
@@ -173,6 +175,22 @@ test('every type but general-purpose stays native, an unknown one included', asy
     const e = { ...AGENT, subagent_type: type }
     assertNativeUntouched({ mod, ...(await mod.call(e)) }, e)
   }
+})
+
+test("a worker this mod opened keeps its own subagents native", async () => {
+  const mod = load({ runs: [onBranch('subagent/fix-the-auth-flow-ab12')] })
+  await mod.start()
+  const { answer, passed } = await mod.call()
+  assert.deepEqual(passed, [AGENT])
+  assert.equal(answer, NATIVE)
+  assert.equal(mod.ran.length, 1)
+})
+
+test('a remote agent stays native', async () => {
+  const e = { ...AGENT, isolation: 'remote' }
+  const mod = load()
+  await mod.start()
+  assertNativeUntouched({ ...(await mod.call(e)), mod }, e)
 })
 
 test('a teammate stays native', async () => {
@@ -241,7 +259,7 @@ test('with no current branch the session opens off lich\'s default base', async 
 
 // ------------------------------------------------------------ the branch --
 
-test('the branch is a slug of the description plus the end of the call id', async () => {
+test('the branch is subagent/, a slug of the description and the end of the call id', async () => {
   const cases = [
     ['Investigate why the websocket reconnect loop never stops retrying', 'investigate-why-the-websocket-reconnect'],
     ['a b c d e f g', 'a-b-c-d-e'],
@@ -252,14 +270,14 @@ test('the branch is a slug of the description plus the end of the call id', asyn
   ]
   for (const [description, slug] of cases) {
     const { mod } = await delegate([onBranch('main'), exits(0, opened('answered', 'done'))], { ...AGENT, description })
-    assert.equal(mod.ran[1].argv[5], `${slug}-ab12`, description)
+    assert.equal(mod.ran[1].argv[5], `subagent/${slug}-ab12`, description)
   }
 })
 
 test('the suffix is the last four letters or digits of the call id, lowercased', async () => {
   const e = { ...AGENT, tool_use_id: 'toolu_01XyZ_9Q' }
   const { mod } = await delegate([onBranch('main'), exits(0, opened('answered', 'done'))], e)
-  assert.equal(mod.ran[1].argv[5], 'fix-the-auth-flow-yz9q')
+  assert.equal(mod.ran[1].argv[5], 'subagent/fix-the-auth-flow-yz9q')
 })
 
 // ------------------------------------------------------------- the report --
@@ -385,7 +403,7 @@ test('a wait that failed after the task reached the worker is denied, never run 
     const { answer, passed, mod } = await delegate([onBranch('main'), exits(0, opened('pending')), wait])
     assert.deepEqual(passed, [])
     assert.deepEqual(mod.toasts, [])
-    assert.match(answer.deny, new RegExp(`^lich stopped answering about "${BRANCH}" \\(.+\\)\\. It is still running on branch ${BRANCH}; a report it sends arrives here as a \\[lich\\] note\\.$`))
+    assert.match(answer.deny, new RegExp(`^lich stopped answering about "${BRANCH}" \\(.+\\)\\. It may still be running on branch ${BRANCH}, but a report it sends reaches this session only while the lich that opened it runs: open its card\\.$`))
   }
 })
 
