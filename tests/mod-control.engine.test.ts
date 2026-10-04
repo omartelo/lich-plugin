@@ -1,7 +1,8 @@
 // The mod under Claude Code's own engine: `claude plugin test .` loads
 // hooks/mod-control.js from hooks/hooks.json the way a session does and runs
 // these against it, the test's hooks standing for lich (`http.fetch`) and for
-// the engine's bottom (`prompt.submit`, `turn.abort`, `turn.step`).
+// the engine's bottom (`prompt.submit`, `turn.abort`, `turn.step`,
+// `command.run`).
 //
 // tests/mod-control.test.mjs is the suite CI runs, against the contract
 // fixtures; this one needs a claude binary, and proves the module loads and its
@@ -100,6 +101,39 @@ test('an abort reaches the running turn while a prompt waits for the session', a
   const aborted: string[] = []
   on('turn.start', async (_$, e) => ({ turnId: e.turnId }))
   on('prompt.submit', () => new Promise<never>(() => {}))
+  on('turn.abort', async (_$, e) => {
+    aborted.push(e.turnId)
+    return { value: undefined }
+  })
+  await $.turn.start({ text: 'go', turnId: 't1' })
+  await $.session.start({ cwd: '/w', surface: 'terminal', isInteractive: true })
+  await clock.settle()
+  expect(aborted).toEqual(['t1'])
+  expect(world.acks).toEqual([{ session_id: 'lich-1', id: 'm2', kind: 'abort', ok: true }])
+})
+
+test('a slash command from lich runs as the plugin and is acked', async ($, on) => {
+  mock.env(on, ENV)
+  const clock = mock.clock(on)
+  const world = lich(on, [{ id: 'm7', kind: 'command', name: 'compact', args: 'keep the test plan' }])
+  const ran: unknown[] = []
+  on('command.run', async (_$, e) => {
+    ran.push({ command: e.command, args: e.args, origin: e.origin })
+    return { text: '' }
+  })
+  await $.session.start({ cwd: '/w', surface: 'terminal', isInteractive: true })
+  await clock.settle()
+  expect(ran).toEqual([{ command: 'compact', args: 'keep the test plan', origin: { kind: 'plugin', name: 'lich' } }])
+  expect(world.acks).toEqual([{ session_id: 'lich-1', id: 'm7', kind: 'command', ok: true }])
+})
+
+test('an abort reaches the turn while a slash command never settles', async ($, on) => {
+  mock.env(on, ENV)
+  const clock = mock.clock(on)
+  const world = lich(on, [{ id: 'm7', kind: 'command', name: 'compact' }], [{ id: 'm2', kind: 'abort' }])
+  const aborted: string[] = []
+  on('turn.start', async (_$, e) => ({ turnId: e.turnId }))
+  on('command.run', () => new Promise<never>(() => {}))
   on('turn.abort', async (_$, e) => {
     aborted.push(e.turnId)
     return { value: undefined }

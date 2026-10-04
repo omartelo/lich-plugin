@@ -20,7 +20,7 @@ two cases where they are deliberately absent.
 On **Claude Code** it carries the other direction too, from lich to the session:
 a mod, a module Claude Code runs in its own process, takes the commands lich
 sends from the session's card (start a turn with a prompt, stop the running
-turn, override the model or the effort, compact the context) and reports how
+turn, override the model or the effort, run a slash command) and reports how
 each one went. It needs Claude Code 2.1.280 or later with mods turned on; an
 older one keeps every report above and only goes without the controls.
 [docs/mod-control.md](docs/mod-control.md) has what it does and which releases

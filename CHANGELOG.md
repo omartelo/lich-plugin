@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **lich can run a Claude Code session's slash commands.** The mod takes a
+  `command` naming one (`/compact`, `/clear`, …) and its arguments, runs it once
+  the session is idle, and acks it with Claude Code's own error when the name is
+  unknown. It replaces the separate compact command. An abort sent while a slash
+  command waits for the session to go idle still reaches the running turn.
+  Needs a lich that sends `command` (lich-plugin 0.15 contract).
+
 ## [0.14.0] - 2026-10-03
 
 ### Added

@@ -53,7 +53,7 @@ Contracts are **canonical in the lich repository** (`docs/hooks/` there); this p
 - [docs/session-start.md](docs/session-start.md) — Claude session id via `SessionStart`
 - [docs/session-title.md](docs/session-title.md) — the provider's own session title, via `PostToolUse`/`PreInvocation` and `Stop`
 - [docs/session-touched.md](docs/session-touched.md) — git-status refresh signal via `PostToolUse` (file-mutating tools only)
-- [docs/mod-control.md](docs/mod-control.md): lich drives a Claude Code session (prompt, abort, model, effort, compact) through a mod that long-polls for commands and acks each one; Claude Code only, the other harnesses have no mod system
+- [docs/mod-control.md](docs/mod-control.md): lich drives a Claude Code session (prompt, abort, model, effort, command) through a mod that long-polls for commands and acks each one; Claude Code only, the other harnesses have no mod system
 - [docs/providers.md](docs/providers.md) — the per-harness map, including what installing on omp takes and what it cannot report
 
 Each doc carries the event mapping for **every** provider, one column each — a contract is implemented once and registered per harness. [docs/providers.md](docs/providers.md) is the map: which file each harness reads, where the event vocabularies differ, and what adding another provider takes. A harness that cannot close a state does not get that report registered: an unendable `busy` is worse on a card than a card with no indicator.

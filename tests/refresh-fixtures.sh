@@ -18,7 +18,19 @@ ref=$(tr -d '[:space:]' <"$here/lich-ref")
 base=https://raw.githubusercontent.com/omartelo/lich/$ref/docs/hooks/fixtures
 
 for file in session-state.jsonl session-start.jsonl session-title.jsonl \
-  session-touched.jsonl mod-control.jsonl mod-commands.json; do
+  session-touched.jsonl; do
   curl -fsSL "$base/$file" -o "$here/fixtures/$file"
   echo "refreshed $file at $ref"
+done
+
+# The mod-control `command` kind is in no lich release yet: these two files are
+# read at the lich commit that carries it (branch feat/control-session), so the
+# module is held to the contract lich is about to ship rather than to the one
+# it replaces. Once a release ships it, move tests/lich-ref there, fold these
+# files back into the list above and delete this block.
+pending=763f9af2b136b0642562a132ef7b198bc623fbf0
+for file in mod-control.jsonl mod-commands.json; do
+  curl -fsSL "https://raw.githubusercontent.com/omartelo/lich/$pending/docs/hooks/fixtures/$file" \
+    -o "$here/fixtures/$file"
+  echo "refreshed $file at $pending (unreleased)"
 done
