@@ -18,11 +18,12 @@ instead. [docs/opencode-tools.md](docs/opencode-tools.md) has the list and the
 two cases where they are deliberately absent.
 
 On **Claude Code** it carries the other direction too, from lich to the session:
-a mod, a module Claude Code runs in its own process, takes the commands lich
-sends from the session's card (start a turn with a prompt, stop the running
-turn, override the model or the effort, run a slash command) and reports how
-each one went. It needs Claude Code 2.1.280 or later with mods turned on; an
-older one keeps every report above and only goes without the controls.
+a mod, a module Claude Code runs in its own process, takes the commands given
+with `lich control` or an agent's `control_session` tool (start a turn with a
+prompt, stop the running turn, override the model or the effort, run a slash
+command) and reports how each one went. It needs Claude Code 2.1.280 or later
+with mods turned on; an older one keeps every report above, and `lich control`
+refuses its session, naming what to fix.
 [docs/mod-control.md](docs/mod-control.md) has what it does and which releases
 run it. No other harness has a mod system, so none of them gets the controls.
 

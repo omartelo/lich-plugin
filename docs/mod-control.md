@@ -4,7 +4,8 @@ Client side of the [mod-control contract](https://github.com/omartelo/lich/blob/
 (the endpoints, the commands and the ack are defined in the lich repository;
 this plugin only implements them).
 
-Lets lich drive a Claude Code session from its card: start a turn with a
+Lets lich drive a Claude Code session, through `lich control` on the command
+line or the `control_session` MCP tool an agent calls: start a turn with a
 prompt, stop the running turn, override the model or the effort of every
 request, and run one of its slash commands. It runs the other way from the
 hooks: instead of reporting what happened, it holds a long poll open on lich,
@@ -17,8 +18,9 @@ applies the commands that come back, and acks each one.
 A Claude Code mod is a module Claude Code runs inside its own process, listed
 under `modules` in the same `hooks/hooks.json` that registers the scripts. Both
 kinds live in one file and both fire. lich refuses to queue a command for a
-session whose mod is not polling, so on every other harness the card says the
-controls are unavailable instead of waiting on nothing.
+session whose mod is not polling, so on every other harness `lich control` and
+`control_session` fail at once, naming what to fix, instead of waiting on
+nothing.
 
 | command   | applied with                         | ack `ok: true` once                     |
 |-----------|--------------------------------------|-----------------------------------------|
@@ -81,8 +83,8 @@ Measured against a stub lich on each release:
 - **2.1.200** ignores the `modules` key.
 
 On every one of them the scripts keep reporting as before. What an older Claude
-Code loses is the card's controls, which lich reports as unavailable for the
-session. The same happens on a current one when the rollout switch is off: it is
+Code loses is the controls: `lich control` and `control_session` refuse the
+session, naming what to fix. The same happens on a current one when the rollout switch is off: it is
 a server-side flag Claude Code caches on disk, and an older `claude` run under
 the same home can save it off for the next session.
 
