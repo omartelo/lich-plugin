@@ -23,6 +23,14 @@ for file in session-state.jsonl session-start.jsonl session-title.jsonl \
   echo "refreshed $file at $ref"
 done
 
+# The mod-usage contract is in no lich release yet either: its fixture is read
+# at the lich commit that adds it (branch feat/mod-usage), on the same terms as
+# the block below, and folds into the first list once a release ships it.
+usage=445ee9e90b7b434135bc369f41486a37f0b738f6
+curl -fsSL "https://raw.githubusercontent.com/omartelo/lich/$usage/docs/hooks/fixtures/mod-usage.jsonl" \
+  -o "$here/fixtures/mod-usage.jsonl"
+echo "refreshed mod-usage.jsonl at $usage (unreleased)"
+
 # The mod-control `command` and `ask` kinds are in no lich release yet: these two files are
 # read at the lich commit that carries them (branch feat/ask-session), so the
 # module is held to the contract lich is about to ship rather than to the one
