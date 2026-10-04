@@ -11,13 +11,15 @@ request, and run one of its slash commands. It runs the other way from the
 hooks: instead of reporting what happened, it holds a long poll open on lich,
 applies the commands that come back, and acks each one.
 
-| client                 | Claude Code                       | Codex               | Antigravity         | opencode            | omp                 | Crush               |
-|------------------------|-----------------------------------|---------------------|---------------------|---------------------|---------------------|---------------------|
-| `hooks/mod-control.js` | mod, `hooks/hooks.json` `modules` | none: no mod system | none: no mod system | none: no mod system | none: no mod system | none: no mod system |
+| client                 | Claude Code                                           | Codex               | Antigravity         | opencode            | omp                 | Crush               |
+|------------------------|-------------------------------------------------------|---------------------|---------------------|---------------------|---------------------|---------------------|
+| `hooks/mod-control.js` | mod, registered by `hooks/lich.js` (`hooks/hooks.json` `modules`) | none: no mod system | none: no mod system | none: no mod system | none: no mod system | none: no mod system |
 
 A Claude Code mod is a module Claude Code runs inside its own process, listed
 under `modules` in the same `hooks/hooks.json` that registers the scripts. Both
-kinds live in one file and both fire. lich refuses to queue a command for a
+kinds live in one file and both fire. Claude Code takes one entry there, so the
+entry is `hooks/lich.js`, which registers this module and
+[agent-cards](agent-cards.md). lich refuses to queue a command for a
 session whose mod is not polling, so on every other harness `lich control` and
 `control_session` fail at once, naming what to fix, instead of waiting on
 nothing.

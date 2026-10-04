@@ -1,0 +1,12 @@
+// The one module hooks/hooks.json names under `modules`: Claude Code takes a
+// single entry there, so each mod lives in a file of its own and is registered
+// from here.
+
+import { register as registerAgentCards } from "./agent-cards.js"
+import { register as registerModControl } from "./mod-control.js"
+
+/** @param {import('claude-code').On} on */
+export function register(on) {
+  registerModControl(on)
+  registerAgentCards(on)
+}

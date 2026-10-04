@@ -27,6 +27,13 @@ refuses its session, naming what to fix.
 [docs/mod-control.md](docs/mod-control.md) has what it does and which releases
 run it. No other harness has a mod system, so none of them gets the controls.
 
+The same mod system turns a **general-purpose subagent** Claude Code starts into
+a lich session: its own worktree, branched off the asking session's branch, and
+a card you can watch and steer. The Agent call waits for that session's report
+and hands it back as the subagent's result; Explore, Plan and other agent types
+stay inside Claude Code. [docs/agent-cards.md](docs/agent-cards.md) has the
+rules and what happens when lich cannot be reached.
+
 It also ships skills for the parts of lich you configure from inside a session:
 
 - **theme** (`/lich:theme` in Claude Code; on Codex and Antigravity the `theme` skill loads from its description) — write, port or fix a lich color theme: the app tokens, the xterm palette, where the file goes, and a validator for the rules that otherwise fail silently
@@ -48,7 +55,9 @@ hooks/report-tool.sh              # session-state hook: the tool a turn is runni
 hooks/report-session-start.sh     # session-start hook
 hooks/report-title.sh             # session-title hook
 hooks/report-touched.sh           # session-touched hook
+hooks/lich.js                     # the Claude Code mods' entry, which registers the two below
 hooks/mod-control.js              # mod-control client, a Claude Code mod
+hooks/agent-cards.js              # a general-purpose subagent as a lich session, a Claude Code mod
 opencode/lich.js                  # opencode client: all four reports plus the seven tools, one module
 omp/lich.js                       # omp client: the reports, one module
 docs/                             # client-side docs, one per contract

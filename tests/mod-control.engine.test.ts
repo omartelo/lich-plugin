@@ -1,8 +1,8 @@
 // The mod under Claude Code's own engine: `claude plugin test .` loads
-// hooks/mod-control.js from hooks/hooks.json the way a session does and runs
-// these against it, the test's hooks standing for lich (`http.fetch`) and for
-// the engine's bottom (`prompt.submit`, `turn.abort`, `turn.step`,
-// `command.run`).
+// hooks/lich.js from hooks/hooks.json the way a session does, which registers
+// hooks/mod-control.js, and runs these against it, the test's hooks standing
+// for lich (`http.fetch`) and for the engine's bottom (`prompt.submit`,
+// `turn.abort`, `turn.step`, `command.run`).
 //
 // tests/mod-control.test.mjs is the suite CI runs, against the contract
 // fixtures; this one needs a claude binary, and proves the module loads and its
