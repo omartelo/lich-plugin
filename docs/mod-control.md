@@ -130,9 +130,9 @@ the trust prompt is answered, the module after.
 - **`/model` and `/effort` are refused by lich, not by the mod.** Run through a
   mod, Claude Code saves what they set as the default for every new session;
   the `model` and `effort` commands are the per-session route.
-- **A fork sees the conversation as the session's last request sent it.** A
-  reply being written, or a tool call running, when the question lands is not
-  in it. Measured on 2.1.289.
+- **A fork sees the conversation as of the session's last finished model
+  response.** A reply being written, a tool call running, or a prompt whose
+  first reply is still being written is not in it. Measured on 2.1.289.
 - **A fork cannot be cancelled, and survives an Esc on the turn.** It takes no
   signal; measured on 2.1.289, it answered in full after the turn it ran beside
   was interrupted. A module reload is what kills one, and then nothing is acked:
