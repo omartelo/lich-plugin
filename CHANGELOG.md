@@ -26,6 +26,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   why. Esc stops the wait, not the session; its report then arrives as a
   [lich] note. Needs Claude Code 2.1.280 or later with mods on (measured on
   2.1.289).
+- **lich can ask a Claude Code session a side question without stopping it.**
+  The mod answers an `ask` with a fork of the session's own conversation, which
+  runs beside the turn, stays out of the conversation and is mostly served from
+  the prompt cache, and sends the answer back in its ack, cut at 16,000
+  characters. An ask still answering holds back no other command. lich asks
+  with `lich ask` or an agent's `ask_session` tool (lich-plugin 0.15 contract).
 
 ## [0.14.0] - 2026-10-03
 

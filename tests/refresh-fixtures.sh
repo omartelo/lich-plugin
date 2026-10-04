@@ -23,12 +23,12 @@ for file in session-state.jsonl session-start.jsonl session-title.jsonl \
   echo "refreshed $file at $ref"
 done
 
-# The mod-control `command` kind is in no lich release yet: these two files are
-# read at the lich commit that carries it (branch feat/control-session), so the
+# The mod-control `command` and `ask` kinds are in no lich release yet: these two files are
+# read at the lich commit that carries them (branch feat/ask-session), so the
 # module is held to the contract lich is about to ship rather than to the one
 # it replaces. Once a release ships it, move tests/lich-ref there, fold these
 # files back into the list above and delete this block.
-pending=f974f9ba2b55ebc7ead6115abd16027e730a9b7b
+pending=8b06b79885bccd2cd4de04f04de07085302d8903
 for file in mod-control.jsonl mod-commands.json; do
   curl -fsSL "https://raw.githubusercontent.com/omartelo/lich/$pending/docs/hooks/fixtures/$file" \
     -o "$here/fixtures/$file"

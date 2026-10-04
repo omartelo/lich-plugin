@@ -7,7 +7,9 @@ this plugin only implements them).
 Lets lich drive a Claude Code session, through `lich control` on the command
 line or the `control_session` MCP tool an agent calls: start a turn with a
 prompt, stop the running turn, override the model or the effort of every
-request, and run one of its slash commands. It runs the other way from the
+request, and run one of its slash commands; and ask it a side question it
+answers without stopping, through `lich ask` or the `ask_session` MCP tool. It
+runs the other way from the
 hooks: instead of reporting what happened, it holds a long poll open on lich,
 applies the commands that come back, and acks each one.
 
@@ -31,9 +33,10 @@ nothing.
 | `model`   | every `turn.step` sent with `model`  | the override is set, or dropped when absent |
 | `effort`  | every `turn.step` sent with `effort` | the override is set, or dropped when absent |
 | `command` | `$.command.run({ command: name, args })` | it ran, once the session was idle    |
+| `ask`     | `$.model.fork({ prompt })`, the question behind a preamble | the fork answered; `answer` carries it |
 
 `GET /mod/commands?token=…&session_id=…` to fetch, `POST /mod/acks` with
-`{"session_id", "id", "kind", "ok", "error"?}` to ack, `X-Lich-Plugin` on both.
+`{"session_id", "id", "kind", "ok", "error"?, "answer"?}` to ack, `X-Lich-Plugin` on both.
 
 ## How it behaves
 
@@ -58,6 +61,19 @@ nothing.
   turn ended, and behind a prompt it would then cancel the prompt's own turn
   instead. A `model` or `effort` sent meanwhile likewise applies to the running
   turn's next request.
+- **An `ask` waits on nothing and nothing waits on it.** A fork runs beside the
+  turn and can take over a minute (measured at 109 seconds for a long answer on
+  2.1.289), so it starts the moment its poll returns and acks whenever it
+  answers, outside the order the other commands keep. Several run at once.
+- **The question goes behind a preamble.** It says the question is a side one,
+  that the answer stays out of the conversation, and that tools are unavailable.
+  Without it, a fork made mid-turn reaches for a tool, is refused, and answers
+  in a second request: twice the latency and the uncached tokens (measured on
+  2.1.289).
+- **An answer is cut at 16,000 UTF-16 units**, with `\n[truncated]` after it,
+  which keeps the ack under lich's 64 KiB body limit. A fork that does not
+  answer acks `ok: false` with its reason: `nothing-to-fork`,
+  `api-error <status> <kind>`, `empty-reply` or `aborted`.
 - **Every other ack is awaited before the next command.** That is the
   contract's rule for an `abort`: lich ends the turn it has open when the ack
   lands, so a late one would end the turn the next `prompt` opened. An ack that
@@ -114,3 +130,12 @@ the trust prompt is answered, the module after.
 - **`/model` and `/effort` are refused by lich, not by the mod.** Run through a
   mod, Claude Code saves what they set as the default for every new session;
   the `model` and `effort` commands are the per-session route.
+- **A fork sees the conversation as the session's last request sent it.** A
+  reply being written, or a tool call running, when the question lands is not
+  in it. Measured on 2.1.289.
+- **A fork cannot be cancelled, and survives an Esc on the turn.** It takes no
+  signal; measured on 2.1.289, it answered in full after the turn it ran beside
+  was interrupted. A module reload is what kills one, and then nothing is acked:
+  lich's wait runs out.
+- **A fork's tokens are not in the transcript**, so nothing that reads cost
+  from it counts an `ask`.

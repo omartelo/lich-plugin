@@ -21,7 +21,9 @@ On **Claude Code** it carries the other direction too, from lich to the session:
 a mod, a module Claude Code runs in its own process, takes the commands given
 with `lich control` or an agent's `control_session` tool (start a turn with a
 prompt, stop the running turn, override the model or the effort, run a slash
-command) and reports how each one went. It needs Claude Code 2.1.280 or later
+command), answers a side question asked with `lich ask` or `ask_session` from a
+fork of the session's conversation without stopping its turn, and reports how
+each one went. It needs Claude Code 2.1.280 or later
 with mods turned on; an older one keeps every report above, and `lich control`
 refuses its session, naming what to fix.
 [docs/mod-control.md](docs/mod-control.md) has what it does and which releases

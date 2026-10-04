@@ -122,6 +122,8 @@ export const REJECT_RULES = {
     'missing kind': (b) => !('kind' in b),
     'unknown kind': (b) => 'kind' in b && !MOD_KINDS.has(b.kind),
     'ok is not a bool': (b) => 'ok' in b && typeof b.ok !== 'boolean',
+    'answer on another kind': (b) => 'answer' in b && b.kind !== 'ask',
+    'answer on a failed ask': (b) => 'answer' in b && b.kind === 'ask' && b.ok !== true,
     'malformed json': (b, raw) => !isJsonObject(raw),
   },
 }
