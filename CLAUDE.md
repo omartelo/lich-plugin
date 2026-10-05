@@ -17,10 +17,11 @@ hooks/crush-hooks.json            # hook registration, Crush (hand-merged into c
 hooks/                            # hook scripts (all four run them; only how they are addressed differs)
 hooks/detail.jq                   # what a tool call acts on, shared by two of those scripts
 hooks/win-run.cmd                 # runs one of those scripts on Windows (Codex)
-hooks/lich.js                     # the one module hooks/hooks.json names under `modules`: registers the three mods below
+hooks/lich.js                     # the one module hooks/hooks.json names under `modules`: registers the four mods below
 hooks/mod-control.js              # Claude Code mod: lich drives the session
 hooks/agent-cards.js              # Claude Code mod: a general-purpose subagent runs as a lich session
 hooks/mod-usage.js                # Claude Code mod: the session reports its own context, rate limits and cost
+hooks/edit-guard.js               # Claude Code mod: an edit says which other lich session edited the file
 opencode/lich.js                  # opencode client: a module, not a command
 omp/lich.js                       # omp client: a module, not a command
 docs/                             # lich ⇄ plugin communication contracts
@@ -59,6 +60,7 @@ Contracts are **canonical in the lich repository** (`docs/hooks/` there); this p
 - [docs/mod-control.md](docs/mod-control.md): lich drives a Claude Code session (prompt, abort, model, effort, command) and asks it side questions (ask) through a mod that long-polls for commands and acks each one; Claude Code only, the other harnesses have no mod system
 - [docs/agent-cards.md](docs/agent-cards.md): a general-purpose subagent Claude Code starts runs as a lich session, through the `lich open` CLI rather than an HTTP contract; Claude Code only
 - [docs/mod-usage.md](docs/mod-usage.md): a Claude Code session reports the context window, rate limits and cost it measured itself, through a mod hooking `session.measure`; Claude Code only
+- [docs/edit-guard.md](docs/edit-guard.md): an edit to a file another lich session edited in the last minutes carries a note naming it, through markers in the checkout's git dir rather than an HTTP contract; Claude Code only
 - [docs/providers.md](docs/providers.md) — the per-harness map, including what installing on omp takes and what it cannot report
 
 Each doc carries the event mapping for **every** provider, one column each — a contract is implemented once and registered per harness. [docs/providers.md](docs/providers.md) is the map: which file each harness reads, where the event vocabularies differ, and what adding another provider takes. A harness that cannot close a state does not get that report registered: an unendable `busy` is worse on a card than a card with no indicator.
@@ -93,6 +95,9 @@ Claude Code mod, handing it a fake `$` and asserting its acks against the
 mod-control fixtures and its polls against the commands lich sends;
 [tests/mod-usage.test.mjs](tests/mod-usage.test.mjs) does the same for its
 usage reports against the mod-usage fixtures.
+[tests/edit-guard.test.mjs](tests/edit-guard.test.mjs) hands the edit guard a
+fake `$` with an in-memory git dir and asserts the markers it leaves and the
+note another session's marker adds.
 [tests/agent-cards.test.mjs](tests/agent-cards.test.mjs) hands the agent-cards
 mod the same kind of fake `$` and asserts the `lich open` argv
 it runs, the Agent result it answers each outcome with, and that a call it does
@@ -102,7 +107,8 @@ stub, shared so every client answers to the same lines. Node only, no
 dependencies.
 [tests/mod-control.engine.test.ts](tests/mod-control.engine.test.ts) and
 [tests/agent-cards.engine.test.ts](tests/agent-cards.engine.test.ts) and
-[tests/mod-usage.engine.test.ts](tests/mod-usage.engine.test.ts) run the
+[tests/mod-usage.engine.test.ts](tests/mod-usage.engine.test.ts) and
+[tests/edit-guard.engine.test.ts](tests/edit-guard.engine.test.ts) run the
 mods under Claude Code's own engine (`claude plugin test .`); they need a
 `claude` binary, so CI does not run them. The kit does not check a `tool.call`
 result against the tool's output schema (measured on 2.1.289), so whether
