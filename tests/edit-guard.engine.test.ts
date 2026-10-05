@@ -1,6 +1,6 @@
 // The edit guard under Claude Code's own engine: `claude plugin test .` loads
 // hooks/lich.js from hooks/hooks.json, which registers hooks/edit-guard.js.
-// The test's hooks stand for git (`process.run`), the checkout's git dir
+// The test's hooks stand for git and the lich CLI (`process.run`), the checkout's git dir
 // (`fs.*`) and the Edit tool itself (the `tool.call` beneath the mod).
 //
 // tests/edit-guard.test.mjs is the suite CI runs; this one proves the module
@@ -13,17 +13,20 @@ import type { On } from 'claude-code'
 const GIT_DIR = '/w/.git'
 const FILE = '/w/src/app.js'
 const T0 = Date.parse('2026-10-05T12:00:00.000Z')
+const LICH = '/usr/bin/lich'
+const B_ID = '7c0e93aa-0b1d-4f52-a8e1-2d9f6c4b3e10'
 const EDIT = { tool: 'Edit', tool_use_id: 'toolu_1', file_path: FILE, old_string: 'a', new_string: 'b' } as const
 
 /** A checkout another lich session (`lich-a`) edited one minute before T0. */
-function world(on: On, session: string | undefined) {
+function world(on: On, session: string | undefined, roster?: object[]) {
   const disk = new Map<string, string>()
   const edited: string[] = []
-  mock.env(on, session ? { LICH_SESSION_ID: session } : {})
+  mock.env(on, session ? { LICH_SESSION_ID: session, ...(roster ? { LICH_BIN: LICH } : {}) } : {})
   mock.clock(on, { now: T0 })
-  on('process.run', async () => ({
-    value: { exitCode: 0, stdout: `${GIT_DIR}\n`, stderr: '', isStdoutTruncated: false, isStderrTruncated: false },
-  }))
+  on('process.run', async (_$, e) => {
+    const stdout = e.argv[0] === LICH ? `${JSON.stringify(roster)}\n` : `${GIT_DIR}\n`
+    return { value: { exitCode: 0, stdout, stderr: '', isStdoutTruncated: false, isStderrTruncated: false } }
+  })
   on('fs.exists', async (_$, e) => ({ value: disk.has(e.path) }))
   on('fs.read', async (_$, e) => ({ value: disk.get(e.path) ?? '' }))
   on('fs.write', async (_$, e) => {
@@ -53,6 +56,17 @@ test('an edit to a file another lich session just edited goes ahead with a note'
   expect(ran.context?.[0]).toContain('lich session lich-b')
   expect(ran.context?.[0]).toContain('send_to_session')
   expect(JSON.parse(markerOf(w.disk)![1]).session).toBe('lich-a')
+})
+
+test('the note names the other session by the label on its card', async ($, on) => {
+  const w = world(on, 'lich-a', [{ label: 'quiet-comet', name: 'repo-7c0e', project: 'repo', kind: 'claude', state: 'busy' }])
+  await $.tool.call(EDIT)
+  const [path] = markerOf(w.disk) ?? []
+  w.disk.set(path!, JSON.stringify({ path: FILE, session: B_ID, at: T0 - 60_000 }))
+
+  const ran = await $.tool.call(EDIT)
+
+  expect(ran.context?.[0]).toContain('lich session "quiet-comet" at')
 })
 
 test('outside lich the edit runs untouched and nothing is recorded', async ($, on) => {

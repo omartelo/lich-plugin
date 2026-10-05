@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **The edit guard names the other session by its card's label.** A note that a
+  file was also edited by another lich session read that session's id, which
+  meant nothing to the model or to you; it now reads the label on its card, the
+  name `lich send` reaches it by, and falls back to the id only when lich cannot
+  say which session it was.
+
 ## [0.16.0] - 2026-10-05
 
 ### Changed

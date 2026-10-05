@@ -16,10 +16,16 @@
 const RECENT_MS = 10 * 60_000
 const MARKER_DIR = "lich-edits"
 const GIT_TIMEOUT_MS = 5_000
+// The edit's result waits on it, so it is cut well short of the git timeout.
+const LICH_TIMEOUT_MS = 2_000
+// lich's roster name for a session ends in this many letters and digits of its
+// id (RosterName in lich's internal/relay/rostername.go).
+const ROSTER_ID_CHARS = 4
 
 /**
  * @typedef {import('claude-code').EngineInterface} Engine
  * @typedef {{ path: string, session: string, at: number }} Marker
+ * @typedef {{ label: string, name: string }} Peer
  */
 
 /** FNV-1a, 32 bits: a file name for a path; the marker keeps the path itself. */
@@ -71,17 +77,65 @@ async function readMarker($, markerPath, path) {
  * @param {Marker | undefined} marker
  * @param {string} session
  * @param {number} now
+ * @returns {marker is Marker}
  */
-function noteFor(marker, session, now) {
-  if (!marker || marker.session === session || now - marker.at > RECENT_MS) return undefined
+function isNews(marker, session, now) {
+  return !!marker && marker.session !== session && now - marker.at <= RECENT_MS
+}
+
+/**
+ * The label on the card of the session `id`, or undefined when lich cannot say.
+ *
+ * `lich sessions --json` lists no ids, so the session is found by its roster
+ * name, which lich derives from the id. A session renamed with `/rename` has a
+ * name nothing can derive, and goes unnamed.
+ *
+ * @param {Engine} $
+ * @param {string} id
+ */
+async function labelOf($, id) {
+  const lich = await $.env.get("LICH_BIN")
+  if (!lich) return undefined
+  const { exitCode, stdout } = await $.process.run([lich, "sessions", "--json"], { timeoutMs: LICH_TIMEOUT_MS })
+  if (exitCode !== 0) return undefined
+  /** @type {Peer[]} */
+  const peers = JSON.parse(stdout)
+  const tail = `-${id.replace(/[^0-9A-Za-z]/g, "").slice(0, ROSTER_ID_CHARS)}`
+  const matches = peers.filter((peer) => peer.name.endsWith(tail))
+  return matches.length === 1 ? matches[0].label : undefined
+}
+
+/**
+ * @param {Marker} marker
+ * @param {string} who
+ * @param {number} now
+ */
+function noteFor(marker, who, now) {
   const minutes = Math.round((now - marker.at) / 60_000)
   const ago = minutes === 0 ? "under a minute ago" : `${minutes} min ago`
   return (
-    `${marker.path} was also edited by the lich session ${marker.session} at ` +
+    `${marker.path} was also edited by the lich session ${who} at ` +
     `${new Date(marker.at).toISOString()} (${ago}), which shares this checkout and may still be ` +
     `working on it. Re-read the file before building on it, and coordinate with that session through ` +
     `send_to_session or lich send rather than undoing its change.`
   )
+}
+
+/**
+ * The note for `marker`, naming its session by label when lich can say which.
+ *
+ * @param {Engine} $
+ * @param {Marker} marker
+ * @param {number} now
+ */
+async function noteNaming($, marker, now) {
+  let label
+  try {
+    label = await labelOf($, marker.session)
+  } catch (error) {
+    logFailure($, error)
+  }
+  return noteFor(marker, label ? `"${label}"` : marker.session, now)
 }
 
 /** @param {Engine} $ @param {unknown} error */
@@ -115,7 +169,7 @@ async function guard($, e, next) {
   let note
   try {
     const now = await $.clock.now()
-    note = noteFor(previous, session, now)
+    if (isNews(previous, session, now)) note = await noteNaming($, previous, now)
     if (!result.isError) await $.fs.write(markerPath, JSON.stringify({ path, session, at: now }))
   } catch (error) {
     logFailure($, error)

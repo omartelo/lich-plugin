@@ -3,7 +3,8 @@
 //
 // Like the other mod suites it imports the module and hands it a fake engine:
 // `$.fs` is an in-memory map, `$.process.run` answers `git rev-parse` for one
-// repository, `$.clock.now` is a number the test moves.
+// repository and `lich sessions --json` with the roster a test hands it,
+// `$.clock.now` is a number the test moves.
 //
 // Run: node --test tests/
 
@@ -20,6 +21,12 @@ const MINUTE = 60_000
 const T0 = Date.parse('2026-10-05T12:00:00.000Z')
 
 const EDITED = { ref: 1, result: { filePath: FILE }, text: 'The file has been updated successfully.' }
+const LICH = '/usr/bin/lich'
+const A_ID = '1fd224be-45cd-4322-9cb9-157b15cdd3cc'
+const B_ID = '7c0e93aa-0b1d-4f52-a8e1-2d9f6c4b3e10'
+const A_PEER = { label: 'quiet-comet', name: 'repo-1fd2', project: 'repo', kind: 'claude', state: 'busy' }
+const OTHER_PEER = { label: 'docs', name: 'repo-9f8e', project: 'repo', kind: 'codex', state: 'done' }
+
 const STALE = {
   ref: 2,
   isError: true,
@@ -31,20 +38,35 @@ const STALE = {
  * One Claude Code session with the guard loaded. Sessions built over the same
  * `disk` share a checkout. `beneath` answers the call as core would.
  */
-function session({ id, disk = new Map(), clock = { now: T0 }, beneath = async () => EDITED, failWrites = false }) {
+function session({
+  id,
+  disk = new Map(),
+  clock = { now: T0 },
+  beneath = async () => EDITED,
+  failWrites = false,
+  lich,
+  roster = async () => ({ exitCode: 0, stdout: '[]\n', stderr: '' }),
+}) {
   const hooks = new Map()
   register((event, matcher, hook) => {
     assert.equal(event, 'tool.call')
     hooks.set(matcher.tool, hook)
   })
   const logs = []
-  const env = id === undefined ? {} : { LICH_SESSION_ID: id }
+  const env = id === undefined ? {} : { LICH_SESSION_ID: id, LICH_BIN: lich }
+  const lichRuns = []
   const $ = {
     env: { get: async (name) => env[name] },
     clock: { now: async () => clock.now },
     ui: { log: (text) => logs.push(text) },
     process: {
-      run: async (argv) => {
+      run: async (argv, options) => {
+        if (argv[0] === LICH) {
+          assert.deepEqual(argv, [LICH, 'sessions', '--json'])
+          assert.ok(options?.timeoutMs > 0, 'the lich CLI runs without a timeout')
+          lichRuns.push(argv)
+          return roster()
+        }
         assert.deepEqual(argv.slice(0, 1), ['git'])
         const dir = argv[2]
         const inside = dir === REPO || dir.startsWith(`${REPO}/`)
@@ -75,6 +97,7 @@ function session({ id, disk = new Map(), clock = { now: T0 }, beneath = async ()
     clock,
     logs,
     hooks,
+    lichRuns,
     edit: (path = FILE) => call('Edit', { file_path: path, old_string: 'a', new_string: 'b' }),
     write: (path = FILE) => call('Write', { file_path: path, content: 'x' }),
     notebook: (path) => call('NotebookEdit', { notebook_path: path, new_source: 'x = 1' }),
@@ -219,6 +242,66 @@ test('an unreadable marker is logged and the edit result still returned', async 
   assert.equal(result.ref, EDITED.ref)
   assert.equal(result.context, undefined)
   assert.equal(b.logs.length, 1)
+})
+
+/** Session A edits, then session B edits the same file a minute later. */
+async function editedByAThenB(options) {
+  const disk = new Map()
+  const clock = { now: T0 }
+  await session({ id: A_ID, disk, clock }).edit()
+  clock.now = T0 + MINUTE
+  const b = session({ id: B_ID, disk, clock, lich: LICH, ...options })
+  return { b, result: await b.edit() }
+}
+
+test('the note names the other session by the label on its card', async () => {
+  const { b, result } = await editedByAThenB({
+    roster: async () => ({ exitCode: 0, stdout: `${JSON.stringify([OTHER_PEER, A_PEER])}\n`, stderr: '' }),
+  })
+
+  assert.match(result.context[0], /lich session "quiet-comet" at/)
+  assert.doesNotMatch(result.context[0], new RegExp(A_ID))
+  assert.equal(b.lichRuns.length, 1)
+})
+
+test('the note falls back to the session id when the label cannot be learned', async (t) => {
+  const answers = {
+    'the session is gone': async () => ({ exitCode: 0, stdout: `${JSON.stringify([OTHER_PEER])}\n`, stderr: '' }),
+    'the CLI fails': async () => ({ exitCode: 1, stdout: '', stderr: 'lich: no running lich' }),
+    'the CLI prints no JSON': async () => ({ exitCode: 0, stdout: 'No other live sessions.\n', stderr: '' }),
+    'the CLI cannot run': async () => {
+      throw new Error('timed out')
+    },
+    'two sessions match the id': async () => ({
+      exitCode: 0,
+      stdout: `${JSON.stringify([A_PEER, { ...A_PEER, label: 'twin', name: 'other-1fd2' }])}\n`,
+      stderr: '',
+    }),
+  }
+  for (const [name, roster] of Object.entries(answers)) {
+    await t.test(name, async () => {
+      const { result } = await editedByAThenB({ roster })
+
+      assert.equal(result.ref, EDITED.ref, 'the edit went ahead')
+      assert.match(result.context[0], new RegExp(`lich session ${A_ID} at`))
+    })
+  }
+})
+
+test('without LICH_BIN the note names the session id', async () => {
+  const { b, result } = await editedByAThenB({ lich: undefined })
+
+  assert.match(result.context[0], new RegExp(`lich session ${A_ID} at`))
+  assert.equal(b.lichRuns.length, 0)
+})
+
+test('the lich CLI runs only when a note is added', async () => {
+  const a = session({ id: A_ID, lich: LICH })
+
+  await a.edit()
+  await a.edit()
+
+  assert.equal(a.lichRuns.length, 0)
 })
 
 test('the plugin entry module registers the guard on every file-editing tool', () => {
