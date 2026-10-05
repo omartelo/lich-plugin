@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **A lich worker answers the way a native subagent does.** The worker's last
+  message is its report, so it is handed the task alone, with no ticket or reply
+  instructions; a worker that handed work to the background reports once that
+  work is done. Needs a lich that takes the answer (the mod-answer contract).
+
 ## [0.16.0] - 2026-10-05
 
 ### Changed

@@ -86,7 +86,10 @@ for an isolated call.
   the model reads after it: where the worker is (and, without isolation, that
   it edits this same checkout), that its report arrives on its own, and that
   `send_to_session` or `lich send` reaches it where `SendMessage` cannot.
-- **Without isolation the worker shares the checkout**, as a native subagent
+- **The worker answers by itself.** Its own copy of this plugin posts the final
+  message of a turn that ends with nothing left running in the background as
+  its answer ([mod-answer](mod-answer.md)), so lich hands it the task with no
+  ticket and no reply instructions, as a native subagent gets its prompt.- **Without isolation the worker shares the checkout**, as a native subagent
   does: both edit the same files, and nothing keeps their changes apart. With
   `isolation: "worktree"` it gets a branch and worktree of its own.
 - **It falls back to the native agent only before lich has the task.** Claude
@@ -127,7 +130,8 @@ for an isolated call.
   and is still counting: a worker in this checkout is closed with
   `$LICH_BIN close <name>`, having nothing of its own to keep, and an isolated
   one has its turn stopped with `$LICH_BIN control <name> abort`, its card and
-  worktree left for the user. Either answers TaskStop's own result shape; a
+  worktree left for the user. A closed worker's task just ends: lich sends
+  the asking session no note about it. Either answers TaskStop's own result shape; a
   command lich refused denies the call with lich's reason. Any other task id
   goes to Claude Code.
 - **The worker runs with the permissions lich opens any Claude Code session
