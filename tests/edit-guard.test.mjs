@@ -24,8 +24,8 @@ const EDITED = { ref: 1, result: { filePath: FILE }, text: 'The file has been up
 const LICH = '/usr/bin/lich'
 const A_ID = '1fd224be-45cd-4322-9cb9-157b15cdd3cc'
 const B_ID = '7c0e93aa-0b1d-4f52-a8e1-2d9f6c4b3e10'
-const A_PEER = { label: 'quiet-comet', name: 'repo-1fd2', project: 'repo', kind: 'claude', state: 'busy' }
-const OTHER_PEER = { label: 'docs', name: 'repo-9f8e', project: 'repo', kind: 'codex', state: 'done' }
+const A_PEER = { label: 'quiet-comet', name: 'repo-1fd2', project: 'repo', kind: 'claude', state: 'busy', id: A_ID }
+const OTHER_PEER = { label: 'docs', name: 'repo-9f8e', project: 'repo', kind: 'codex', state: 'done', id: B_ID }
 
 const STALE = {
   ref: 2,
@@ -272,11 +272,10 @@ test('the note falls back to the session id when the label cannot be learned', a
     'the CLI cannot run': async () => {
       throw new Error('timed out')
     },
-    'two sessions match the id': async () => ({
-      exitCode: 0,
-      stdout: `${JSON.stringify([A_PEER, { ...A_PEER, label: 'twin', name: 'other-1fd2' }])}\n`,
-      stderr: '',
-    }),
+    'an older lich lists no ids': async () => {
+      const { id, ...withoutId } = A_PEER
+      return { exitCode: 0, stdout: `${JSON.stringify([withoutId])}\n`, stderr: '' }
+    },
   }
   for (const [name, roster] of Object.entries(answers)) {
     await t.test(name, async () => {

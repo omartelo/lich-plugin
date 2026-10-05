@@ -18,14 +18,11 @@ const MARKER_DIR = "lich-edits"
 const GIT_TIMEOUT_MS = 5_000
 // The edit's result waits on it, so it is cut well short of the git timeout.
 const LICH_TIMEOUT_MS = 2_000
-// lich's roster name for a session ends in this many letters and digits of its
-// id (RosterName in lich's internal/relay/rostername.go).
-const ROSTER_ID_CHARS = 4
 
 /**
  * @typedef {import('claude-code').EngineInterface} Engine
  * @typedef {{ path: string, session: string, at: number }} Marker
- * @typedef {{ label: string, name: string }} Peer
+ * @typedef {{ label: string, id?: string }} Peer
  */
 
 /** FNV-1a, 32 bits: a file name for a path; the marker keeps the path itself. */
@@ -86,9 +83,8 @@ function isNews(marker, session, now) {
 /**
  * The label on the card of the session `id`, or undefined when lich cannot say.
  *
- * `lich sessions --json` lists no ids, so the session is found by its roster
- * name, which lich derives from the id. A session renamed with `/rename` has a
- * name nothing can derive, and goes unnamed.
+ * A lich older than the `id` field in `lich sessions --json` lists none, and
+ * the session goes unnamed there.
  *
  * @param {Engine} $
  * @param {string} id
@@ -100,9 +96,7 @@ async function labelOf($, id) {
   if (exitCode !== 0) return undefined
   /** @type {Peer[]} */
   const peers = JSON.parse(stdout)
-  const tail = `-${id.replace(/[^0-9A-Za-z]/g, "").slice(0, ROSTER_ID_CHARS)}`
-  const matches = peers.filter((peer) => peer.name.endsWith(tail))
-  return matches.length === 1 ? matches[0].label : undefined
+  return peers.find((peer) => peer.id === id)?.label
 }
 
 /**

@@ -57,11 +57,9 @@ The line names the session by the label on its card, the name the user and
 `lich send` know it by. lich puts no label in a session's environment and no
 command tells a session its own, so the marker keeps the id and the label is
 looked up when a line is about to be added, never on an edit that gets none:
-`$LICH_BIN sessions --json`, two seconds at most. That roster carries no ids
-either, only each session's roster name, which lich derives from the id (the
-folder name, a dash, the first four letters and digits of the id); the guard
-takes the one session whose name ends that way. When the CLI is missing or
-fails, the session is gone, or no single name matches, the line names the id
+`$LICH_BIN sessions --json`, two seconds at most, matched on its `id` field
+(lich 0.60.0 and later). When the CLI is missing or fails, the session is
+gone, or the lich is older and lists no ids, the line names the id
 instead.
 
 Ten minutes spans the turn in which the other session made its edit; past that
@@ -76,10 +74,8 @@ guard were not there.
 - It speaks only after the edit. The `context` of a `tool.call` result is read
   with the tool's result; there is no slot to warn before the call runs. The
   refusals above are what keep the edit safe.
-- The label is found through a derivation, not a contract: `lich sessions
-  --json` lists no session ids. A Claude Code session renamed with `/rename`
-  answers to a name nothing can derive, and is named by id. An `id` field in
-  that roster, which lich would have to add, would close this.
+- A lich older than 0.60.0 lists no session ids in `lich sessions --json`, so
+  there the line names the session by id.
 - One marker per file, the last editor's: two other sessions editing the same
   file leave only the newer one's name.
 - A file in a folder that does not exist yet is outside any repository to git,

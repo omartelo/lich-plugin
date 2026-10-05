@@ -13,7 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   file was also edited by another lich session read that session's id, which
   meant nothing to the model or to you; it now reads the label on its card, the
   name `lich send` reaches it by, and falls back to the id only when lich cannot
-  say which session it was.
+  say which session it was. Needs lich 0.60.0, whose `lich sessions --json` lists
+  session ids.
 
 ## [0.16.0] - 2026-10-05
 

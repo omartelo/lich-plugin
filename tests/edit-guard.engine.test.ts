@@ -59,7 +59,7 @@ test('an edit to a file another lich session just edited goes ahead with a note'
 })
 
 test('the note names the other session by the label on its card', async ($, on) => {
-  const w = world(on, 'lich-a', [{ label: 'quiet-comet', name: 'repo-7c0e', project: 'repo', kind: 'claude', state: 'busy' }])
+  const w = world(on, 'lich-a', [{ label: 'quiet-comet', name: 'repo-7c0e', project: 'repo', kind: 'claude', state: 'busy', id: '7c0e93aa-0b1d-4f52-a8e1-2d9f6c4b3e10' }])
   await $.tool.call(EDIT)
   const [path] = markerOf(w.disk) ?? []
   w.disk.set(path!, JSON.stringify({ path: FILE, session: B_ID, at: T0 - 60_000 }))
