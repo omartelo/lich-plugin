@@ -163,7 +163,7 @@ test('an ask from lich is answered by a fork and the answer rides the ack', asyn
   await $.session.start({ cwd: '/w', surface: 'terminal', isInteractive: true })
   await clock.settle()
   expect(asked.length).toBe(1)
-  expect(asked[0].endsWith('Question: what are you on?')).toBe(true)
+  expect(asked[0]?.endsWith('Question: what are you on?')).toBe(true)
   expect(world.acks).toEqual([
     { session_id: 'lich-1', id: 'm9', kind: 'ask', ok: true, answer: 'Fixing the login test.' },
   ])
