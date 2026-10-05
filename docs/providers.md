@@ -24,11 +24,12 @@ This repository is one plugin, packaged for each harness it supports:
 | `hooks/crush-hooks.json`        | Crush       | hook registration, merged by hand |
 | `hooks/*.sh`                    | the four    | the reports themselves        |
 | `hooks/win-run.cmd`             | Codex       | runs a script on Windows      |
-| `hooks/lich.js`                 | Claude Code | the one module `hooks/hooks.json` names under `modules`; registers the four below |
+| `hooks/lich.js`                 | Claude Code | the one module `hooks/hooks.json` names under `modules`; registers the five below |
 | `hooks/mod-control.js`          | Claude Code | the mod-control client, a mod |
 | `hooks/agent-cards.js`          | Claude Code | runs a general-purpose subagent as a lich session, a mod |
 | `hooks/mod-usage.js`            | Claude Code | the mod-usage client, a mod |
 | `hooks/edit-guard.js`           | Claude Code | names the other lich session that edited a file, a mod |
+| `hooks/worker-answer.js`        | Claude Code | the mod-answer client: a worker's last message answers its task, a mod |
 | `opencode/lich.js`              | opencode    | the whole client, as a module |
 | `omp/lich.js`                   | omp         | the whole client, as a module |
 | `skills/`                       | all         | skills, same layout           |

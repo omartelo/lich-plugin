@@ -39,6 +39,7 @@ export const FIXTURE_OF = {
   '/session-touched': 'session-touched',
   '/mod/acks': 'mod-control',
   '/mod/usage': 'mod-usage',
+  '/mod/answer': 'mod-answer',
 }
 
 const readFixture = (name) =>
@@ -131,6 +132,13 @@ export const REJECT_RULES = {
     'reset that is not a timestamp': (b) =>
       (b.rate_limits ?? []).some((l) => 'resets_at' in l && Number.isNaN(Date.parse(l.resets_at))),
     'negative cost': (b) => b.cost_usd < 0,
+    'malformed json': (b, raw) => !isJsonObject(raw),
+  },
+  '/mod/answer': {
+    'missing session_id': (b) => !('session_id' in b),
+    'missing text': (b) => !('text' in b),
+    'blank text': (b) => typeof b.text === 'string' && b.text.trim() === '',
+    'text is not a string': (b) => 'text' in b && typeof b.text !== 'string',
     'malformed json': (b, raw) => !isJsonObject(raw),
   },
   '/mod/acks': {

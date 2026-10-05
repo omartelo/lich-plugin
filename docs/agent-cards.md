@@ -86,7 +86,10 @@ for an isolated call.
   the model reads after it: where the worker is (and, without isolation, that
   it edits this same checkout), that its report arrives on its own, and that
   `send_to_session` or `lich send` reaches it where `SendMessage` cannot.
-- **Without isolation the worker shares the checkout**, as a native subagent
+- **The worker answers by itself.** Its own copy of this plugin posts the final
+  message of a turn that ends with nothing left running in the background as
+  its answer ([mod-answer](mod-answer.md)), so lich hands it the task with no
+  ticket and no reply instructions, as a native subagent gets its prompt.- **Without isolation the worker shares the checkout**, as a native subagent
   does: both edit the same files, and nothing keeps their changes apart. With
   `isolation: "worktree"` it gets a branch and worktree of its own.
 - **It falls back to the native agent only before lich has the task.** Claude
@@ -111,11 +114,12 @@ for an isolated call.
   "N agents" hint counts background agents: `N workers` under the prompt
   (`$.ui.status`), which Claude Code shows after the plugin's name as
   `lich: N workers`, cleared at none. Every 5 seconds while any runs, the mod reads
-  `$LICH_BIN sessions --json`; a worker lich lists with a turn `done`, or no
-  longer lists at all, is finished. lich closes a worker in this checkout once
-  it reported and its turn ended (`lich open --subagent` in lich's docs/cli.md),
-  which is what takes it off the list. A list lich could not give leaves the
-  count as it was until the next read.
+  `$LICH_BIN sessions --json`. A worker in this checkout is finished once lich
+  no longer lists it: lich closes it after it reported and its turn ended
+  (`lich open --subagent` in lich's docs/cli.md), while a turn it ended with a
+  command left in the background is done without being finished. An isolated
+  worker keeps its card after it reported, so a turn lich lists `done` ends it.
+  A list lich could not give leaves the count as it was until the next read.
 - **Esc does not stop a worker, and TaskStop does**, as with a native background
   agent. Measured on Claude Code 2.1.289: Esc in the asking session interrupts
   its own turn and leaves its background agents running (a second Esc at the
@@ -127,7 +131,8 @@ for an isolated call.
   and is still counting: a worker in this checkout is closed with
   `$LICH_BIN close <name>`, having nothing of its own to keep, and an isolated
   one has its turn stopped with `$LICH_BIN control <name> abort`, its card and
-  worktree left for the user. Either answers TaskStop's own result shape; a
+  worktree left for the user. A closed worker's task just ends: lich sends
+  the asking session no note about it. Either answers TaskStop's own result shape; a
   command lich refused denies the call with lich's reason. Any other task id
   goes to Claude Code.
 - **The worker runs with the permissions lich opens any Claude Code session
