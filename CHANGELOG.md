@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **A lich worker that pauses on a background command is no longer reported as
+  finished.** A worker whose turn ended before it reported, usually waiting on a
+  command it left running, now comes back as a backgrounded agent, and its
+  report still arrives as a [lich] note.
+
 ## [0.15.0] - 2026-10-05
 
 ### Added
