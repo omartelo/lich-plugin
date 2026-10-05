@@ -54,7 +54,7 @@ Nothing runs after that: the delivery `lich open` printed decides the answer.
 
 | delivery                      | the Agent call answers                                              |
 |-------------------------------|---------------------------------------------------------------------|
-| `pending`                     | `async_launched` at once, plus a note on how the report comes back  |
+| `pending`                     | `async_launched` at once, plus a note on how the report comes back; the worker is counted in the status line |
 | `answered`                    | `completed`: the report, then the checkout (and branch) it is on    |
 | `unanswered`                  | `completed`: the worker ended its turn without reporting, and where to look |
 | `unread`, `undelivered`       | denied: the task never reached the card                             |
@@ -107,6 +107,29 @@ for an isolated call.
   committed.** Uncommitted
   changes are not in the worker's checkout. On a detached HEAD, or when git
   cannot answer, the base is left to lich, which uses the project's current branch.
+- **Claude Code's status line counts the workers still running**, as its own
+  "N agents" hint counts background agents: `N workers` under the prompt
+  (`$.ui.status`), which Claude Code shows after the plugin's name as
+  `lich: N workers`, cleared at none. Every 5 seconds while any runs, the mod reads
+  `$LICH_BIN sessions --json`; a worker lich lists with a turn `done`, or no
+  longer lists at all, is finished. lich closes a worker in this checkout once
+  it reported and its turn ended (`lich open --subagent` in lich's docs/cli.md),
+  which is what takes it off the list. A list lich could not give leaves the
+  count as it was until the next read.
+- **Esc does not stop a worker, and TaskStop does**, as with a native background
+  agent. Measured on Claude Code 2.1.289: Esc in the asking session interrupts
+  its own turn and leaves its background agents running (a second Esc at the
+  idle prompt too; Claude Code stops them all with its own `ctrl+x ctrl+k`,
+  pressed twice), and the model stops one with `TaskStop({ task_id })`, the
+  `agentId` the Agent call answered, which answers
+  `{ message, task_id, task_type: "local_agent", command }`. The mod takes a
+  TaskStop whose `task_id` (or the deprecated `shell_id`) is a worker it opened
+  and is still counting: a worker in this checkout is closed with
+  `$LICH_BIN close <name>`, having nothing of its own to keep, and an isolated
+  one has its turn stopped with `$LICH_BIN control <name> abort`, its card and
+  worktree left for the user. Either answers TaskStop's own result shape; a
+  command lich refused denies the call with lich's reason. Any other task id
+  goes to Claude Code.
 - **The worker runs with the permissions lich opens any Claude Code session
   with**, not the asking session's mode, so a permission prompt waits on its
   card, and lich tells the asking session when the worker is waiting on one.
@@ -125,8 +148,14 @@ for an isolated call.
 - **The result reports no tokens and no tool uses.** Both are counted in the
   worker's own session.
 - **Claude Code does not track the worker as a task.** It is not in the
-  background-task list, Claude Code sends no completion notification for it,
-  and stopping it is done on its card, not from Claude Code.
+  background-task list and Claude Code sends no completion notification for it;
+  the status line and TaskStop above are the mod's, not Claude Code's. So
+  `ctrl+x ctrl+k` does not stop a worker, and a worker is counted only while
+  this module remembers it: a reload forgets the count, and TaskStop then goes
+  to Claude Code, which does not know the id.
+- **The status line lags a worker's end by up to 5 seconds**, the period of the
+  `lich sessions --json` read, and matches a worker by the roster name `lich
+  open` printed, so a worker renamed in Claude Code is read as finished.
 - **Needs a lich that takes `lich open --subagent`.** An older one refuses the
   flag, and every subagent runs inside Claude Code with a toast saying why.
 - **A reload of the module mid-session forgets that the session is
