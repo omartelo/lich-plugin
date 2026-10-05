@@ -45,8 +45,13 @@ function worldWith(on: On, env: Record<string, string>, ...lich: ProcessRunResul
   const native: string[] = []
   const argvs: string[][] = []
   const toasts: string[] = []
+  const statuses: (string | undefined)[] = []
   mock.env(on, env)
-  mock.clock(on)
+  const clock = mock.clock(on)
+  on('ui.status', async (_$, e) => {
+    statuses.push(e.text)
+    return { value: undefined }
+  })
   on('session.start', async (_$, e) => ({ cwd: e.cwd }))
   on('process.run', async (_$, e) => {
     argvs.push([...e.argv])
@@ -63,7 +68,11 @@ function worldWith(on: On, env: Record<string, string>, ...lich: ProcessRunResul
     native.push(e.description)
     return { deny: 'the native agent ran' }
   })
-  return { native, argvs, toasts }
+  on('tool.call', { tool: 'TaskStop' }, async (_$, e) => {
+    native.push(`TaskStop ${e.task_id}`)
+    return { deny: 'the native TaskStop ran' }
+  })
+  return { native, argvs, toasts, statuses, clock }
 }
 
 test('a task lich took comes back at once as a backgrounded agent', async ($, on) => {
@@ -127,4 +136,36 @@ test('turned off in lich, every subagent stays native and lich is never run', as
   await $.tool.call(CALL)
   expect(w.native).toEqual(['Fix the auth flow'])
   expect(w.argvs).toEqual([])
+})
+
+test('a running worker shows in the status line until lich lists it done, and TaskStop closes one', async ($, on) => {
+  const pending = { ...OPENED, delivery: { ticket: 't1', target: BRANCH, status: 'pending', answer: '' } }
+  const peer = (name: string, state: string) => ({ label: name, name, project: 'lich', kind: 'claude', state })
+  const w = world(
+    on,
+    exited(2, pending),
+    exited(2, { ...pending, label: 'second', name: 'second-1a2b' }),
+    exited(0, [peer(OPENED.name, 'busy'), peer('second-1a2b', 'busy')]),
+    exited(0, ''),
+    exited(0, [peer(OPENED.name, 'done')]),
+  )
+  await $.session.start({ cwd: '/w', surface: 'terminal', isInteractive: true })
+  await $.tool.call(CALL)
+  await $.tool.call({ ...CALL, tool_use_id: 'toolu_second' })
+  expect(w.statuses).toEqual(['1 worker', '2 workers'])
+
+  await w.clock.advance(5000)
+  expect(w.argvs.at(-1)).toEqual(['/opt/lich/bin/lich', 'sessions', '--json'])
+  expect(w.statuses.at(-1)).toBe('2 workers')
+
+  const stopped = await $.tool.call({ tool: 'TaskStop', task_id: 'second-1a2b' })
+  expect(stopped.result).toEqual(expect.objectContaining({ task_id: 'second-1a2b', task_type: 'local_agent' }))
+  expect(w.argvs.at(-1)).toEqual(['/opt/lich/bin/lich', 'close', 'second-1a2b'])
+  expect(w.statuses.at(-1)).toBe('1 worker')
+
+  await w.clock.advance(5000)
+  expect(w.statuses.at(-1)).toBe(undefined)
+
+  await $.tool.call({ tool: 'TaskStop', task_id: 'a712043a56e1aafb1' })
+  expect(w.native).toEqual(['TaskStop a712043a56e1aafb1'])
 })

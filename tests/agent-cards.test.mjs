@@ -71,16 +71,25 @@ function load({ env = ENV, runs = [], times = [1000, 4000] } = {}) {
     const hook = rest.at(-1)
     const matcher = rest.length > 1 ? rest[0] : {}
     const matches = (e) => Object.entries(matcher).every(([field, value]) => e[field] === value)
-    hooks.set(event, ($, e, next) => (matches(e) ? hook($, e, next) : next(e)))
+    const below = hooks.get(event) ?? ((_$, e, next) => next(e))
+    hooks.set(event, ($, e, next) => (matches(e) ? hook($, e, next) : below($, e, next)))
   })
 
   const ran = []
   const toasts = []
+  const statuses = []
+  const timers = []
   const script = [...runs]
   const clock = [...times]
   const $ = {
     env: { get: async (name) => env[name] },
-    clock: { now: async () => clock.shift() },
+    clock: {
+      now: async () => clock.shift(),
+      after: (ms, fn) => {
+        timers.push({ ms, fn })
+        return { cancel: () => {} }
+      },
+    },
     process: {
       run: async (argv, init) => {
         ran.push({ argv, init })
@@ -89,12 +98,22 @@ function load({ env = ENV, runs = [], times = [1000, 4000] } = {}) {
         return answer(argv, init)
       },
     },
-    ui: { toast: (text) => toasts.push(text) },
+    ui: { toast: (text) => toasts.push(text), status: (text) => statuses.push(text) },
   }
 
   return {
     ran,
     toasts,
+    statuses,
+    timers,
+    /** Scripts what the next `$.process.run` calls answer. */
+    answer: (...more) => script.push(...more),
+    /** Fires the timers pending now, `runs` scripting what they run, and waits for them. */
+    async tick(...more) {
+      script.push(...more)
+      const due = timers.splice(0)
+      await Promise.all(due.map(({ fn }) => fn()))
+    },
     start: (isInteractive = true) =>
       hooks.get('session.start')($, { cwd: '/w', surface: isInteractive ? 'terminal' : null, isInteractive }, async (e) => e),
     /** Raises one Agent call; `passed` is what reached the native agent. */
@@ -453,4 +472,120 @@ test('a status this mod does not know is denied, never run natively', async () =
   assert.deepEqual(answer, { deny: `lich answered "mislaid" about "${SHARED.label}": open its card.` })
   const isolated = await delegate([onBranch('main'), exits(3, opened('mislaid'))], ISOLATED)
   assert.deepEqual(isolated.answer, { deny: `lich answered "mislaid" about "${BRANCH}", on branch ${BRANCH}: open its card.` })
+})
+
+// ---------------------------------------------------- workers in the status line --
+
+// What `lich sessions --json` prints (relay.Peer in lich): the live sessions
+// this one can address, each with the state its hooks last reported.
+const peer = (worker, state) => ({ label: worker.label, name: worker.name, project: worker.project, kind: 'claude', state })
+const listed = (...peers) => exits(0, peers)
+const SESSIONS = [LICH_BIN, 'sessions', '--json']
+
+test('a backgrounded worker shows in the status line until lich lists its turn done', async () => {
+  const { mod } = await delegate([exits(2, openedHere('pending'))])
+  assert.deepEqual(mod.statuses, ['1 worker'])
+  assert.equal(mod.timers.length, 1)
+
+  await mod.tick(listed(peer(SHARED, 'busy')))
+  assert.deepEqual(mod.ran.at(-1).argv, SESSIONS)
+  assert.deepEqual(mod.statuses, ['1 worker'])
+  assert.equal(mod.timers.length, 1)
+
+  await mod.tick(listed(peer(SHARED, 'done')))
+  assert.deepEqual(mod.statuses, ['1 worker', undefined])
+  assert.equal(mod.timers.length, 0)
+})
+
+test('a worker waiting on a permission, or not reported yet, is still running', async () => {
+  const { mod } = await delegate([exits(2, openedHere('pending'))])
+  await mod.tick(listed(peer(SHARED, 'waiting')))
+  await mod.tick(listed(peer(SHARED, '')))
+  assert.deepEqual(mod.statuses, ['1 worker'])
+  assert.equal(mod.timers.length, 1)
+})
+
+test('a worker lich no longer lists, closed once it reported, is finished', async () => {
+  const { mod } = await delegate([exits(2, openedHere('pending'))])
+  await mod.tick(listed())
+  assert.deepEqual(mod.statuses, ['1 worker', undefined])
+  assert.equal(mod.timers.length, 0)
+})
+
+test('two workers count as two, and one finishing leaves one', async () => {
+  const mod = load({ runs: [exits(2, openedHere('pending')), onBranch('main'), exits(2, opened('pending'))], times: [1, 2, 3, 4] })
+  await mod.start()
+  await mod.call(AGENT)
+  await mod.call(ISOLATED)
+  assert.deepEqual(mod.statuses, ['1 worker', '2 workers'])
+  assert.equal(mod.timers.length, 1, 'one watch for every worker')
+
+  await mod.tick(listed(peer(SHARED, 'done'), peer(OPENED, 'busy')))
+  assert.deepEqual(mod.statuses.at(-1), '1 worker')
+})
+
+test('a list lich could not give keeps the count and asks again', async () => {
+  const { mod } = await delegate([exits(2, openedHere('pending'))])
+  await mod.tick(exits(1, '', 'lich: no lich is running\n'))
+  await mod.tick(rejects('$.process.run(lich) failed'))
+  assert.deepEqual(mod.statuses, ['1 worker'])
+  assert.equal(mod.timers.length, 1)
+})
+
+test('a worker that answered at the open is never counted', async () => {
+  const { mod } = await delegate([exits(0, openedHere('answered', 'done'))])
+  assert.deepEqual(mod.statuses, [])
+  assert.equal(mod.timers.length, 0)
+})
+
+// ---------------------------------------------------------------- TaskStop --
+
+// Measured on Claude Code 2.1.289: TaskStop takes the agentId the Agent call
+// answered as `task_id`, and answers with this shape.
+const taskStop = (id) => ({ tool: 'TaskStop', task_id: id })
+const stopped = (id) => ({
+  result: {
+    message: `Successfully stopped task: ${id} (${AGENT.description})`,
+    task_id: id,
+    task_type: 'local_agent',
+    command: AGENT.description,
+  },
+})
+
+test('TaskStop on a worker in this checkout closes its session, which keeps nothing of its own', async () => {
+  const { mod } = await delegate([exits(2, openedHere('pending'))])
+  mod.answer(exits(0, `Closed "${SHARED.label}".\n`))
+  const { answer, passed } = await mod.call(taskStop(SHARED.name))
+  assert.deepEqual(mod.ran.at(-1).argv, [LICH_BIN, 'close', SHARED.name])
+  assert.deepEqual(passed, [])
+  assert.deepEqual(answer, stopped(SHARED.name))
+  assert.deepEqual(mod.statuses, ['1 worker', undefined])
+})
+
+test('TaskStop on an isolated worker stops its turn and leaves its worktree and card', async () => {
+  const { mod } = await delegate([onBranch('main'), exits(2, opened('pending'))], ISOLATED)
+  mod.answer(exits(0, `"${OPENED.label}" stopped its turn.\n`))
+  const { answer } = await mod.call(taskStop(OPENED.name))
+  assert.deepEqual(mod.ran.at(-1).argv, [LICH_BIN, 'control', OPENED.name, 'abort'])
+  assert.deepEqual(answer, stopped(OPENED.name))
+  assert.deepEqual(mod.statuses.at(-1), undefined)
+})
+
+test('TaskStop on a task that is not a lich worker goes to Claude Code untouched', async () => {
+  const mod = load()
+  await mod.start()
+  const e = taskStop('a712043a56e1aafb1')
+  const { answer, passed } = await mod.call(e)
+  assert.deepEqual(passed, [e])
+  assert.equal(answer, NATIVE)
+  assert.deepEqual(mod.ran, [])
+})
+
+test('TaskStop lich could not carry out is refused with its reason, and the worker still counts', async () => {
+  const { mod } = await delegate([exits(2, openedHere('pending'))])
+  mod.answer(exits(1, '', `lich: no session named "${SHARED.name}"\n`))
+  const { answer, passed } = await mod.call(taskStop(SHARED.name))
+  assert.deepEqual(passed, [])
+  assert.deepEqual(answer, { deny: `lich could not stop "${SHARED.label}": lich: no session named "${SHARED.name}"` })
+  assert.deepEqual(mod.statuses, ['1 worker'])
 })

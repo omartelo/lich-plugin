@@ -9,6 +9,8 @@
 // Once lich has the task the Agent call answers at once, as a background
 // subagent does, and nothing here waits on the worker: `--subagent` makes lich
 // type the worker's whole report at this session's prompt as a [lich] note.
+// While workers run, the status line counts them from `$LICH_BIN sessions
+// --json`, and Claude Code's TaskStop on one is taken here and done by lich.
 //
 // Claude Code fails a tool.call hook open: one that throws, overruns its budget
 // or lets a `$.process.run` reject is skipped and the native agent runs in its
@@ -47,6 +49,12 @@ const FALLBACK_SLUG = "agent"
 // session with LICH_SUBAGENT_CARDS=off instead.
 const WORKER_BRANCH_PREFIX = "subagent/"
 
+// How often the status line asks lich which workers still run. Claude Code's
+// own "N agents" hint moves as each agent ends; a worker's end reaches lich, not
+// this session, so it is read from `lich sessions --json`, one short run of the
+// CLI per period while any worker runs.
+const WORKER_POLL_MS = 5000
+
 // The end of the Agent call's id makes each branch new: lich checks out an
 // existing branch as it stands, so a bare slug could land on someone's work.
 const SUFFIX_CHARS = 4
@@ -55,7 +63,9 @@ const SUFFIX_CHARS = 4
  * @typedef {import('claude-code').EngineInterface} Engine
  * @typedef {{ ticket: string, target: string, status: string, answer: string }} Report
  * @typedef {{ label: string, name: string, path: string, delivery?: Report }} Opened
- * @typedef {{ interactive: boolean }} State
+ * @typedef {{ label: string, name: string, description: string, shared: boolean }} Worker
+ * @typedef {{ interactive: boolean, workers: Map<string, Worker>, watching: boolean, lich: string }} State
+ * @typedef {{ label: string, name: string, state: string }} Peer
  * @typedef {{ tool: "Agent", tool_use_id: string, agentId?: string, description: string, prompt: string,
  *   subagent_type?: string, model?: string, team_name?: string, isolation?: string }} AgentCall
  */
@@ -310,13 +320,135 @@ async function runAsSession($, state, e, next) {
     }
     return runNatively($, e, next, messageOf(error))
   }
-  return answerFor(e, opened, branch, opened.delivery, (await $.clock.now()) - startedMs)
+  const answer = answerFor(e, opened, branch, opened.delivery, (await $.clock.now()) - startedMs)
+  if (opened.delivery.status === "pending") trackWorker($, state, lich, opened, e, branch)
+  return answer
+}
+
+/**
+ * Pins how many workers this session waits on under its prompt, as Claude
+ * Code's own hint does for its background agents, and clears it at none.
+ * Claude Code puts the plugin's name before the line, so it reads
+ * "lich: 2 workers" (measured on 2.1.289).
+ *
+ * @param {Engine} $
+ * @param {State} state
+ */
+function showWorkers($, state) {
+  const count = state.workers.size
+  $.ui.status(count === 0 ? undefined : `${count} worker${count === 1 ? "" : "s"}`)
+}
+
+/**
+ * Keeps one watch running while any worker does.
+ *
+ * @param {Engine} $
+ * @param {State} state
+ */
+function watchWorkers($, state) {
+  if (state.watching || state.workers.size === 0) return
+  state.watching = true
+  $.clock.after(WORKER_POLL_MS, () => refreshWorkers($, state))
+}
+
+/**
+ * A worker still runs while lich lists it with a turn that is not done: busy,
+ * waiting on a permission, or not reported yet, which is a worker whose first
+ * turn has not started. One lich no longer lists was closed, which lich does to
+ * a worker in this checkout once it reported.
+ *
+ * @param {Worker} worker
+ * @param {Peer[]} peers
+ */
+function stillRuns(worker, peers) {
+  return peers.some((p) => p.name === worker.name && p.state !== "done")
+}
+
+/**
+ * Drops the workers lich lists as finished. A list lich could not give leaves
+ * the count as it is until the next period.
+ *
+ * @param {Engine} $
+ * @param {State} state
+ */
+async function refreshWorkers($, state) {
+  state.watching = false
+  try {
+    const { exitCode, stdout } = await $.process.run([state.lich, "sessions", "--json"])
+    /** @type {Peer[] | undefined} */
+    const peers = exitCode === 0 ? parsedOrUndefined(stdout) : undefined
+    const before = state.workers.size
+    if (Array.isArray(peers)) {
+      for (const [id, worker] of state.workers) {
+        if (!stillRuns(worker, peers)) state.workers.delete(id)
+      }
+    }
+    if (state.workers.size !== before) showWorkers($, state)
+  } catch {
+    // A rejection here reaches no hook; the next period asks again.
+  }
+  watchWorkers($, state)
+}
+
+/**
+ * @param {Engine} $
+ * @param {State} state
+ * @param {string} lich
+ * @param {Opened} opened
+ * @param {AgentCall} e
+ * @param {string} branch
+ */
+function trackWorker($, state, lich, opened, e, branch) {
+  state.lich = lich
+  state.workers.set(opened.name, { label: opened.label, name: opened.name, description: e.description, shared: !branch })
+  showWorkers($, state)
+  watchWorkers($, state)
+}
+
+/**
+ * Claude Code's TaskStop for a worker this mod opened: Esc in this session
+ * leaves a background agent running, and TaskStop is how the model stops one
+ * (both measured on 2.1.289). A worker in this checkout is closed, having
+ * nothing of its own to keep; an isolated one has its turn stopped, and its
+ * card and worktree stay for the user. Any other task goes to Claude Code.
+ *
+ * @param {Engine} $
+ * @param {State} state
+ * @param {{ tool: "TaskStop", task_id?: string, shell_id?: string }} e
+ * @param {any} next
+ */
+async function stopWorker($, state, e, next) {
+  const id = e.task_id ?? e.shell_id ?? ""
+  const worker = state.workers.get(id)
+  if (worker === undefined) return next(e)
+  const argv = worker.shared
+    ? [state.lich, "close", worker.name]
+    : [state.lich, "control", worker.name, "abort"]
+  let outcome
+  try {
+    outcome = await $.process.run(argv)
+  } catch (error) {
+    return { deny: `lich could not stop "${worker.label}": ${messageOf(error)}` }
+  }
+  if (outcome.exitCode !== 0) {
+    return { deny: `lich could not stop "${worker.label}": ${outcome.stderr.trim() || `lich exited ${outcome.exitCode}`}` }
+  }
+  state.workers.delete(id)
+  showWorkers($, state)
+  return {
+    result: {
+      message: `Successfully stopped task: ${id} (${worker.description})`,
+      task_id: id,
+      task_type: "local_agent",
+      command: worker.description,
+    },
+  }
 }
 
 /** @param {import('claude-code').On} on */
 export function register(on) {
   /** @type {State} */
-  const state = { interactive: false }
+  const state = { interactive: false, workers: new Map(), watching: false, lich: "" }
 
   // A `claude -p` started from a tool inside a lich session inherits its
   // variables; its subagents are its own and stay inside it. The matcher is
@@ -328,4 +460,5 @@ export function register(on) {
   })
 
   on("tool.call", { tool: "Agent" }, ($, e, next) => runAsSession($, state, e, next))
+  on("tool.call", { tool: "TaskStop" }, ($, e, next) => stopWorker($, state, e, next))
 }

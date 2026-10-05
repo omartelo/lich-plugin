@@ -9,6 +9,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Claude Code's status line counts the lich workers a session waits on.**
+  While a subagent it opened as a lich session runs, `lich: N workers` shows
+  under the prompt, as Claude Code's own hint does for its background agents,
+  and it clears when the last one is done.
+- **TaskStop stops a subagent running as a lich session.** As with a native
+  background agent, Esc leaves it running and the model's TaskStop ends it: a
+  worker in the asking session's checkout is closed, and one on a worktree of
+  its own has its turn stopped and keeps its card and worktree.
+
 - **lich can run a Claude Code session's slash commands.** The mod takes a
   `command` naming one (`/compact`, `/clear`, …) and its arguments, runs it once
   the session is idle, and acks it with Claude Code's own error when the name is
