@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.17.0] - 2026-10-05
+
 ### Added
 
 - **A lich worker answers the way a native subagent does.** The worker's last
@@ -574,7 +576,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   plugin is safe to install globally. Requests time out after ~1s and errors
   are swallowed — the hook never blocks or fails the turn.
 
-[Unreleased]: https://github.com/omartelo/lich-plugin/compare/v0.16.0...HEAD
+[Unreleased]: https://github.com/omartelo/lich-plugin/compare/v0.17.0...HEAD
+[0.17.0]: https://github.com/omartelo/lich-plugin/compare/v0.16.0...v0.17.0
 [0.16.0]: https://github.com/omartelo/lich-plugin/compare/v0.15.1...v0.16.0
 [0.15.1]: https://github.com/omartelo/lich-plugin/compare/v0.15.0...v0.15.1
 [0.15.0]: https://github.com/omartelo/lich-plugin/compare/v0.14.0...v0.15.0
