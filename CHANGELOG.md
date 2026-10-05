@@ -19,14 +19,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   lich that sends `command` (lich-plugin 0.15 contract).
 - **A general-purpose subagent runs as a lich session you can watch and steer.**
   Inside lich, the Claude Code mod opens each general-purpose subagent (or one
-  started with no type) as a Claude Code session on a branch of its own, off the
-  asking session's branch. The Agent call returns at once as a background
-  subagent, so the asking session keeps working, and the report arrives at its
-  prompt as a [lich] note. Explore, Plan and other types stay inside Claude
-  Code. When lich cannot take the task, the subagent runs inside Claude Code as
-  before, with a toast saying why. Turning off "Subagents as lich sessions" in
+  started with no type) as a Claude Code session filed under the asking
+  session. Like a native subagent it works in the asking session's checkout,
+  or on a branch and worktree of its own, off the asking session's branch, when
+  the subagent asks for worktree isolation. The Agent call returns at once as a
+  background subagent, so the asking session keeps working, and the worker's
+  full report arrives at its prompt on its own as a [lich] note, as does word
+  that the worker is waiting on a permission. Explore, Plan and other types stay
+  inside Claude Code. When lich cannot take the task, the subagent runs inside
+  Claude Code as before, with a toast saying why. Turning off "Subagents as lich sessions" in
   lich's Settings › Providers › Claude Code keeps every subagent inside Claude
-  Code. Needs Claude Code 2.1.280 or later with mods on (measured on 2.1.289).
+  Code. Needs Claude Code 2.1.280 or later with mods on (measured on 2.1.289)
+  and a lich that takes `lich open --subagent`.
 - **lich can ask a Claude Code session a side question without stopping it.**
   The mod answers an `ask` with a fork of the session's own conversation, which
   runs beside the turn, stays out of the conversation and is mostly served from

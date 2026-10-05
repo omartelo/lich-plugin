@@ -1,13 +1,14 @@
-// Runs a general-purpose subagent Claude Code starts as a lich session: its own
-// worktree and a card the user can watch and steer, instead of an agent hidden
-// inside this session. Docs: ../docs/agent-cards.md. There is no HTTP contract
-// behind it: it drives the lich CLI (`$LICH_BIN open`), whose output and exit
-// codes are docs/cli.md in the lich repository.
+// Runs a general-purpose subagent Claude Code starts as a lich session: a card
+// the user can watch and steer, instead of an agent hidden inside this session.
+// It works in this session's checkout, as a native subagent does, or in a
+// worktree of its own when the call asks for `isolation: "worktree"`.
+// Docs: ../docs/agent-cards.md. There is no HTTP contract behind it: it drives
+// the lich CLI (`$LICH_BIN open`), whose output and exit codes are docs/cli.md
+// in the lich repository.
 //
 // Once lich has the task the Agent call answers at once, as a background
-// subagent does, and nothing here waits on the worker: the errand is an
-// ordinary one, so lich announces its result at this session's prompt as a
-// [lich] note and the model collects it through lich.
+// subagent does, and nothing here waits on the worker: `--subagent` makes lich
+// type the worker's whole report at this session's prompt as a [lich] note.
 //
 // Claude Code fails a tool.call hook open: one that throws, overruns its budget
 // or lets a `$.process.run` reject is skipped and the native agent runs in its
@@ -41,7 +42,9 @@ const MIN_CHARS = 10
 const MAX_CHARS = 40
 const FALLBACK_SLUG = "agent"
 // Marks a worker's branch, so the mod inside that worker leaves its own
-// subagents native instead of opening cards from cards.
+// subagents native instead of opening cards from cards. A worker in this
+// session's checkout has no branch of its own: lich starts every `--subagent`
+// session with LICH_SUBAGENT_CARDS=off instead.
 const WORKER_BRANCH_PREFIX = "subagent/"
 
 // The end of the Agent call's id makes each branch new: lich checks out an
@@ -138,13 +141,14 @@ function parsedOrUndefined(stdout) {
  * @param {Engine} $
  * @param {string} lich
  * @param {AgentCall} e
- * @param {string} branch
+ * @param {string} branch "" opens the worker in this session's checkout
  * @param {string} base
  * @returns {Promise<Opened & { delivery: Report }>}
  */
 async function openWorker($, lich, e, branch, base) {
   const argv = [
-    lich, "open", "--kind", "claude", "--worktree", branch,
+    lich, "open", "--kind", "claude", "--subagent",
+    ...(branch ? ["--worktree", branch] : []),
     ...(base ? ["--base", base] : []),
     ...(e.model ? ["--model", e.model] : []),
     "--prompt", e.prompt, "--json",
@@ -169,9 +173,11 @@ async function openWorker($, lich, e, branch, base) {
  * @param {AgentCall} e
  * @param {Opened} opened
  * @param {string} branch
- * @param {Report} delivery
  */
-function backgrounded(e, opened, branch, delivery) {
+function backgrounded(e, opened, branch) {
+  const where = branch
+    ? `on branch ${branch} in ${opened.path}, not in this checkout`
+    : `in this same checkout, ${opened.path}, and edits its files as you do`
   return {
     result: {
       status: /** @type {const} */ ("async_launched"),
@@ -181,9 +187,9 @@ function backgrounded(e, opened, branch, delivery) {
       outputFile: "",
     },
     context: [
-      `The agent runs as the lich session "${opened.label}", on branch ${branch} in ${opened.path}, not in this checkout. ` +
-        `Its report arrives at this prompt as a [lich] note, not as a task notification: collect it with the lich ` +
-        `tool wait_for_answer, or "$LICH_BIN" wait ${delivery.ticket}. SendMessage cannot reach that session; ` +
+      `The agent runs as the lich session "${opened.label}", ${where}. ` +
+        `Its full report arrives at this prompt on its own as a [lich] note, not as a task notification, so there ` +
+        `is no need to call wait_for_answer (it still works). SendMessage cannot reach that session; ` +
         `send_to_session or lich send can.`,
     ],
   }
@@ -192,7 +198,8 @@ function backgrounded(e, opened, branch, delivery) {
 /**
  * The Agent tool's `completed` arm, which Claude Code checks a hook's result
  * against. The worker's tokens and tools are its own session's, so none are
- * counted here.
+ * counted here; a worker in this checkout names no worktree, as a native agent
+ * without isolation does.
  *
  * @param {AgentCall} e
  * @param {Opened} opened
@@ -218,8 +225,7 @@ function completed(e, opened, branch, text, durationMs) {
       cache_creation: null,
     },
     prompt: e.prompt,
-    worktreePath: opened.path,
-    worktreeBranch: branch,
+    ...(branch ? { worktreePath: opened.path, worktreeBranch: branch } : {}),
   }
 }
 
@@ -233,24 +239,26 @@ function completed(e, opened, branch, text, durationMs) {
 function answerFor(e, opened, branch, report, durationMs) {
   switch (report.status) {
     case "pending":
-      return backgrounded(e, opened, branch, report)
+      return backgrounded(e, opened, branch)
     case "answered": {
       const where =
-        `The work is on branch ${branch} in ${opened.path} (lich session "${opened.label}"), not in this checkout. ` +
+        (branch
+          ? `The work is on branch ${branch} in ${opened.path} (lich session "${opened.label}"), not in this checkout. `
+          : `The work is in this same checkout, ${opened.path} (lich session "${opened.label}"). `) +
         `Reach that session with send_to_session or lich send, not SendMessage.`
       return { result: completed(e, opened, branch, `${report.answer}\n\n${where}`, durationMs) }
     }
     case "unanswered": {
       const text =
-        `"${opened.label}" ended its turn without reporting back through lich. What it did is on its card and on ` +
-        `branch ${branch}; a report it sends later arrives here as a [lich] note.`
+        `"${opened.label}" ended its turn without reporting back through lich. What it did is on its card and ` +
+        `${branch ? `on branch ${branch}` : "in this checkout"}; a report it sends later arrives here as a [lich] note.`
       return { result: completed(e, opened, branch, text, durationMs) }
     }
     case "unread":
     case "undelivered":
       return { deny: `the task never reached "${opened.label}" (${report.status}): open its card.` }
     default:
-      return { deny: `lich answered "${report.status}" about "${opened.label}", on branch ${branch}: open its card.` }
+      return { deny: `lich answered "${report.status}" about "${opened.label}"${branch ? `, on branch ${branch}` : ""}: open its card.` }
   }
 }
 
@@ -285,10 +293,11 @@ async function runAsSession($, state, e, next) {
     return runNatively($, e, next, `the task is ${bytes} bytes, over lich's ${PROMPT_LIMIT_BYTES}`)
   }
 
-  const base = await currentBranch($)
+  const isolated = e.isolation === "worktree"
+  const base = isolated ? await currentBranch($) : ""
   if (base.startsWith(WORKER_BRANCH_PREFIX)) return next(e)
   const startedMs = await $.clock.now()
-  const branch = branchFor(e)
+  const branch = isolated ? branchFor(e) : ""
   /** @type {Opened & { delivery: Report }} */
   let opened
   try {
@@ -296,7 +305,7 @@ async function runAsSession($, state, e, next) {
   } catch (error) {
     if (next.signal.aborted) {
       return {
-        deny: `interrupted; a lich session on branch ${branch} may already have the task, and a report it sends arrives here as a [lich] note.`,
+        deny: `interrupted; a lich session${branch ? ` on branch ${branch}` : ""} may already have the task, and a report it sends arrives here as a [lich] note.`,
       }
     }
     return runNatively($, e, next, messageOf(error))
