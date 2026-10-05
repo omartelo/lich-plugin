@@ -3,6 +3,7 @@
 // from here.
 
 import { register as registerAgentCards } from "./agent-cards.js"
+import { register as registerEditGuard } from "./edit-guard.js"
 import { register as registerModControl } from "./mod-control.js"
 import { register as registerModUsage } from "./mod-usage.js"
 
@@ -11,4 +12,5 @@ export function register(on) {
   registerModControl(on)
   registerAgentCards(on)
   registerModUsage(on)
+  registerEditGuard(on)
 }

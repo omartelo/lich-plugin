@@ -52,6 +52,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   own cost, the model's real window and, for a long-lived token login, the plan
   gauge without spending a request to measure it. Needs a lich that serves the
   mod-usage contract; an older one answers 404 and the mod stops reporting.
+- **A Claude Code session is told when another lich session just edited the
+  same file.** A subagent that shares the asking session's checkout can edit
+  the files it edits. After an edit, a write or a notebook edit to a file
+  another lich session edited in the last ten minutes, the model reads which
+  session it was, when, and that `send_to_session` or `lich send` reaches it.
+  Nothing is blocked: Claude Code already refuses an edit that would overwrite
+  a change it has not read. Works inside lich, in a git repository, with
+  Claude Code mods on.
 
 ## [0.14.0] - 2026-10-03
 
