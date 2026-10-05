@@ -49,9 +49,18 @@ unless `LICH_SESSION_ID` is set.
 4. When the call succeeded, it writes its own marker over that one.
 5. When the marker named a different lich session and is under 10 minutes old,
    the result goes back with one more `context` line, which the model reads
-   after the tool's result: the path, the session id, the time and how long
+   after the tool's result: the path, the session, the time and how long
    ago, and that `send_to_session` or `lich send` reaches that session. A
    refused call carries the line too, since it explains the refusal.
+
+The line names the session by the label on its card, the name the user and
+`lich send` know it by. lich puts no label in a session's environment and no
+command tells a session its own, so the marker keeps the id and the label is
+looked up when a line is about to be added, never on an edit that gets none:
+`$LICH_BIN sessions --json`, two seconds at most, matched on its `id` field
+(lich 0.60.0 and later). When the CLI is missing or fails, the session is
+gone, or the lich is older and lists no ids, the line names the id
+instead.
 
 Ten minutes spans the turn in which the other session made its edit; past that
 the work is likely finished and the file as read is the news.
@@ -65,8 +74,8 @@ guard were not there.
 - It speaks only after the edit. The `context` of a `tool.call` result is read
   with the tool's result; there is no slot to warn before the call runs. The
   refusals above are what keep the edit safe.
-- The marker names the lich session by id. lich gives a session no label in its
-  environment, and the guard sends nothing to lich to ask for one.
+- A lich older than 0.60.0 lists no session ids in `lich sessions --json`, so
+  there the line names the session by id.
 - One marker per file, the last editor's: two other sessions editing the same
   file leave only the newer one's name.
 - A file in a folder that does not exist yet is outside any repository to git,
