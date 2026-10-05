@@ -27,10 +27,24 @@ const MAX_BACKOFF_MS = 10000
 // the hook, so a level outside these is refused here, where lich hears of it.
 const EFFORTS = new Set(["low", "medium", "high", "xhigh", "max"])
 
+// Put before an `ask`'s question. Without it, a fork made while a turn runs
+// reaches for a tool, is refused (a fork has none) and answers in a second
+// request, at twice the latency and the uncached tokens: measured on Claude
+// Code 2.1.289.
+const ASK_PREAMBLE =
+  "This is a side question asked from outside your turn, while you work. It does not " +
+  "interrupt your turn and your answer is not added to the conversation. Tools are " +
+  "unavailable: do not call any tool. Answer from what the conversation already holds, " +
+  "in plain text, briefly. Question: "
+
+// The contract cuts an answer at this many UTF-16 units, which keeps an ack
+// under lich's 64 KiB body limit; a fork has no length bound of its own.
+const ANSWER_LIMIT = 16000
+
 /**
  * @typedef {import('claude-code').EngineInterface} Engine
  * @typedef {'low' | 'medium' | 'high' | 'xhigh' | 'max'} Effort
- * @typedef {{ id: string, kind: string, text?: string, model?: string, effort?: string, name?: string, args?: string }} Command
+ * @typedef {{ id: string, kind: string, text?: string, model?: string, effort?: string, name?: string, args?: string, question?: string }} Command
  * @typedef {{
  *   base: string,
  *   token: string,
@@ -84,6 +98,12 @@ async function poll($, state, link) {
   }
   link.backoffMs = 0
   for (const command of commands) {
+    // An answer can take a minute and changes nothing the other commands
+    // depend on, so it is not queued behind them, nor they behind it.
+    if (command.kind === "ask") {
+      void applyAndAck($, state, link, command)
+      continue
+    }
     link.applying = link.applying.then(() => {
       const acked = applyAndAck($, state, link, command)
       // A prompt or a slash command settles only once the session is idle and
@@ -108,11 +128,10 @@ async function poll($, state, link) {
  * @param {Command} command
  */
 async function applyAndAck($, state, link, command) {
-  /** @type {{ ok: boolean, error?: string }} */
+  /** @type {{ ok: boolean, error?: string, answer?: string }} */
   let outcome
   try {
-    await apply($, state, command)
-    outcome = { ok: true }
+    outcome = { ok: true, ...(await apply($, state, command)) }
   } catch (error) {
     outcome = { ok: false, error: error instanceof Error ? error.message : String(error) }
   }
@@ -131,6 +150,7 @@ async function applyAndAck($, state, link, command) {
  * @param {Engine} $
  * @param {State} state
  * @param {Command} command
+ * @returns {Promise<{ answer: string } | undefined>} what the ack carries beyond `ok`
  */
 async function apply($, state, command) {
   switch (command.kind) {
@@ -153,9 +173,28 @@ async function apply($, state, command) {
     case "command":
       await $.command.run({ command: command.name ?? "", args: command.args })
       return
+    case "ask":
+      return { answer: await answer($, command.question ?? "") }
     default:
       throw new Error("unknown kind")
   }
+}
+
+/**
+ * The session's answer to a side question: a fork of its own conversation, cut
+ * at ANSWER_LIMIT. A fork with no answer throws its reason, which the ack
+ * carries as its error.
+ *
+ * @param {Engine} $
+ * @param {string} question
+ */
+async function answer($, question) {
+  const reply = await $.model.fork({ prompt: ASK_PREAMBLE + question })
+  if (!reply.isAnswered) {
+    throw new Error(reply.reason === "api-error" ? `api-error ${reply.status} ${reply.error}` : reply.reason)
+  }
+  if (reply.text.length <= ANSWER_LIMIT) return reply.text
+  return `${reply.text.slice(0, ANSWER_LIMIT)}\n[truncated]`
 }
 
 /** @param {import('claude-code').On} on */

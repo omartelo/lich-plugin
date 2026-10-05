@@ -55,7 +55,7 @@ Contracts are **canonical in the lich repository** (`docs/hooks/` there); this p
 - [docs/session-start.md](docs/session-start.md) — Claude session id via `SessionStart`
 - [docs/session-title.md](docs/session-title.md) — the provider's own session title, via `PostToolUse`/`PreInvocation` and `Stop`
 - [docs/session-touched.md](docs/session-touched.md) — git-status refresh signal via `PostToolUse` (file-mutating tools only)
-- [docs/mod-control.md](docs/mod-control.md): lich drives a Claude Code session (prompt, abort, model, effort, command) through a mod that long-polls for commands and acks each one; Claude Code only, the other harnesses have no mod system
+- [docs/mod-control.md](docs/mod-control.md): lich drives a Claude Code session (prompt, abort, model, effort, command) and asks it side questions (ask) through a mod that long-polls for commands and acks each one; Claude Code only, the other harnesses have no mod system
 - [docs/agent-cards.md](docs/agent-cards.md): a general-purpose subagent Claude Code starts runs as a lich session, through the `lich open` and `lich wait` CLI rather than an HTTP contract; Claude Code only
 - [docs/providers.md](docs/providers.md) — the per-harness map, including what installing on omp takes and what it cannot report
 

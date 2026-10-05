@@ -30,6 +30,8 @@ const status = (code) => () =>
   Promise.resolve({ status: code, ok: code >= 200 && code < 300, headers: {}, text: '' })
 const refused = () => () => Promise.reject(new Error('connect ECONNREFUSED 127.0.0.1'))
 const ACKED = { status: 204, ok: true, headers: {}, text: '' }
+const ANSWER = 'Fixing the login test.'
+const USAGE = { input_tokens: 24, output_tokens: 12, cache_read_input_tokens: 55730, cache_creation_input_tokens: 36 }
 
 function deferred() {
   let resolve, reject
@@ -103,6 +105,12 @@ function load({ env = lichEnv(PORT), polls = [], engine = {} } = {}) {
       run: async (args) => {
         calls.push(['command', args])
         return engine.command ? engine.command(args) : { text: '' }
+      },
+    },
+    model: {
+      fork: async (args) => {
+        calls.push(['fork', args])
+        return engine.fork ? engine.fork(args) : { isAnswered: true, text: ANSWER, usage: USAGE }
       },
     },
   }
@@ -327,17 +335,26 @@ test('a slash command waiting for idle holds back none of the commands after it'
 
 // ----------------------------------------------------------------- commands --
 
+// The contract changed here: an `ask` is applied outside the order, at once,
+// so its fork comes ahead of the commands queued before it, and its ack lands
+// whenever the fork answers.
 test('every command shape lich sends is applied in order and acked ok', async () => {
   const mod = await applied(COMMANDS, { before: (m) => m.turnStart('t1') })
+  const asked = COMMANDS.find((c) => c.kind === 'ask')
   assert.deepEqual(mod.calls, [
+    ['fork', { prompt: forkPrompt(asked.question) }],
     ['prompt', { text: 'run the tests' }],
     ['abort', { turnId: 't1' }],
     ['command', { command: 'compact', args: 'keep the test plan' }],
     ['command', { command: 'clear', args: undefined }],
   ])
   assert.deepEqual(
-    mod.acks().map(({ id, kind, ok }) => ({ id, kind, ok })),
-    COMMANDS.map(({ id, kind }) => ({ id, kind, ok: true })),
+    mod.acks().filter((a) => a.kind !== 'ask').map(({ id, kind, ok }) => ({ id, kind, ok })),
+    COMMANDS.filter((c) => c !== asked).map(({ id, kind }) => ({ id, kind, ok: true })),
+  )
+  assert.deepEqual(
+    mod.acks().filter((a) => a.kind === 'ask').map(({ id, ok }) => ({ id, ok })),
+    [{ id: asked.id, ok: true }],
   )
   for (const request of mod.ackRequests()) {
     const { body } = assertContractHonoured('/mod/acks', request)
@@ -476,4 +493,76 @@ test('a kind the mod does not know is acked as unknown, its kind echoed', async 
     { session_id: LICH_SESSION_ID, id: 'm9', kind: 'rewind', ok: false, error: 'unknown kind' },
   ])
   assert.equal(mod.ackRequests()[0].headers['x-lich-plugin'], PLUGIN_VERSION)
+})
+
+// --------------------------------------------------------------------- ask --
+
+/** The prompt the fork is sent: the question behind the mod's preamble. */
+function forkPrompt(question) {
+  return `This is a side question asked from outside your turn, while you work. It does not interrupt your turn and your answer is not added to the conversation. Tools are unavailable: do not call any tool. Answer from what the conversation already holds, in plain text, briefly. Question: ${question}`
+}
+
+test('an ask is answered by a fork of the session and its answer rides the ack', async () => {
+  const mod = await applied([{ id: 'm9', kind: 'ask', question: 'what are you on?' }])
+  assert.deepEqual(mod.calls, [['fork', { prompt: forkPrompt('what are you on?') }]])
+  assert.deepEqual(mod.acks(), [{ session_id: LICH_SESSION_ID, id: 'm9', kind: 'ask', ok: true, answer: ANSWER }])
+  assertContractHonoured('/mod/acks', mod.ackRequests()[0])
+})
+
+test('an ask with no answer acks the fork\'s reason', async () => {
+  const cases = [
+    [{ isAnswered: false, reason: 'nothing-to-fork' }, 'nothing-to-fork'],
+    [{ isAnswered: false, reason: 'api-error', status: 529, error: 'overloaded', usage: USAGE }, 'api-error 529 overloaded'],
+    [{ isAnswered: false, reason: 'empty-reply', usage: USAGE }, 'empty-reply'],
+    [{ isAnswered: false, reason: 'aborted', usage: USAGE }, 'aborted'],
+  ]
+  for (const [reply, error] of cases) {
+    const mod = await applied([{ id: 'm9', kind: 'ask', question: 'why?' }], { engine: { fork: () => reply } })
+    assert.deepEqual(mod.acks(), [{ session_id: LICH_SESSION_ID, id: 'm9', kind: 'ask', ok: false, error }])
+    assertContractHonoured('/mod/acks', mod.ackRequests()[0])
+  }
+})
+
+test('a long answer is cut at 16,000 characters and says so', async () => {
+  const text = 'x'.repeat(16001)
+  const mod = await applied([{ id: 'm9', kind: 'ask', question: 'essay?' }], {
+    engine: { fork: () => ({ isAnswered: true, text, usage: USAGE }) },
+  })
+  assert.equal(mod.acks()[0].answer, `${'x'.repeat(16000)}\n[truncated]`)
+})
+
+test('an answer of exactly 16,000 characters is left whole', async () => {
+  const text = 'x'.repeat(16000)
+  const mod = await applied([{ id: 'm9', kind: 'ask', question: 'essay?' }], {
+    engine: { fork: () => ({ isAnswered: true, text, usage: USAGE }) },
+  })
+  assert.equal(mod.acks()[0].answer, text)
+})
+
+// A fork can run for a minute and more (measured at 109 seconds on Claude Code
+// 2.1.289), so neither the poll nor an abort may wait on one.
+test('an ask still answering holds back neither the poll nor the commands after it', async () => {
+  const forked = deferred()
+  const mod = load({
+    polls: [ok([{ id: 'm9', kind: 'ask', question: 'why?' }]), ok([{ id: 'm2', kind: 'abort' }])],
+    engine: { fork: () => forked.promise },
+  })
+  await mod.turnStart('t1')
+  await mod.start()
+  await until(() => mod.acks().length === 1, 'the abort ack')
+  await until(() => mod.parked() === 1, 'the poll after the abort')
+  assert.deepEqual(mod.acks()[0], { session_id: LICH_SESSION_ID, id: 'm2', kind: 'abort', ok: true })
+  forked.resolve({ isAnswered: true, text: ANSWER, usage: USAGE })
+  await until(() => mod.acks().length === 2, 'the ask ack')
+  assert.equal(mod.acks()[1].answer, ANSWER)
+})
+
+test('an ask does not wait on an abort ack still being answered', async () => {
+  const held = deferred()
+  const mod = load({ polls: [ok([{ id: 'm2', kind: 'abort' }, { id: 'm9', kind: 'ask', question: 'why?' }])] })
+  mod.holdAcks((request) => (JSON.parse(request.raw).kind === 'abort' ? held.promise : Promise.resolve(ACKED)))
+  await mod.turnStart('t1')
+  await mod.start()
+  await until(() => mod.acks().some((a) => a.kind === 'ask'), 'the ask ack')
+  held.resolve(ACKED)
 })

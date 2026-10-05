@@ -2,7 +2,7 @@
 // hooks/lich.js from hooks/hooks.json the way a session does, which registers
 // hooks/mod-control.js, and runs these against it, the test's hooks standing
 // for lich (`http.fetch`) and for the engine's bottom (`prompt.submit`,
-// `turn.abort`, `turn.step`, `command.run`).
+// `turn.abort`, `turn.step`, `command.run`, `model.fork`).
 //
 // tests/mod-control.test.mjs is the suite CI runs, against the contract
 // fixtures; this one needs a claude binary, and proves the module loads and its
@@ -134,6 +134,48 @@ test('an abort reaches the turn while a slash command never settles', async ($, 
   const aborted: string[] = []
   on('turn.start', async (_$, e) => ({ turnId: e.turnId }))
   on('command.run', () => new Promise<never>(() => {}))
+  on('turn.abort', async (_$, e) => {
+    aborted.push(e.turnId)
+    return { value: undefined }
+  })
+  await $.turn.start({ text: 'go', turnId: 't1' })
+  await $.session.start({ cwd: '/w', surface: 'terminal', isInteractive: true })
+  await clock.settle()
+  expect(aborted).toEqual(['t1'])
+  expect(world.acks).toEqual([{ session_id: 'lich-1', id: 'm2', kind: 'abort', ok: true }])
+})
+
+test('an ask from lich is answered by a fork and the answer rides the ack', async ($, on) => {
+  mock.env(on, ENV)
+  const clock = mock.clock(on)
+  const world = lich(on, [{ id: 'm9', kind: 'ask', question: 'what are you on?' }])
+  const asked: string[] = []
+  on('model.fork', async (_$, e) => {
+    asked.push(e.prompt)
+    return {
+      value: {
+        isAnswered: true,
+        text: 'Fixing the login test.',
+        usage: { input_tokens: 1, output_tokens: 1, cache_read_input_tokens: 0, cache_creation_input_tokens: 0 },
+      },
+    }
+  })
+  await $.session.start({ cwd: '/w', surface: 'terminal', isInteractive: true })
+  await clock.settle()
+  expect(asked.length).toBe(1)
+  expect(asked[0].endsWith('Question: what are you on?')).toBe(true)
+  expect(world.acks).toEqual([
+    { session_id: 'lich-1', id: 'm9', kind: 'ask', ok: true, answer: 'Fixing the login test.' },
+  ])
+})
+
+test('an abort reaches the turn while an ask never answers', async ($, on) => {
+  mock.env(on, ENV)
+  const clock = mock.clock(on)
+  const world = lich(on, [{ id: 'm9', kind: 'ask', question: 'why?' }], [{ id: 'm2', kind: 'abort' }])
+  const aborted: string[] = []
+  on('turn.start', async (_$, e) => ({ turnId: e.turnId }))
+  on('model.fork', () => new Promise<never>(() => {}))
   on('turn.abort', async (_$, e) => {
     aborted.push(e.turnId)
     return { value: undefined }
