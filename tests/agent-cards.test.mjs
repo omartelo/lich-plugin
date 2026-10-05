@@ -368,24 +368,16 @@ test('an isolated task still pending at the open says which branch the worker is
   assert.deepEqual(answer, backgrounded())
 })
 
-test('a worker that ended its turn without reporting is a completed subagent saying so', async () => {
-  const { answer } = await delegate([exits(3, openedHere('unanswered'))])
-  assert.deepEqual(
-    answer,
-    completed(
-      `"${SHARED.label}" ended its turn without reporting back through lich. What it did is on its card and in ` +
-        `this checkout; a report it sends later arrives here as a [lich] note.`,
-      { worker: SHARED },
-    ),
-  )
+// A worker whose turn ended before it reported is usually still working: it
+// left a command running in the background and resumes when it finishes. Its
+// report still arrives as a [lich] note, so the call is a backgrounded agent,
+// never a finished one.
+test('a worker that ended its turn without reporting comes back as a backgrounded agent', async () => {
+  const { answer, passed } = await delegate([exits(3, openedHere('unanswered'))])
+  assert.deepEqual(answer, backgrounded({ worker: SHARED }))
+  assert.deepEqual(passed, [])
   const isolated = await delegate([onBranch('main'), exits(3, opened('unanswered'))], ISOLATED)
-  assert.deepEqual(
-    isolated.answer,
-    completed(
-      `"${BRANCH}" ended its turn without reporting back through lich. What it did is on its card and on branch ` +
-        `${BRANCH}; a report it sends later arrives here as a [lich] note.`,
-    ),
-  )
+  assert.deepEqual(isolated.answer, backgrounded())
 })
 
 test('a task that never reached the worker is denied, never run natively', async () => {

@@ -248,7 +248,11 @@ function completed(e, opened, branch, text, durationMs) {
  */
 function answerFor(e, opened, branch, report, durationMs) {
   switch (report.status) {
+    // A worker whose turn ended unanswered is usually still at it: it left a
+    // command running in the background and resumes when it finishes, and its
+    // report still arrives as a [lich] note.
     case "pending":
+    case "unanswered":
       return backgrounded(e, opened, branch)
     case "answered": {
       const where =
@@ -257,12 +261,6 @@ function answerFor(e, opened, branch, report, durationMs) {
           : `The work is in this same checkout, ${opened.path} (lich session "${opened.label}"). `) +
         `Reach that session with send_to_session or lich send, not SendMessage.`
       return { result: completed(e, opened, branch, `${report.answer}\n\n${where}`, durationMs) }
-    }
-    case "unanswered": {
-      const text =
-        `"${opened.label}" ended its turn without reporting back through lich. What it did is on its card and ` +
-        `${branch ? `on branch ${branch}` : "in this checkout"}; a report it sends later arrives here as a [lich] note.`
-      return { result: completed(e, opened, branch, text, durationMs) }
     }
     case "unread":
     case "undelivered":

@@ -56,7 +56,7 @@ Nothing runs after that: the delivery `lich open` printed decides the answer.
 |-------------------------------|---------------------------------------------------------------------|
 | `pending`                     | `async_launched` at once, plus a note on how the report comes back; the worker is counted in the status line |
 | `answered`                    | `completed`: the report, then the checkout (and branch) it is on    |
-| `unanswered`                  | `completed`: the worker ended its turn without reporting, and where to look |
+| `unanswered`                  | `async_launched`, as for `pending`: a turn that ended unanswered usually left a background command running, and the report still arrives as a [lich] note |
 | `unread`, `undelivered`       | denied: the task never reached the card                             |
 | a status it does not know     | denied, naming the card and its branch                              |
 | the open failed               | the native agent runs, with a toast saying why                      |
