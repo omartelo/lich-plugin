@@ -5,9 +5,8 @@ card the user can watch and steer, where Claude Code would otherwise run the
 agent hidden inside the asking session.
 
 There is no HTTP contract behind it. It drives the lich CLI the asking session
-already has, `$LICH_BIN open` and `$LICH_BIN wait`, so what it reads is what
-those commands print (`docs/cli.md` in the lich repository: `open --json`,
-`wait --json`, Exit status).
+already has, `$LICH_BIN open`, so what it reads is what that command prints
+(`docs/cli.md` in the lich repository: `open --json`, Exit status).
 
 | client                 | Claude Code                                           | Codex               | Antigravity         | opencode            | omp                 | Crush               |
 |------------------------|-------------------------------------------------------|---------------------|---------------------|---------------------|---------------------|---------------------|
@@ -30,7 +29,12 @@ of these hold, and every other one goes on to Claude Code untouched:
 - the session is interactive (`session.start` saw `isInteractive`), since a
   `claude -p` started from a tool inside a lich session inherits its variables;
 - `LICH_BIN` and `LICH_SESSION_ID` are set, which is to say the session runs
-  inside lich.
+  inside lich;
+- `LICH_SUBAGENT_CARDS` is not `off`. lich sets it to `off` in a Claude Code
+  session it starts while "Subagents as lich sessions" is off in Settings ›
+  Providers › Claude Code, and leaves it out otherwise, so the default is on.
+  A session's environment is fixed when it starts, so turning the setting over
+  reaches the sessions started after that.
 
 A taken call runs:
 
@@ -38,43 +42,49 @@ A taken call runs:
 2. `$LICH_BIN open --kind claude --worktree <branch> [--base <current>] [--model <model>] --prompt <prompt> --json`,
    given two minutes, the sum of the waits lich's own client allows an open
    with a task.
-3. While the delivery is `pending`, `$LICH_BIN wait --timeout 540 --json <ticket>`,
-   each given ten minutes, which is the most `$.process.run` allows.
 
-| outcome                       | the Agent call answers                                              |
+Nothing runs after that: the delivery `lich open` printed decides the answer.
+
+| delivery                      | the Agent call answers                                              |
 |-------------------------------|---------------------------------------------------------------------|
+| `pending`                     | `async_launched` at once, plus a note on how the report comes back  |
 | `answered`                    | `completed`: the report, then the branch and checkout it is on      |
 | `unanswered`                  | `completed`: the worker ended its turn without reporting, and where to look |
 | `unread`, `undelivered`       | denied: the task never reached the card                             |
+| a status it does not know     | denied, naming the card and its branch                              |
 | the open failed               | the native agent runs, with a toast saying why                      |
-| the wait failed, or a status it does not know | denied, naming the card and its branch              |
 
-The `completed` result is the Agent tool's own arm: `agentId` is the worker's
-roster name, `worktreePath` and `worktreeBranch` are its checkout, and the token
-and tool counts are zero because they are the worker's session's, not this one's.
+`pending` is the usual case: a worker rarely reports within the open's own
+wait. Both results are the Agent tool's own arms, and `agentId` is the worker's
+roster name in each. `async_launched` carries the call's description and prompt
+and an empty `outputFile`, which is the value Claude Code gives its own agents
+that have no output file: there is nothing to read, and without
+`canReadOutputFile` Claude Code never shows the model the field. `completed`
+carries the worker's checkout in `worktreePath` and `worktreeBranch`, and token
+and tool counts of zero because they are the worker's session's, not this one's.
 
 ## How it behaves
 
-- **The call is held until the worker reports**, as a foreground subagent holds
-  it: the asking turn waits. Claude Code's hook budget does not count the time a
-  `$.process.run` is in flight, so a held call can last as long as the worker
-  does (measured past 12 minutes on 2.1.289). Parallel Agent calls run their
-  hooks concurrently, so each opens its own card at once. Answering at once
-  (`async_launched`) was turned down: it promises a background task Claude Code
-  can notify about, read and stop, and none of that exists for a lich session.
+- **The call runs in the background**, as a background subagent does: once lich
+  has the task it answers `async_launched` and the asking turn goes on. Parallel
+  Agent calls run their hooks concurrently, so each opens its own card at once.
+- **The report comes back through lich, not Claude Code.** The task is an
+  ordinary lich errand (not `--private`), so when the worker replies lich types
+  a `[lich]` note at the asking session's prompt (through mod-control's `prompt`
+  when the session runs the mod), and the model collects it with
+  `wait_for_answer` or `lich wait`. Claude Code's own text for a background
+  agent promises a task notification and names `SendMessage`, so the result
+  carries a `context` line the model reads after it: where the worker is, how
+  its report arrives, its ticket, and that `send_to_session` or `lich send`
+  reaches it where `SendMessage` cannot.
 - **It falls back to the native agent only before lich has the task.** Claude
   Code runs the native agent in place of any hook that throws, overruns its
   budget or lets a `$.process.run` reject, so the module catches every failure
   and decides. A task over lich's 8192-byte limit, or an open that failed, runs
-  natively with a toast saying why, naming the card when one was opened. Once
-  the task reached the worker, a failure denies the call instead: a native agent
-  beside the worker would do the work twice. A worker's later report still
-  arrives at the asking session's prompt as a `[lich]` note.
-- **Esc stops the wait, never the worker.** Claude Code aborts the call and
-  ends the `lich wait` child; the worker keeps running on its card, its ticket is
-  no longer waited on, and its report arrives as a `[lich]` note. Esc while the
-  open is still running denies the call too, because lich may already have
-  handed the task over.
+  natively with a toast saying why, naming the card when one was opened. Esc
+  while the open is still running denies the call instead, because lich may
+  already have handed the task over and a native agent beside the worker would
+  do the work twice; a report that worker sends still arrives as a `[lich]` note.
 - **The branch is named from the call.** The description is slugged the way
   lich's own worktree dialog slugs a typed name (2 to 5 words, 10 to 40
   characters, letters and digits in any script), `agent` when nothing is left,
@@ -89,9 +99,6 @@ and tool counts are zero because they are the worker's session's, not this one's
 - **A model the call names is the worker's model**, passed as `--model`. With
   none, the worker starts on the model lich opens Claude Code with, not the
   asking session's, which a native agent would inherit.
-- **The worker is reached through lich.** The result tells the model to use
-  `send_to_session` or `lich send`: Claude Code's hand-back suggests
-  `SendMessage`, which cannot reach a lich session.
 
 ## Known ceilings
 
@@ -101,7 +108,13 @@ and tool counts are zero because they are the worker's session's, not this one's
   so they stay native.
 - **The result reports no tokens and no tool uses.** Both are counted in the
   worker's own session.
+- **Claude Code does not track the worker as a task.** It is not in the
+  background-task list, Claude Code sends no completion notification for it,
+  and stopping it is done on its card, not from Claude Code.
+- **A report nobody collects within an hour is lost.** lich drops an
+  unanswered ticket an hour after anyone last waited on it, and a result left
+  in the inbox on the same clock; the work itself stays on the worker's card
+  and branch.
 - **A reload of the module mid-session forgets that the session is
   interactive** until its next `session.start`, and Agent calls run natively
-  until then. Claude Code defers a reload while a turn runs, so a held call is
-  never cut by one.
+  until then.

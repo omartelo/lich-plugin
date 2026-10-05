@@ -6,15 +6,15 @@
 //
 // tests/agent-cards.test.mjs is the suite CI runs; this one needs a claude
 // binary, and proves the module loads beside mod-control.js and its hooks
-// chain in the engine that runs it: a deny and a fallback to the native agent
-// reach the caller as the engine relays them. The kit does not check a
-// `tool.call` result against the Agent tool's output schema (measured on
-// 2.1.289), so the `completed` shape is pinned by a live run, not here.
+// chain in the engine that runs it: a backgrounded result and a fallback to the
+// native agent reach the caller as the engine relays them. The kit does not
+// check a `tool.call` result against the Agent tool's output schema (measured
+// on 2.1.289), so the `async_launched` shape is pinned by a live run, not here.
 
 import { expect, mock, test } from 'claude-code/testing'
 import type { On, ProcessRunResult } from 'claude-code'
 
-const ENV = { LICH_BIN: '/opt/lich/bin/lich', LICH_SESSION_ID: 'lich-1' }
+const ENV: Record<string, string> = { LICH_BIN: '/opt/lich/bin/lich', LICH_SESSION_ID: 'lich-1' }
 const BRANCH = 'subagent/fix-the-auth-flow-ab12'
 const OPENED = { id: '9f8e', label: BRANCH, name: `${BRANCH}-9f8e`, kind: 'claude', path: `/wt/${BRANCH}` }
 const CALL = {
@@ -38,10 +38,14 @@ const exited = (exitCode: number, stdout: unknown = '', stderr = ''): ProcessRun
  * stands for the native agent and the engine's own session start.
  */
 function world(on: On, ...lich: ProcessRunResult[]) {
+  return worldWith(on, ENV, ...lich)
+}
+
+function worldWith(on: On, env: Record<string, string>, ...lich: ProcessRunResult[]) {
   const native: string[] = []
   const argvs: string[][] = []
   const toasts: string[] = []
-  mock.env(on, ENV)
+  mock.env(on, env)
   mock.clock(on)
   on('session.start', async (_$, e) => ({ cwd: e.cwd }))
   on('process.run', async (_$, e) => {
@@ -62,33 +66,21 @@ function world(on: On, ...lich: ProcessRunResult[]) {
   return { native, argvs, toasts }
 }
 
-test('an answered task is the Agent tool\'s completed result', async ($, on) => {
+test('a task lich took comes back at once as a backgrounded agent', async ($, on) => {
   const w = world(
     on,
-    exited(0, { ...OPENED, delivery: { ticket: 't1', target: BRANCH, status: 'pending', answer: '' } }),
-    exited(0, { ticket: 't1', target: BRANCH, status: 'answered', answer: 'Fixed.' }),
+    exited(2, { ...OPENED, delivery: { ticket: 't1', target: BRANCH, status: 'pending', answer: '' } }),
   )
   await $.session.start({ cwd: '/w', surface: 'terminal', isInteractive: true })
   const ran = await $.tool.call(CALL)
   expect(ran.deny).toBe(undefined)
   expect(ran.isError).toBe(undefined)
   expect(ran.result).toEqual(
-    expect.objectContaining({ status: 'completed', agentId: OPENED.name, worktreeBranch: BRANCH }),
+    expect.objectContaining({ status: 'async_launched', agentId: OPENED.name, outputFile: '' }),
   )
+  expect(ran.context).toEqual([expect.stringContaining('wait_for_answer')])
   expect(w.native).toEqual([])
-  expect(w.argvs.map((argv) => argv[1])).toEqual(['branch', 'open', 'wait'])
-})
-
-test('a failed wait after the open is denied and the native agent never runs', async ($, on) => {
-  const w = world(
-    on,
-    exited(0, { ...OPENED, delivery: { ticket: 't1', target: BRANCH, status: 'pending', answer: '' } }),
-    exited(1, '', 'lich: no lich is running\n'),
-  )
-  await $.session.start({ cwd: '/w', surface: 'terminal', isInteractive: true })
-  const ran = await $.tool.call(CALL)
-  expect(ran.deny).toEqual(expect.stringContaining(`lich stopped answering about "${BRANCH}"`))
-  expect(w.native).toEqual([])
+  expect(w.argvs.map((argv) => argv[1])).toEqual(['branch', 'open'])
 })
 
 test('a failed open runs the native agent, with a toast saying why', async ($, on) => {
@@ -111,6 +103,14 @@ test('an Explore agent stays native and lich is never run', async ($, on) => {
   const w = world(on)
   await $.session.start({ cwd: '/w', surface: 'terminal', isInteractive: true })
   await $.tool.call({ ...CALL, subagent_type: 'Explore' })
+  expect(w.native).toEqual(['Fix the auth flow'])
+  expect(w.argvs).toEqual([])
+})
+
+test('turned off in lich, every subagent stays native and lich is never run', async ($, on) => {
+  const w = worldWith(on, { ...ENV, LICH_SUBAGENT_CARDS: 'off' })
+  await $.session.start({ cwd: '/w', surface: 'terminal', isInteractive: true })
+  await $.tool.call(CALL)
   expect(w.native).toEqual(['Fix the auth flow'])
   expect(w.argvs).toEqual([])
 })
