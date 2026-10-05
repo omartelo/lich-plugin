@@ -59,6 +59,29 @@ test('a prompt from lich is submitted as the plugin and acked', async ($, on) =>
   expect(world.acks).toEqual([{ session_id: 'lich-1', id: 'm1', kind: 'prompt', ok: true }])
 })
 
+test('a prompt carrying a notification is submitted as the user, in the task-notification shape', async ($, on) => {
+  mock.env(on, ENV)
+  const clock = mock.clock(on)
+  const notification = { status: 'completed', summary: 'lich session "docs" finished' }
+  const world = lich(on, [{ id: 'm10', kind: 'prompt', text: 'a < b', notification }])
+  const submitted: unknown[] = []
+  on('prompt.submit', async (_$, e) => {
+    submitted.push({ text: e.text, origin: e.origin })
+    return { text: e.text }
+  })
+  await $.session.start({ cwd: '/w', surface: 'terminal', isInteractive: true })
+  await clock.settle()
+  expect(submitted).toEqual([
+    {
+      text:
+        '<task-notification>\n<status>completed</status>\n<summary>lich session "docs" finished</summary>\n' +
+        '<result>a < b</result>\n</task-notification>',
+      origin: { kind: 'plugin', name: 'lich', asUser: true },
+    },
+  ])
+  expect(world.acks).toEqual([{ session_id: 'lich-1', id: 'm10', kind: 'prompt', ok: true }])
+})
+
 test('an abort from lich ends the turn turn.start named', async ($, on) => {
   mock.env(on, ENV)
   const clock = mock.clock(on)

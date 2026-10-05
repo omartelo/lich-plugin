@@ -43,8 +43,9 @@ const ANSWER_LIMIT = 16000
 
 /**
  * @typedef {import('claude-code').EngineInterface} Engine
+ * @typedef {{ status: string, summary: string }} Notification
  * @typedef {'low' | 'medium' | 'high' | 'xhigh' | 'max'} Effort
- * @typedef {{ id: string, kind: string, text?: string, model?: string, effort?: string, name?: string, args?: string, question?: string }} Command
+ * @typedef {{ id: string, kind: string, text?: string, notification?: Notification, model?: string, effort?: string, name?: string, args?: string, question?: string }} Command
  * @typedef {{
  *   base: string,
  *   token: string,
@@ -155,7 +156,10 @@ async function applyAndAck($, state, link, command) {
 async function apply($, state, command) {
   switch (command.kind) {
     case "prompt": {
-      const submitted = await $.prompt.submit({ text: command.text ?? "" })
+      const text = command.text ?? ""
+      const submitted = await $.prompt.submit(
+        command.notification ? { text: notificationText(command.notification, text), asUser: true } : { text },
+      )
       if (submitted.drop !== undefined) throw new Error(submitted.drop)
       return
     }
@@ -178,6 +182,28 @@ async function apply($, state, command) {
     default:
       throw new Error("unknown kind")
   }
+}
+
+/**
+ * A prompt lich marks as news from outside the session, in the shape Claude
+ * Code gives its own background agent's completion: it shows `summary` as one
+ * line and the model reads the whole text. `text` goes in unescaped because the
+ * model reads it byte for byte, entities included; Claude Code decodes them in
+ * the line it shows (measured on 2.1.289).
+ *
+ * @param {Notification} notification
+ * @param {string} text
+ */
+function notificationText(notification, text) {
+  return (
+    `<task-notification>\n<status>${escapeXml(notification.status)}</status>\n` +
+    `<summary>${escapeXml(notification.summary)}</summary>\n<result>${text}</result>\n</task-notification>`
+  )
+}
+
+/** @param {string} value */
+function escapeXml(value) {
+  return value.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;")
 }
 
 /**

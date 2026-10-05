@@ -28,7 +28,7 @@ nothing.
 
 | command   | applied with                         | ack `ok: true` once                     |
 |-----------|--------------------------------------|-----------------------------------------|
-| `prompt`  | `$.prompt.submit({ text })`          | its turn started                        |
+| `prompt`  | `$.prompt.submit({ text })`, or with `notification` `$.prompt.submit({ text: <task-notification>, asUser: true })` | its turn started |
 | `abort`   | `$.turn.abort({ turnId })`, the id `turn.start` gave | the turn ended          |
 | `model`   | every `turn.step` sent with `model`  | the override is set, or dropped when absent |
 | `effort`  | every `turn.step` sent with `effort` | the override is set, or dropped when absent |
@@ -65,6 +65,14 @@ nothing.
   turn and can take over a minute (measured at 109 seconds for a long answer on
   2.1.289), so it starts the moment its poll returns and acks whenever it
   answers, outside the order the other commands keep. Several run at once.
+- **A prompt with a `notification` reads like a background agent's
+  completion.** It is submitted as the user in the shape Claude Code gives its
+  own: `<task-notification>` with `<status>`, `<summary>` and the prompt's text
+  as `<result>`, no task id. Claude Code shows the summary as one dim line, and
+  the model reads the text and starts its turn (measured on 2.1.289). Status and
+  summary are XML-escaped, which Claude Code decodes for the line; the text is
+  not, because the model reads it as written and an escaped `&&` would reach it
+  as `&amp;&amp;`.
 - **The question goes behind a preamble.** It says the question is a side one,
   that the answer stays out of the conversation, and that tools are unavailable.
   Without it, a fork made mid-turn reaches for a tool, is refused, and answers
