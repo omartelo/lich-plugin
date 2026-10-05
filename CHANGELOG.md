@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.15.0] - 2026-10-05
+
 ### Added
 
 - **Claude Code's status line counts the lich workers a session waits on.**
@@ -17,7 +19,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   background agent, Esc leaves it running and the model's TaskStop ends it: a
   worker in the asking session's checkout is closed, and one on a worktree of
   its own has its turn stopped and keeps its card and worktree.
-
 - **lich can run a Claude Code session's slash commands.** The mod takes a
   `command` naming one (`/compact`, `/clear`, …) and its arguments, runs it once
   the session is idle, and acks it with Claude Code's own error when the name is
@@ -538,7 +539,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   plugin is safe to install globally. Requests time out after ~1s and errors
   are swallowed — the hook never blocks or fails the turn.
 
-[Unreleased]: https://github.com/omartelo/lich-plugin/compare/v0.14.0...HEAD
+[Unreleased]: https://github.com/omartelo/lich-plugin/compare/v0.15.0...HEAD
+[0.15.0]: https://github.com/omartelo/lich-plugin/compare/v0.14.0...v0.15.0
 [0.14.0]: https://github.com/omartelo/lich-plugin/compare/v0.13.2...v0.14.0
 [0.13.2]: https://github.com/omartelo/lich-plugin/compare/v0.13.1...v0.13.2
 [0.13.1]: https://github.com/omartelo/lich-plugin/compare/v0.13.0...v0.13.1
