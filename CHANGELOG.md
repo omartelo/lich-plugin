@@ -14,6 +14,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   instructions; a worker that handed work to the background reports once that
   work is done. Needs a lich that takes the answer (the mod-answer contract).
 
+### Fixed
+
+- **The edit guard names the other session by its card's label.** A note that a
+  file was also edited by another lich session read that session's id, which
+  meant nothing to the model or to you; it now reads the label on its card, the
+  name `lich send` reaches it by, and falls back to the id only when lich cannot
+  say which session it was. Needs lich 0.60.0, whose `lich sessions --json` lists
+  session ids.
+
 ## [0.16.0] - 2026-10-05
 
 ### Changed
