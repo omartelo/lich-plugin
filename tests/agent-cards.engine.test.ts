@@ -78,9 +78,23 @@ test('a task lich took comes back at once as a backgrounded agent', async ($, on
   expect(ran.result).toEqual(
     expect.objectContaining({ status: 'async_launched', agentId: OPENED.name, outputFile: '' }),
   )
-  expect(ran.context).toEqual([expect.stringContaining('wait_for_answer')])
+  expect(ran.context).toEqual([expect.stringContaining('in this same checkout')])
   expect(w.native).toEqual([])
-  expect(w.argvs.map((argv) => argv[1])).toEqual(['branch', 'open'])
+  expect(w.argvs).toEqual([['/opt/lich/bin/lich', 'open', '--kind', 'claude', '--subagent', '--prompt', CALL.prompt, '--json']])
+})
+
+test('an isolated task opens in a worktree off the current branch', async ($, on) => {
+  const w = world(
+    on,
+    exited(2, { ...OPENED, delivery: { ticket: 't1', target: BRANCH, status: 'pending', answer: '' } }),
+  )
+  await $.session.start({ cwd: '/w', surface: 'terminal', isInteractive: true })
+  const ran = await $.tool.call({ ...CALL, isolation: 'worktree' })
+  expect(ran.context).toEqual([expect.stringContaining(`on branch ${BRANCH}`)])
+  expect(w.argvs.map((argv) => argv.slice(1, 9))).toEqual([
+    ['branch', '--show-current'],
+    ['open', '--kind', 'claude', '--subagent', '--worktree', BRANCH, '--base', 'main'],
+  ])
 })
 
 test('a failed open runs the native agent, with a toast saying why', async ($, on) => {

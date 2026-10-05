@@ -39,10 +39,14 @@ const AGENT = {
   prompt: 'Fix the login bug in auth/login.go and run its tests.',
   subagent_type: 'general-purpose',
 }
+const ISOLATED = { ...AGENT, isolation: 'worktree' }
+// A worker without isolation opens in the asking session's directory.
+const SHARED = { ...OPENED, label: 'claude-2', name: 'claude-2-9f8e', path: '/w' }
 const NATIVE = { result: 'the native agent ran' }
 
 const report = (status, answer = '') => ({ ticket: TICKET, target: BRANCH, status, answer })
 const opened = (status, answer) => ({ ...OPENED, delivery: report(status, answer) })
+const openedHere = (status, answer) => ({ ...SHARED, delivery: report(status, answer) })
 
 /** One scripted `$.process.run` answer: the child exited with `code`. */
 const exits = (code, stdout = '', stderr = '') => () => ({
@@ -116,11 +120,12 @@ async function delegate(runs, e = AGENT, options = {}) {
   return { mod, ...(await mod.call(e, options)) }
 }
 
-function completed(text, { durationMs = 3000, prompt = AGENT.prompt } = {}) {
+function completed(text, { durationMs = 3000, prompt = AGENT.prompt, worker = OPENED } = {}) {
+  const worktree = worker === OPENED ? { worktreePath: OPENED.path, worktreeBranch: BRANCH } : {}
   return {
     result: {
       status: 'completed',
-      agentId: OPENED.name,
+      agentId: worker.name,
       content: [{ type: 'text', text }],
       totalToolUseCount: 0,
       totalDurationMs: durationMs,
@@ -135,26 +140,32 @@ function completed(text, { durationMs = 3000, prompt = AGENT.prompt } = {}) {
         cache_creation: null,
       },
       prompt,
-      worktreePath: OPENED.path,
-      worktreeBranch: BRANCH,
+      ...worktree,
     },
   }
 }
 
-function backgrounded({ prompt = AGENT.prompt, description = AGENT.description } = {}) {
+const reportArrives =
+  'Its full report arrives at this prompt on its own as a [lich] note, not as a task notification, so there ' +
+  'is no need to call wait_for_answer (it still works). SendMessage cannot reach that session; ' +
+  'send_to_session or lich send can.'
+
+function backgrounded({ worker = OPENED } = {}) {
+  const where =
+    worker === OPENED
+      ? `on branch ${BRANCH} in ${OPENED.path}, not in this checkout`
+      : `in this same checkout, ${SHARED.path}, and edits its files as you do`
   return {
-    result: { status: 'async_launched', agentId: OPENED.name, description, prompt, outputFile: '' },
-    context: [
-      `The agent runs as the lich session "${BRANCH}", on branch ${BRANCH} in ${OPENED.path}, not in this checkout. ` +
-        `Its report arrives at this prompt as a [lich] note, not as a task notification: collect it with the lich ` +
-        `tool wait_for_answer, or "$LICH_BIN" wait ${TICKET}. SendMessage cannot reach that session; ` +
-        `send_to_session or lich send can.`,
-    ],
+    result: { status: 'async_launched', agentId: worker.name, description: AGENT.description, prompt: AGENT.prompt, outputFile: '' },
+    context: [`The agent runs as the lich session "${worker.label}", ${where}. ${reportArrives}`],
   }
 }
 
 const whereItIs =
   `\n\nThe work is on branch ${BRANCH} in ${OPENED.path} (lich session "${BRANCH}"), not in this checkout. ` +
+  `Reach that session with send_to_session or lich send, not SendMessage.`
+const whereItIsHere =
+  `\n\nThe work is in this same checkout, ${SHARED.path} (lich session "${SHARED.label}"). ` +
   `Reach that session with send_to_session or lich send, not SendMessage.`
 
 function assertNativeUntouched({ answer, passed, mod }, e = AGENT) {
@@ -187,11 +198,11 @@ test('every type but general-purpose stays native, an unknown one included', asy
   }
 })
 
-test("a worker this mod opened keeps its own subagents native", async () => {
+test("a worker on a branch this mod opened keeps its isolated subagents native", async () => {
   const mod = load({ runs: [onBranch('subagent/fix-the-auth-flow-ab12')] })
   await mod.start()
-  const { answer, passed } = await mod.call()
-  assert.deepEqual(passed, [AGENT])
+  const { answer, passed } = await mod.call(ISOLATED)
+  assert.deepEqual(passed, [ISOLATED])
   assert.equal(answer, NATIVE)
   assert.equal(mod.ran.length, 1)
 })
@@ -240,12 +251,25 @@ test('outside lich every call stays native', async () => {
 
 // --------------------------------------------------------------- the open --
 
-test('a general-purpose call opens a Claude Code session off the current branch', async () => {
-  const { mod } = await delegate([onBranch('feat/login'), exits(0, opened('answered', 'done'))])
+test('a general-purpose call opens a Claude Code subagent session in this checkout, without asking git', async () => {
+  const { mod } = await delegate([exits(0, openedHere('answered', 'done'))])
+  assert.deepEqual(mod.ran, [
+    {
+      argv: [LICH_BIN, 'open', '--kind', 'claude', '--subagent', '--prompt', AGENT.prompt, '--json'],
+      init: { timeoutMs: 120000 },
+    },
+  ])
+})
+
+test('an isolated call opens the session in a worktree off the current branch', async () => {
+  const { mod } = await delegate([onBranch('feat/login'), exits(0, opened('answered', 'done'))], ISOLATED)
   assert.deepEqual(mod.ran, [
     { argv: ['git', 'branch', '--show-current'], init: undefined },
     {
-      argv: [LICH_BIN, 'open', '--kind', 'claude', '--worktree', BRANCH, '--base', 'feat/login', '--prompt', AGENT.prompt, '--json'],
+      argv: [
+        LICH_BIN, 'open', '--kind', 'claude', '--subagent', '--worktree', BRANCH, '--base', 'feat/login',
+        '--prompt', AGENT.prompt, '--json',
+      ],
       init: { timeoutMs: 120000 },
     },
   ])
@@ -254,21 +278,23 @@ test('a general-purpose call opens a Claude Code session off the current branch'
 test('a call with no type is a general-purpose one', async () => {
   const e = { ...AGENT }
   delete e.subagent_type
-  const { mod, passed } = await delegate([onBranch('main'), exits(0, opened('answered', 'done'))], e)
+  const { mod, passed } = await delegate([exits(0, openedHere('answered', 'done'))], e)
   assert.deepEqual(passed, [])
-  assert.equal(mod.ran[1].argv[1], 'open')
+  assert.equal(mod.ran[0].argv[1], 'open')
 })
 
 test('the model the call names is the model the session starts on', async () => {
-  const { mod } = await delegate([onBranch('main'), exits(0, opened('answered', 'done'))], { ...AGENT, model: 'haiku' })
-  assert.deepEqual(mod.ran[1].argv.slice(6, 10), ['--base', 'main', '--model', 'haiku'])
+  const { mod } = await delegate([exits(0, openedHere('answered', 'done'))], { ...AGENT, model: 'haiku' })
+  assert.deepEqual(mod.ran[0].argv.slice(4, 7), ['--subagent', '--model', 'haiku'])
+  const isolated = await delegate([onBranch('main'), exits(0, opened('answered', 'done'))], { ...ISOLATED, model: 'haiku' })
+  assert.deepEqual(isolated.mod.ran[1].argv.slice(7, 11), ['--base', 'main', '--model', 'haiku'])
 })
 
-test('with no current branch the session opens off lich\'s default base', async () => {
+test('with no current branch an isolated session opens off lich\'s default base', async () => {
   for (const git of [exits(0, '\n'), exits(128, '', 'fatal: not a git repository'), rejects('git: not found')]) {
-    const { mod } = await delegate([git, exits(0, opened('answered', 'done'))])
+    const { mod } = await delegate([git, exits(0, opened('answered', 'done'))], ISOLATED)
     assert.deepEqual(mod.ran[1].argv, [
-      LICH_BIN, 'open', '--kind', 'claude', '--worktree', BRANCH, '--prompt', AGENT.prompt, '--json',
+      LICH_BIN, 'open', '--kind', 'claude', '--subagent', '--worktree', BRANCH, '--prompt', AGENT.prompt, '--json',
     ])
   }
 })
@@ -285,38 +311,57 @@ test('the branch is subagent/, a slug of the description and the end of the call
     ['', 'agent'],
   ]
   for (const [description, slug] of cases) {
-    const { mod } = await delegate([onBranch('main'), exits(0, opened('answered', 'done'))], { ...AGENT, description })
-    assert.equal(mod.ran[1].argv[5], `subagent/${slug}-ab12`, description)
+    const { mod } = await delegate([onBranch('main'), exits(0, opened('answered', 'done'))], { ...ISOLATED, description })
+    assert.equal(mod.ran[1].argv[6], `subagent/${slug}-ab12`, description)
   }
 })
 
 test('the suffix is the last four letters or digits of the call id, lowercased', async () => {
-  const e = { ...AGENT, tool_use_id: 'toolu_01XyZ_9Q' }
+  const e = { ...ISOLATED, tool_use_id: 'toolu_01XyZ_9Q' }
   const { mod } = await delegate([onBranch('main'), exits(0, opened('answered', 'done'))], e)
-  assert.equal(mod.ran[1].argv[5], 'subagent/fix-the-auth-flow-yz9q')
+  assert.equal(mod.ran[1].argv[6], 'subagent/fix-the-auth-flow-yz9q')
 })
 
 // ------------------------------------------------------------- the report --
 
-test('an answer at the open comes back as the completed subagent', async () => {
-  const { answer, passed, mod } = await delegate([onBranch('main'), exits(0, opened('answered', 'Fixed; tests pass.'))])
-  assert.deepEqual(answer, completed(`Fixed; tests pass.${whereItIs}`))
+test('an answer at the open comes back as the completed subagent, with no worktree of its own', async () => {
+  const { answer, passed, mod } = await delegate([exits(0, openedHere('answered', 'Fixed; tests pass.'))])
+  assert.deepEqual(answer, completed(`Fixed; tests pass.${whereItIsHere}`, { worker: SHARED }))
   assert.deepEqual(passed, [])
   assert.deepEqual(mod.toasts, [])
+})
+
+test('an isolated answer at the open comes back with its worktree', async () => {
+  const { answer } = await delegate([onBranch('main'), exits(0, opened('answered', 'Fixed; tests pass.'))], ISOLATED)
+  assert.deepEqual(answer, completed(`Fixed; tests pass.${whereItIs}`))
 })
 
 test('a task still pending at the open comes back at once as a backgrounded agent, never waited on', async () => {
-  const { answer, passed, mod } = await delegate([onBranch('main'), exits(2, opened('pending'))])
-  assert.deepEqual(answer, backgrounded())
-  assert.equal(mod.ran.length, 2)
+  const { answer, passed, mod } = await delegate([exits(2, openedHere('pending'))])
+  assert.deepEqual(answer, backgrounded({ worker: SHARED }))
+  assert.equal(mod.ran.length, 1)
   assert.deepEqual(passed, [])
   assert.deepEqual(mod.toasts, [])
 })
 
+test('an isolated task still pending at the open says which branch the worker is on', async () => {
+  const { answer } = await delegate([onBranch('main'), exits(2, opened('pending'))], ISOLATED)
+  assert.deepEqual(answer, backgrounded())
+})
+
 test('a worker that ended its turn without reporting is a completed subagent saying so', async () => {
-  const { answer } = await delegate([onBranch('main'), exits(3, opened('unanswered'))])
+  const { answer } = await delegate([exits(3, openedHere('unanswered'))])
   assert.deepEqual(
     answer,
+    completed(
+      `"${SHARED.label}" ended its turn without reporting back through lich. What it did is on its card and in ` +
+        `this checkout; a report it sends later arrives here as a [lich] note.`,
+      { worker: SHARED },
+    ),
+  )
+  const isolated = await delegate([onBranch('main'), exits(3, opened('unanswered'))], ISOLATED)
+  assert.deepEqual(
+    isolated.answer,
     completed(
       `"${BRANCH}" ended its turn without reporting back through lich. What it did is on its card and on branch ` +
         `${BRANCH}; a report it sends later arrives here as a [lich] note.`,
@@ -326,7 +371,7 @@ test('a worker that ended its turn without reporting is a completed subagent say
 
 test('a task that never reached the worker is denied, never run natively', async () => {
   for (const status of ['unread', 'undelivered']) {
-    const { answer, passed } = await delegate([onBranch('main'), exits(3, opened(status))])
+    const { answer, passed } = await delegate([onBranch('main'), exits(3, opened(status))], ISOLATED)
     assert.deepEqual(answer, { deny: `the task never reached "${BRANCH}" (${status}): open its card.` })
     assert.deepEqual(passed, [])
   }
@@ -347,12 +392,12 @@ test('a task over lich\'s byte limit runs natively, with a toast saying why', as
 
 test('a task exactly at the byte limit goes to lich', async () => {
   const e = { ...AGENT, prompt: 'é'.repeat(4096) }
-  const { passed } = await delegate([onBranch('main'), exits(0, opened('answered', 'done'))], e)
+  const { passed } = await delegate([exits(0, openedHere('answered', 'done'))], e)
   assert.deepEqual(passed, [])
 })
 
 test('an open that failed runs natively, with lich\'s reason in a toast', async () => {
-  const { mod, answer, passed } = await delegate([onBranch('main'), exits(1, '', 'lich: no lich is running\n')])
+  const { mod, answer, passed } = await delegate([exits(1, '', 'lich: no lich is running\n')])
   assert.deepEqual(passed, [AGENT])
   assert.equal(answer, NATIVE)
   assert.deepEqual(mod.toasts, ['lich: ran "Fix the auth flow" as a Claude Code subagent: lich: no lich is running'])
@@ -360,7 +405,6 @@ test('an open that failed runs natively, with lich\'s reason in a toast', async 
 
 test('an open whose task never reached the session runs natively, naming the card', async () => {
   const { mod, passed } = await delegate([
-    onBranch('main'),
     exits(1, OPENED, 'lich: the session is open, but the task did not reach it: its terminal ended\n'),
   ])
   assert.deepEqual(passed, [AGENT])
@@ -369,7 +413,7 @@ test('an open whose task never reached the session runs natively, naming the car
 })
 
 test('an open that could not run at all runs natively, with a toast', async () => {
-  const { mod, passed } = await delegate([onBranch('main'), rejects('$.process.run(lich) aborted: still running after 120000ms')])
+  const { mod, passed } = await delegate([rejects('$.process.run(lich) aborted: still running after 120000ms')])
   assert.deepEqual(passed, [AGENT])
   assert.deepEqual(mod.toasts, [
     'lich: ran "Fix the auth flow" as a Claude Code subagent: $.process.run(lich) aborted: still running after 120000ms',
@@ -379,21 +423,24 @@ test('an open that could not run at all runs natively, with a toast', async () =
 // Esc while the open is in flight: lich may already have opened the card and
 // handed it the task, so running the agent natively as well could do it twice.
 test('an open the user interrupted is denied, never run natively', async () => {
-  const stop = new AbortController()
-  const { answer, passed, mod } = await delegate(
-    [
-      onBranch('main'),
-      () => {
-        stop.abort()
-        return Promise.reject(new Error('$.process.run(lich) aborted'))
-      },
-    ],
-    AGENT,
-    { signal: stop.signal },
-  )
+  const interrupted = () => {
+    const stop = new AbortController()
+    const run = () => {
+      stop.abort()
+      return Promise.reject(new Error('$.process.run(lich) aborted'))
+    }
+    return { run, signal: stop.signal }
+  }
+  const here = interrupted()
+  const { answer, passed, mod } = await delegate([here.run], AGENT, { signal: here.signal })
   assert.deepEqual(passed, [])
   assert.deepEqual(mod.toasts, [])
   assert.deepEqual(answer, {
+    deny: 'interrupted; a lich session may already have the task, and a report it sends arrives here as a [lich] note.',
+  })
+  const isolated = interrupted()
+  const onItsBranch = await delegate([onBranch('main'), isolated.run], ISOLATED, { signal: isolated.signal })
+  assert.deepEqual(onItsBranch.answer, {
     deny: `interrupted; a lich session on branch ${BRANCH} may already have the task, and a report it sends arrives here as a [lich] note.`,
   })
 })
@@ -401,7 +448,9 @@ test('an open the user interrupted is denied, never run natively', async () => {
 // ------------------------------------------------ never native after delegation --
 
 test('a status this mod does not know is denied, never run natively', async () => {
-  const { answer, passed } = await delegate([onBranch('main'), exits(3, opened('mislaid'))])
+  const { answer, passed } = await delegate([exits(3, openedHere('mislaid'))])
   assert.deepEqual(passed, [])
-  assert.deepEqual(answer, { deny: `lich answered "mislaid" about "${BRANCH}", on branch ${BRANCH}: open its card.` })
+  assert.deepEqual(answer, { deny: `lich answered "mislaid" about "${SHARED.label}": open its card.` })
+  const isolated = await delegate([onBranch('main'), exits(3, opened('mislaid'))], ISOLATED)
+  assert.deepEqual(isolated.answer, { deny: `lich answered "mislaid" about "${BRANCH}", on branch ${BRANCH}: open its card.` })
 })

@@ -30,10 +30,11 @@ refuses its session, naming what to fix.
 run it. No other harness has a mod system, so none of them gets the controls.
 
 The same mod system turns a **general-purpose subagent** Claude Code starts into
-a lich session: its own worktree, branched off the asking session's branch, and
-a card you can watch and steer. The Agent call returns at once as a background
-subagent, and the session's report arrives at the asking session's prompt as a
-`[lich]` note; Explore, Plan and other agent types stay inside Claude Code. [docs/agent-cards.md](docs/agent-cards.md) has the
+a lich session: a card you can watch and steer, working in the asking session's
+checkout as a native subagent does, or in a worktree of its own when the
+subagent asks for isolation. The Agent call returns at once as a background
+subagent, and the session's full report arrives at the asking session's prompt
+on its own as a `[lich]` note; Explore, Plan and other agent types stay inside Claude Code. [docs/agent-cards.md](docs/agent-cards.md) has the
 rules and what happens when lich cannot be reached.
 
 It also ships skills for the parts of lich you configure from inside a session:
