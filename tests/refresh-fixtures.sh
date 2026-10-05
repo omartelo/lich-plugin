@@ -18,15 +18,8 @@ ref=$(tr -d '[:space:]' <"$here/lich-ref")
 base=https://raw.githubusercontent.com/omartelo/lich/$ref/docs/hooks/fixtures
 
 for file in session-state.jsonl session-start.jsonl session-title.jsonl \
-  session-touched.jsonl mod-usage.jsonl mod-control.jsonl mod-commands.json; do
+  session-touched.jsonl mod-usage.jsonl mod-control.jsonl mod-commands.json \
+  mod-answer.jsonl; do
   curl -fsSL "$base/$file" -o "$here/fixtures/$file"
   echo "refreshed $file at $ref"
 done
-
-# The mod-answer contract is in no lich release yet: its fixture is read at the
-# commit of lich's feat/worker-auto-answer branch that adds it, and folds into
-# the list above once a release ships it.
-answer=274b3d514ea18c0fd68c1da578de1c0b65ef8af0
-curl -fsSL "https://raw.githubusercontent.com/omartelo/lich/$answer/docs/hooks/fixtures/mod-answer.jsonl" \
-  -o "$here/fixtures/mod-answer.jsonl"
-echo "refreshed mod-answer.jsonl at $answer (unreleased)"
