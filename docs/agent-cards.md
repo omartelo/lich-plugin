@@ -114,11 +114,12 @@ for an isolated call.
   "N agents" hint counts background agents: `N workers` under the prompt
   (`$.ui.status`), which Claude Code shows after the plugin's name as
   `lich: N workers`, cleared at none. Every 5 seconds while any runs, the mod reads
-  `$LICH_BIN sessions --json`; a worker lich lists with a turn `done`, or no
-  longer lists at all, is finished. lich closes a worker in this checkout once
-  it reported and its turn ended (`lich open --subagent` in lich's docs/cli.md),
-  which is what takes it off the list. A list lich could not give leaves the
-  count as it was until the next read.
+  `$LICH_BIN sessions --json`. A worker in this checkout is finished once lich
+  no longer lists it: lich closes it after it reported and its turn ended
+  (`lich open --subagent` in lich's docs/cli.md), while a turn it ended with a
+  command left in the background is done without being finished. An isolated
+  worker keeps its card after it reported, so a turn lich lists `done` ends it.
+  A list lich could not give leaves the count as it was until the next read.
 - **Esc does not stop a worker, and TaskStop does**, as with a native background
   agent. Measured on Claude Code 2.1.289: Esc in the asking session interrupts
   its own turn and leaves its background agents running (a second Esc at the

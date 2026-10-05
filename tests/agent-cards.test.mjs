@@ -474,19 +474,33 @@ const peer = (worker, state) => ({ label: worker.label, name: worker.name, proje
 const listed = (...peers) => exits(0, peers)
 const SESSIONS = [LICH_BIN, 'sessions', '--json']
 
-test('a backgrounded worker shows in the status line until lich lists its turn done', async () => {
+// A worker in this checkout is closed once it reported, so it runs until lich
+// stops listing it: a turn it ended with a command left in the background is
+// done but not finished.
+test('a worker in this checkout shows in the status line until lich closes it', async () => {
   const { mod } = await delegate([exits(2, openedHere('pending'))])
   assert.deepEqual(mod.statuses, ['1 worker'])
   assert.equal(mod.timers.length, 1)
 
   await mod.tick(listed(peer(SHARED, 'busy')))
   assert.deepEqual(mod.ran.at(-1).argv, SESSIONS)
+  await mod.tick(listed(peer(SHARED, 'done')))
   assert.deepEqual(mod.statuses, ['1 worker'])
   assert.equal(mod.timers.length, 1)
 
-  await mod.tick(listed(peer(SHARED, 'done')))
+  await mod.tick(listed())
   assert.deepEqual(mod.statuses, ['1 worker', undefined])
   assert.equal(mod.timers.length, 0)
+})
+
+// An isolated worker keeps its card and worktree after it reported, so a done
+// turn is the end there.
+test('an isolated worker shows in the status line until lich lists its turn done', async () => {
+  const { mod } = await delegate([onBranch('main'), exits(2, opened('pending'))], ISOLATED)
+  await mod.tick(listed(peer(OPENED, 'busy')))
+  assert.deepEqual(mod.statuses, ['1 worker'])
+  await mod.tick(listed(peer(OPENED, 'done')))
+  assert.deepEqual(mod.statuses, ['1 worker', undefined])
 })
 
 test('a worker waiting on a permission, or not reported yet, is still running', async () => {
@@ -512,7 +526,7 @@ test('two workers count as two, and one finishing leaves one', async () => {
   assert.deepEqual(mod.statuses, ['1 worker', '2 workers'])
   assert.equal(mod.timers.length, 1, 'one watch for every worker')
 
-  await mod.tick(listed(peer(SHARED, 'done'), peer(OPENED, 'busy')))
+  await mod.tick(listed(peer(OPENED, 'busy')))
   assert.deepEqual(mod.statuses.at(-1), '1 worker')
 })
 

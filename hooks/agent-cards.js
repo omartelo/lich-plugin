@@ -350,16 +350,17 @@ function watchWorkers($, state) {
 }
 
 /**
- * A worker still runs while lich lists it with a turn that is not done: busy,
- * waiting on a permission, or not reported yet, which is a worker whose first
- * turn has not started. One lich no longer lists was closed, which lich does to
- * a worker in this checkout once it reported.
+ * A worker in this checkout still runs while lich lists it: lich closes one
+ * once it reported, and a turn it ended with a command left in the background
+ * is done without being finished. An isolated worker keeps its card after it
+ * reported, so for it a done turn is the end.
  *
  * @param {Worker} worker
  * @param {Peer[]} peers
  */
 function stillRuns(worker, peers) {
-  return peers.some((p) => p.name === worker.name && p.state !== "done")
+  const listed = peers.find((p) => p.name === worker.name)
+  return listed !== undefined && (worker.shared || listed.state !== "done")
 }
 
 /**

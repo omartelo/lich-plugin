@@ -138,7 +138,7 @@ test('turned off in lich, every subagent stays native and lich is never run', as
   expect(w.argvs).toEqual([])
 })
 
-test('a running worker shows in the status line until lich lists it done, and TaskStop closes one', async ($, on) => {
+test('a running worker shows in the status line until lich closes it, and TaskStop closes one', async ($, on) => {
   const pending = { ...OPENED, delivery: { ticket: 't1', target: BRANCH, status: 'pending', answer: '' } }
   const peer = (name: string, state: string) => ({ label: name, name, project: 'lich', kind: 'claude', state })
   const w = world(
@@ -147,7 +147,7 @@ test('a running worker shows in the status line until lich lists it done, and Ta
     exited(2, { ...pending, label: 'second', name: 'second-1a2b' }),
     exited(0, [peer(OPENED.name, 'busy'), peer('second-1a2b', 'busy')]),
     exited(0, ''),
-    exited(0, [peer(OPENED.name, 'done')]),
+    exited(0, []),
   )
   await $.session.start({ cwd: '/w', surface: 'terminal', isInteractive: true })
   await $.tool.call(CALL)
