@@ -1,6 +1,6 @@
 {
   "name": "lich",
-  "version": "0.15.1",
+  "version": "0.16.0",
   "description": "Codex CLI plugin for the lich harness",
   "author": {
     "name": "omartelo"
