@@ -13,7 +13,7 @@
 // a module that hands `$` to a nested function.
 
 // Sent as X-Lich-Plugin on every request; bumped at release (CLAUDE.md, Release).
-const PLUGIN_VERSION = "0.14.0"
+const PLUGIN_VERSION = "0.15.0"
 
 const SETTLE_WHEN_IDLE = new Set(["prompt", "command"])
 
