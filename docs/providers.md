@@ -4,7 +4,10 @@ lich drives an agent CLI inside a PTY and injects the same three variables
 (`LICH_PORT`, `LICH_TOKEN`, `LICH_SESSION_ID`) into every one it spawns. The
 [hook contracts](https://github.com/omartelo/lich/blob/main/docs/hooks/README.md)
 are therefore provider-agnostic: what changes per provider is only *how the
-harness registers hooks* and *what its lifecycle events are called*.
+harness registers hooks* and *what its lifecycle events are called*. A Claude
+Code session also carries `LICH_BIN`, and `LICH_SUBAGENT_CARDS=off` when
+"Subagents as lich sessions" is off in lich's Settings › Providers › Claude
+Code; both are read only by the agent-cards mod ([agent-cards.md](agent-cards.md)).
 
 This repository is one plugin, packaged for each harness it supports:
 

@@ -57,7 +57,7 @@ Contracts are **canonical in the lich repository** (`docs/hooks/` there); this p
 - [docs/session-title.md](docs/session-title.md) — the provider's own session title, via `PostToolUse`/`PreInvocation` and `Stop`
 - [docs/session-touched.md](docs/session-touched.md) — git-status refresh signal via `PostToolUse` (file-mutating tools only)
 - [docs/mod-control.md](docs/mod-control.md): lich drives a Claude Code session (prompt, abort, model, effort, command) and asks it side questions (ask) through a mod that long-polls for commands and acks each one; Claude Code only, the other harnesses have no mod system
-- [docs/agent-cards.md](docs/agent-cards.md): a general-purpose subagent Claude Code starts runs as a lich session, through the `lich open` and `lich wait` CLI rather than an HTTP contract; Claude Code only
+- [docs/agent-cards.md](docs/agent-cards.md): a general-purpose subagent Claude Code starts runs as a lich session, through the `lich open` CLI rather than an HTTP contract; Claude Code only
 - [docs/mod-usage.md](docs/mod-usage.md): a Claude Code session reports the context window, rate limits and cost it measured itself, through a mod hooking `session.measure`; Claude Code only
 - [docs/providers.md](docs/providers.md) — the per-harness map, including what installing on omp takes and what it cannot report
 
@@ -94,7 +94,7 @@ mod-control fixtures and its polls against the commands lich sends;
 [tests/mod-usage.test.mjs](tests/mod-usage.test.mjs) does the same for its
 usage reports against the mod-usage fixtures.
 [tests/agent-cards.test.mjs](tests/agent-cards.test.mjs) hands the agent-cards
-mod the same kind of fake `$` and asserts the `lich open` and `lich wait` argv
+mod the same kind of fake `$` and asserts the `lich open` argv
 it runs, the Agent result it answers each outcome with, and that a call it does
 not take, or one lich cannot take, reaches the native agent untouched.
 [tests/contract.mjs](tests/contract.mjs) is the fixtures, the assertions and the

@@ -1,22 +1,20 @@
 // Runs a general-purpose subagent Claude Code starts as a lich session: its own
 // worktree and a card the user can watch and steer, instead of an agent hidden
 // inside this session. Docs: ../docs/agent-cards.md. There is no HTTP contract
-// behind it: it drives the lich CLI (`$LICH_BIN open`, `$LICH_BIN wait`), whose
-// output and exit codes are docs/cli.md in the lich repository.
+// behind it: it drives the lich CLI (`$LICH_BIN open`), whose output and exit
+// codes are docs/cli.md in the lich repository.
 //
-// The Agent call is held until the worker reports, as a foreground subagent
-// holds it. Answering at once (`async_launched`) promises a task Claude Code
-// can notify about, read and stop, and none of that exists for a lich session;
-// held, the ticket also stays attended, so lich never expires it under a long
-// run. Esc turns the held call into the unattended case on its own: the report
-// then arrives at this session's prompt as a [lich] note.
+// Once lich has the task the Agent call answers at once, as a background
+// subagent does, and nothing here waits on the worker: the errand is an
+// ordinary one, so lich announces its result at this session's prompt as a
+// [lich] note and the model collects it through lich.
 //
 // Claude Code fails a tool.call hook open: one that throws, overruns its budget
 // or lets a `$.process.run` reject is skipped and the native agent runs in its
 // place (measured on 2.1.289). Every failure is therefore caught here and
 // decided: before lich has the task, the native agent runs with a toast saying
-// why; after, the call is denied, because a native agent beside the worker
-// would do the work twice.
+// why; once lich may have it, the call is denied, because a native agent beside
+// the worker would do the work twice.
 //
 // Every function that takes `$` is declared at the top level: the loader
 // refuses a module that hands `$` to a nested function or keeps it in a variable.
@@ -30,17 +28,9 @@ const PROMPT_LIMIT_BYTES = 8192
 // internal/cli/cli.go. This bound only has to outlast lich's own.
 const OPEN_TIMEOUT_MS = 120000
 
-// `$.process.run` kills a child after ten minutes at most, and `lich wait`
-// holds the line for its timeout plus a 30s client slack, so each chunk ends
-// on lich's answer, never on the kill.
-const WAIT_CHUNK_SECONDS = 540
-const WAIT_TIMEOUT_MS = 600000
-
-// docs/cli.md, Exit status: a ticket came back (2), the errand is over with no
-// answer coming (3). Both print their result like an answer (0) does.
-const EXIT_PENDING = 2
-const EXIT_NO_ANSWER = 3
-const REPORTING_EXITS = new Set([0, EXIT_PENDING, EXIT_NO_ANSWER])
+// The value lich's Settings › Providers › Claude Code writes into a session's
+// environment when "Subagents as lich sessions" is off.
+const CARDS_OFF = "off"
 
 // The bounds lich's own worktree dialog slugs a typed name with
 // (`toBranchName`, frontend/src/lib/git/branch-name.ts there), so a branch
@@ -169,22 +159,34 @@ async function openWorker($, lich, e, branch, base) {
 }
 
 /**
- * Waits on the ticket a chunk at a time until the errand has an outcome.
+ * The Agent tool's `async_launched` arm, plus what the model reads after it.
+ * Claude Code's own text for this arm promises a task notification and points
+ * at SendMessage, and neither reaches a lich session, so `context` says how the
+ * report really comes back. `outputFile` is "", Claude Code's own value for an
+ * agent with no output file: without `canReadOutputFile` the model is never
+ * shown it.
  *
- * @param {Engine} $
- * @param {string} lich
+ * @param {AgentCall} e
+ * @param {Opened} opened
+ * @param {string} branch
  * @param {Report} delivery
- * @returns {Promise<Report>}
  */
-async function awaitReport($, lich, delivery) {
-  let report = delivery
-  while (report.status === "pending") {
-    const argv = [lich, "wait", "--timeout", String(WAIT_CHUNK_SECONDS), "--json", delivery.ticket]
-    const { exitCode, stdout, stderr } = await $.process.run(argv, { timeoutMs: WAIT_TIMEOUT_MS })
-    if (!REPORTING_EXITS.has(exitCode)) throw new Error(stderr.trim() || `lich wait exited ${exitCode}`)
-    report = JSON.parse(stdout)
+function backgrounded(e, opened, branch, delivery) {
+  return {
+    result: {
+      status: /** @type {const} */ ("async_launched"),
+      agentId: opened.name,
+      description: e.description,
+      prompt: e.prompt,
+      outputFile: "",
+    },
+    context: [
+      `The agent runs as the lich session "${opened.label}", on branch ${branch} in ${opened.path}, not in this checkout. ` +
+        `Its report arrives at this prompt as a [lich] note, not as a task notification: collect it with the lich ` +
+        `tool wait_for_answer, or "$LICH_BIN" wait ${delivery.ticket}. SendMessage cannot reach that session; ` +
+        `send_to_session or lich send can.`,
+    ],
   }
-  return report
 }
 
 /**
@@ -230,6 +232,8 @@ function completed(e, opened, branch, text, durationMs) {
  */
 function answerFor(e, opened, branch, report, durationMs) {
   switch (report.status) {
+    case "pending":
+      return backgrounded(e, opened, branch, report)
     case "answered": {
       const where =
         `The work is on branch ${branch} in ${opened.path} (lich session "${opened.label}"), not in this checkout. ` +
@@ -246,7 +250,7 @@ function answerFor(e, opened, branch, report, durationMs) {
     case "undelivered":
       return { deny: `the task never reached "${opened.label}" (${report.status}): open its card.` }
     default:
-      throw new Error(`lich answered "${report.status}"`)
+      return { deny: `lich answered "${report.status}" about "${opened.label}", on branch ${branch}: open its card.` }
   }
 }
 
@@ -269,8 +273,13 @@ function runNatively($, e, next, reason) {
  */
 async function runAsSession($, state, e, next) {
   if (!isDelegable(e, next, state)) return next(e)
-  const [lich, session] = await Promise.all([$.env.get("LICH_BIN"), $.env.get("LICH_SESSION_ID")])
+  const [lich, session, cards] = await Promise.all([
+    $.env.get("LICH_BIN"),
+    $.env.get("LICH_SESSION_ID"),
+    $.env.get("LICH_SUBAGENT_CARDS"),
+  ])
   if (!lich || !session) return next(e)
+  if (cards === CARDS_OFF) return next(e)
   const bytes = new TextEncoder().encode(e.prompt).length
   if (bytes > PROMPT_LIMIT_BYTES) {
     return runNatively($, e, next, `the task is ${bytes} bytes, over lich's ${PROMPT_LIMIT_BYTES}`)
@@ -292,22 +301,7 @@ async function runAsSession($, state, e, next) {
     }
     return runNatively($, e, next, messageOf(error))
   }
-
-  try {
-    const report = await awaitReport($, lich, opened.delivery)
-    return answerFor(e, opened, branch, report, (await $.clock.now()) - startedMs)
-  } catch (error) {
-    if (next.signal.aborted) {
-      return {
-        deny: `interrupted; "${opened.label}" keeps running on branch ${branch}, and a report it sends arrives here as a [lich] note.`,
-      }
-    }
-    return {
-      deny:
-        `lich stopped answering about "${opened.label}" (${messageOf(error)}). It may still be running on branch ` +
-        `${branch}, but a report it sends reaches this session only while the lich that opened it runs: open its card.`,
-    }
-  }
+  return answerFor(e, opened, branch, opened.delivery, (await $.clock.now()) - startedMs)
 }
 
 /** @param {import('claude-code').On} on */

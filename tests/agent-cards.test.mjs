@@ -1,13 +1,13 @@
 // Pins the Claude Code mod that runs a subagent as a lich session
-// (hooks/agent-cards.js) to the lich CLI it drives: the argv of `lich open` and
-// `lich wait`, how each outcome they print is answered, and the rule that a
-// call the mod does not take goes to the native agent untouched.
+// (hooks/agent-cards.js) to the lich CLI it drives: the argv of `lich open`, how
+// each outcome it prints is answered, and the rule that a call the mod does not
+// take goes to the native agent untouched.
 //
 // Like tests/mod-control.test.mjs it imports the module and hands it a fake
 // engine. The `e` fields, `next.origin`, `next.signal`, the Agent result arms
 // and the `$.process.run` behaviour were measured on Claude Code 2.1.289; the
 // CLI's output shapes and exit codes are docs/cli.md in lich (`open --json`,
-// `wait --json`, Exit status).
+// Exit status).
 //
 // Run: node --test tests/
 
@@ -54,8 +54,6 @@ const exits = (code, stdout = '', stderr = '') => () => ({
 })
 const rejects = (message) => () => Promise.reject(new Error(message))
 const onBranch = (name) => exits(0, `${name}\n`)
-
-const waitArgv = [LICH_BIN, 'wait', '--timeout', '540', '--json', TICKET]
 
 /**
  * Registers the module against a fake engine. `runs` answers each
@@ -143,6 +141,18 @@ function completed(text, { durationMs = 3000, prompt = AGENT.prompt } = {}) {
   }
 }
 
+function backgrounded({ prompt = AGENT.prompt, description = AGENT.description } = {}) {
+  return {
+    result: { status: 'async_launched', agentId: OPENED.name, description, prompt, outputFile: '' },
+    context: [
+      `The agent runs as the lich session "${BRANCH}", on branch ${BRANCH} in ${OPENED.path}, not in this checkout. ` +
+        `Its report arrives at this prompt as a [lich] note, not as a task notification: collect it with the lich ` +
+        `tool wait_for_answer, or "$LICH_BIN" wait ${TICKET}. SendMessage cannot reach that session; ` +
+        `send_to_session or lich send can.`,
+    ],
+  }
+}
+
 const whereItIs =
   `\n\nThe work is on branch ${BRANCH} in ${OPENED.path} (lich session "${BRANCH}"), not in this checkout. ` +
   `Reach that session with send_to_session or lich send, not SendMessage.`
@@ -209,6 +219,12 @@ test('a non-interactive run stays native', async () => {
 
 test('a session that never reported its start stays native', async () => {
   const mod = load()
+  assertNativeUntouched({ mod, ...(await mod.call()) })
+})
+
+test('subagents as lich sessions turned off in lich keeps every call native', async () => {
+  const mod = load({ env: { ...ENV, LICH_SUBAGENT_CARDS: 'off' } })
+  await mod.start()
   assertNativeUntouched({ mod, ...(await mod.call()) })
 })
 
@@ -289,25 +305,16 @@ test('an answer at the open comes back as the completed subagent', async () => {
   assert.deepEqual(mod.toasts, [])
 })
 
-test('a pending task is waited on in chunks until it is answered', async () => {
-  const { answer, mod } = await delegate([
-    onBranch('main'),
-    exits(0, opened('pending')),
-    exits(2, report('pending')),
-    exits(0, report('answered', 'Fixed.')),
-  ])
-  assert.deepEqual(
-    mod.ran.slice(2),
-    [
-      { argv: waitArgv, init: { timeoutMs: 600000 } },
-      { argv: waitArgv, init: { timeoutMs: 600000 } },
-    ],
-  )
-  assert.deepEqual(answer, completed(`Fixed.${whereItIs}`))
+test('a task still pending at the open comes back at once as a backgrounded agent, never waited on', async () => {
+  const { answer, passed, mod } = await delegate([onBranch('main'), exits(2, opened('pending'))])
+  assert.deepEqual(answer, backgrounded())
+  assert.equal(mod.ran.length, 2)
+  assert.deepEqual(passed, [])
+  assert.deepEqual(mod.toasts, [])
 })
 
 test('a worker that ended its turn without reporting is a completed subagent saying so', async () => {
-  const { answer } = await delegate([onBranch('main'), exits(0, opened('pending')), exits(3, report('unanswered'))])
+  const { answer } = await delegate([onBranch('main'), exits(3, opened('unanswered'))])
   assert.deepEqual(
     answer,
     completed(
@@ -319,14 +326,9 @@ test('a worker that ended its turn without reporting is a completed subagent say
 
 test('a task that never reached the worker is denied, never run natively', async () => {
   for (const status of ['unread', 'undelivered']) {
-    for (const runs of [
-      [onBranch('main'), exits(0, opened(status))],
-      [onBranch('main'), exits(0, opened('pending')), exits(3, report(status))],
-    ]) {
-      const { answer, passed } = await delegate(runs)
-      assert.deepEqual(answer, { deny: `the task never reached "${BRANCH}" (${status}): open its card.` })
-      assert.deepEqual(passed, [])
-    }
+    const { answer, passed } = await delegate([onBranch('main'), exits(3, opened(status))])
+    assert.deepEqual(answer, { deny: `the task never reached "${BRANCH}" (${status}): open its card.` })
+    assert.deepEqual(passed, [])
   }
 })
 
@@ -398,37 +400,8 @@ test('an open the user interrupted is denied, never run natively', async () => {
 
 // ------------------------------------------------ never native after delegation --
 
-test('a wait that failed after the task reached the worker is denied, never run natively', async () => {
-  for (const wait of [exits(1, '', 'lich: no lich is running\n'), rejects('$.process.run(lich) aborted: still running after 600000ms')]) {
-    const { answer, passed, mod } = await delegate([onBranch('main'), exits(0, opened('pending')), wait])
-    assert.deepEqual(passed, [])
-    assert.deepEqual(mod.toasts, [])
-    assert.match(answer.deny, new RegExp(`^lich stopped answering about "${BRANCH}" \\(.+\\)\\. It may still be running on branch ${BRANCH}, but a report it sends reaches this session only while the lich that opened it runs: open its card\\.$`))
-  }
-})
-
 test('a status this mod does not know is denied, never run natively', async () => {
-  const { answer, passed } = await delegate([onBranch('main'), exits(0, opened('pending')), exits(3, report('mislaid'))])
+  const { answer, passed } = await delegate([onBranch('main'), exits(3, opened('mislaid'))])
   assert.deepEqual(passed, [])
-  assert.match(answer.deny, /^lich stopped answering about .+ \(lich answered "mislaid"\)/)
-})
-
-test('Esc during the wait stops the wait, not the worker', async () => {
-  const stop = new AbortController()
-  const { answer, passed } = await delegate(
-    [
-      onBranch('main'),
-      exits(0, opened('pending')),
-      () => {
-        stop.abort()
-        return Promise.reject(new Error('$.process.run(lich) aborted'))
-      },
-    ],
-    AGENT,
-    { signal: stop.signal },
-  )
-  assert.deepEqual(passed, [])
-  assert.deepEqual(answer, {
-    deny: `interrupted; "${BRANCH}" keeps running on branch ${BRANCH}, and a report it sends arrives here as a [lich] note.`,
-  })
+  assert.deepEqual(answer, { deny: `lich answered "mislaid" about "${BRANCH}", on branch ${BRANCH}: open its card.` })
 })
