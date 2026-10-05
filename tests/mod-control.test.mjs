@@ -338,6 +338,8 @@ test('a slash command waiting for idle holds back none of the commands after it'
 // The contract changed here: an `ask` is applied outside the order, at once,
 // so its fork comes ahead of the commands queued before it, and its ack lands
 // whenever the fork answers.
+// And again: a `prompt` carrying a `notification` is submitted as the user, in
+// the task-notification shape, its status and summary escaped and its text not.
 test('every command shape lich sends is applied in order and acked ok', async () => {
   const mod = await applied(COMMANDS, { before: (m) => m.turnStart('t1') })
   const asked = COMMANDS.find((c) => c.kind === 'ask')
@@ -347,6 +349,27 @@ test('every command shape lich sends is applied in order and acked ok', async ()
     ['abort', { turnId: 't1' }],
     ['command', { command: 'compact', args: 'keep the test plan' }],
     ['command', { command: 'clear', args: undefined }],
+    [
+      'prompt',
+      {
+        text:
+          '<task-notification>\n<status>completed</status>\n<summary>lich session "docs" finished</summary>\n' +
+          '<result>[lich] Session "docs" finished the task you handed it (ticket t1). Its report:\n\n' +
+          'If a < b && c > d, see </result>.</result>\n</task-notification>',
+        asUser: true,
+      },
+    ],
+    [
+      'prompt',
+      {
+        text:
+          '<task-notification>\n<status>waiting</status>\n' +
+          '<summary>lich session "a&lt;b&amp;c" is waiting on a permission prompt</summary>\n' +
+          '<result>[lich] Session "a<b&c", the subagent you opened, is waiting on a permission prompt in its card.</result>\n' +
+          '</task-notification>',
+        asUser: true,
+      },
+    ],
   ])
   assert.deepEqual(
     mod.acks().filter((a) => a.kind !== 'ask').map(({ id, kind, ok }) => ({ id, kind, ok })),
