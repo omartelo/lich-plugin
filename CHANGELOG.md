@@ -32,6 +32,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the prompt cache, and sends the answer back in its ack, cut at 16,000
   characters. An ask still answering holds back no other command. lich asks
   with `lich ask` or an agent's `ask_session` tool (lich-plugin 0.15 contract).
+- **A Claude Code session reports what it measured about itself.** The mod
+  posts the context window, the account's rate limits and the conversation's
+  cost each time Claude Code measures them, so lich's footer shows Claude Code's
+  own cost, the model's real window and, for a long-lived token login, the plan
+  gauge without spending a request to measure it. Needs a lich that serves the
+  mod-usage contract; an older one answers 404 and the mod stops reporting.
 
 ## [0.14.0] - 2026-10-03
 

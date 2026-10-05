@@ -38,6 +38,7 @@ export const FIXTURE_OF = {
   '/session-title': 'session-title',
   '/session-touched': 'session-touched',
   '/mod/acks': 'mod-control',
+  '/mod/usage': 'mod-usage',
 }
 
 const readFixture = (name) =>
@@ -114,6 +115,22 @@ export const REJECT_RULES = {
   '/session-touched': {
     'missing session_id': (b) => !('session_id' in b),
     'empty session_id': (b) => b.session_id === '',
+    'malformed json': (b, raw) => !isJsonObject(raw),
+  },
+  '/mod/usage': {
+    'missing session_id': (b) => !('session_id' in b),
+    'missing conversation_id': (b) => !('conversation_id' in b),
+    'missing context': (b) => !isObject(b.context),
+    'zero window': (b) => isObject(b.context) && !(b.context.window > 0),
+    'negative tokens': (b) => isObject(b.context) && b.context.tokens < 0,
+    'percent past 100': (b) => isObject(b.context) && b.context.percent > 100,
+    'fractional percent': (b) =>
+      isObject(b.context) && 'percent' in b.context && !Number.isInteger(b.context.percent),
+    'rate limit without kind': (b) => (b.rate_limits ?? []).some((l) => blank(l.kind)),
+    'negative rate limit': (b) => (b.rate_limits ?? []).some((l) => l.percent_used < 0),
+    'reset that is not a timestamp': (b) =>
+      (b.rate_limits ?? []).some((l) => 'resets_at' in l && Number.isNaN(Date.parse(l.resets_at))),
+    'negative cost': (b) => b.cost_usd < 0,
     'malformed json': (b, raw) => !isJsonObject(raw),
   },
   '/mod/acks': {

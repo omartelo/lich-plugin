@@ -57,9 +57,10 @@ hooks/report-tool.sh              # session-state hook: the tool a turn is runni
 hooks/report-session-start.sh     # session-start hook
 hooks/report-title.sh             # session-title hook
 hooks/report-touched.sh           # session-touched hook
-hooks/lich.js                     # the Claude Code mods' entry, which registers the two below
+hooks/lich.js                     # the Claude Code mods' entry, which registers the three below
 hooks/mod-control.js              # mod-control client, a Claude Code mod
 hooks/agent-cards.js              # a general-purpose subagent as a lich session, a Claude Code mod
+hooks/mod-usage.js                # mod-usage client, a Claude Code mod
 opencode/lich.js                  # opencode client: all four reports plus the seven tools, one module
 omp/lich.js                       # omp client: the reports, one module
 docs/                             # client-side docs, one per contract
