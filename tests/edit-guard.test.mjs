@@ -4,7 +4,8 @@
 // Like the other mod suites it imports the module and hands it a fake engine:
 // `$.fs` is an in-memory map, `$.process.run` answers `git rev-parse` for one
 // repository and `lich sessions --json` with the roster a test hands it,
-// `$.clock.now` is a number the test moves.
+// `$.clock.now` is a number the test moves, and a `$.clock.after` timer runs
+// when the test fires it.
 //
 // Run: node --test tests/
 
@@ -53,12 +54,20 @@ function session({
     hooks.set(matcher.tool, hook)
   })
   const logs = []
+  const statuses = []
+  const timers = []
   const env = id === undefined ? {} : { LICH_SESSION_ID: id, LICH_BIN: lich }
   const lichRuns = []
   const $ = {
     env: { get: async (name) => env[name] },
-    clock: { now: async () => clock.now },
-    ui: { log: (text) => logs.push(text) },
+    clock: {
+      now: async () => clock.now,
+      after: (ms, fn) => {
+        timers.push({ ms, fn })
+        return { cancel: () => {} }
+      },
+    },
+    ui: { log: (text) => logs.push(text), status: (text) => statuses.push(text) },
     process: {
       run: async (argv, options) => {
         if (argv[0] === LICH) {
@@ -96,6 +105,8 @@ function session({
     disk,
     clock,
     logs,
+    statuses,
+    timers,
     hooks,
     lichRuns,
     edit: (path = FILE) => call('Edit', { file_path: path, old_string: 'a', new_string: 'b' }),
@@ -301,6 +312,44 @@ test('the lich CLI runs only when a note is added', async () => {
   await a.edit()
 
   assert.equal(a.lichRuns.length, 0)
+})
+
+test('the user sees the other session in the status line until its marker leaves the window', async () => {
+  const { b } = await editedByAThenB({
+    roster: async () => ({ exitCode: 0, stdout: `${JSON.stringify([A_PEER])}\n`, stderr: '' }),
+  })
+
+  assert.deepEqual(b.statuses, ['app.js also edited by "quiet-comet"'])
+  assert.deepEqual(b.timers.map((t) => t.ms), [9 * MINUTE], 'cleared when the 10-minute window of A\'s edit ends')
+  b.timers[0].fn()
+  assert.deepEqual(b.statuses, ['app.js also edited by "quiet-comet"', undefined])
+})
+
+test('an older edit leaving the window does not clear a newer one from the status line', async () => {
+  const disk = new Map()
+  const clock = { now: T0 }
+  const a = session({ id: 'lich-a', disk, clock })
+  const b = session({ id: 'lich-b', disk, clock })
+  const other = `${REPO}/src/other.js`
+
+  await a.edit()
+  await a.edit(other)
+  clock.now = T0 + MINUTE
+  await b.edit()
+  await b.edit(other)
+  b.timers[0].fn()
+
+  assert.deepEqual(b.statuses, ['app.js also edited by lich-a', 'other.js also edited by lich-a'])
+})
+
+test('no note, no status line', async () => {
+  const a = session({ id: 'lich-a' })
+
+  await a.edit()
+  await a.edit()
+
+  assert.deepEqual(a.statuses, [])
+  assert.deepEqual(a.timers, [])
 })
 
 test('the plugin entry module registers the guard on every file-editing tool', () => {

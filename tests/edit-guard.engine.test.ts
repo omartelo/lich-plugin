@@ -69,6 +69,22 @@ test('the note names the other session by the label on its card', async ($, on) 
   expect(ran.context?.[0]).toContain('lich session "quiet-comet" at')
 })
 
+test('the user sees the other session in the status line', async ($, on) => {
+  const w = world(on, 'lich-a', [{ label: 'quiet-comet', name: 'repo-7c0e', project: 'repo', kind: 'claude', state: 'busy', id: B_ID }])
+  const statuses: (string | undefined)[] = []
+  on('ui.status', async (_$, e) => {
+    statuses.push(e.text)
+    return { value: undefined }
+  })
+  await $.tool.call(EDIT)
+  const [path] = markerOf(w.disk) ?? []
+  w.disk.set(path!, JSON.stringify({ path: FILE, session: B_ID, at: T0 - 60_000 }))
+
+  await $.tool.call(EDIT)
+
+  expect(statuses).toEqual(['app.js also edited by "quiet-comet"'])
+})
+
 test('outside lich the edit runs untouched and nothing is recorded', async ($, on) => {
   const w = world(on, undefined)
   const ran = await $.tool.call(EDIT)

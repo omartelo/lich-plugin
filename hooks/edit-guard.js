@@ -11,6 +11,8 @@
 // Every function that takes `$` is declared here at the top level: the loader
 // refuses a module that hands `$` to a nested function.
 
+import { statusLineWith } from "./status-line.js"
+
 // Long enough to span the other session's turn that made the edit, short
 // enough that a marker from work long finished stops raising notes.
 const RECENT_MS = 10 * 60_000
@@ -116,20 +118,46 @@ function noteFor(marker, who, now) {
 }
 
 /**
- * The note for `marker`, naming its session by label when lich can say which.
+ * The session that left `marker`, by label when lich can say which.
  *
  * @param {Engine} $
  * @param {Marker} marker
- * @param {number} now
  */
-async function noteNaming($, marker, now) {
+async function whoMarked($, marker) {
   let label
   try {
     label = await labelOf($, marker.session)
   } catch (error) {
     logFailure($, error)
   }
-  return noteFor(marker, label ? `"${label}"` : marker.session, now)
+  return label ? `"${label}"` : marker.session
+}
+
+/** The marker the status line shows, so an older one's timer does not clear a newer one. @type {Marker | undefined} */
+let shownMarker
+
+/**
+ * Tells the user too, in the status line, until the marker stops being news.
+ * The note only reaches the model.
+ *
+ * @param {Engine} $
+ * @param {Marker} marker
+ * @param {string} who
+ */
+function showEditBy($, marker, who) {
+  shownMarker = marker
+  const name = marker.path.slice(Math.max(marker.path.lastIndexOf("/"), marker.path.lastIndexOf("\\")) + 1)
+  $.ui.status(statusLineWith("edits", `${name} also edited by ${who}`))
+}
+
+/**
+ * @param {Engine} $
+ * @param {Marker} marker
+ */
+function clearEditBy($, marker) {
+  if (shownMarker !== marker) return
+  shownMarker = undefined
+  $.ui.status(statusLineWith("edits", undefined))
 }
 
 /** @param {Engine} $ @param {unknown} error */
@@ -163,7 +191,12 @@ async function guard($, e, next) {
   let note
   try {
     const now = await $.clock.now()
-    if (isNews(previous, session, now)) note = await noteNaming($, previous, now)
+    if (isNews(previous, session, now)) {
+      const who = await whoMarked($, previous)
+      note = noteFor(previous, who, now)
+      showEditBy($, previous, who)
+      $.clock.after(previous.at + RECENT_MS - now, () => clearEditBy($, previous))
+    }
     if (!result.isError) await $.fs.write(markerPath, JSON.stringify({ path, session, at: now }))
   } catch (error) {
     logFailure($, error)
