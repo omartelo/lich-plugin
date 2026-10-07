@@ -17,13 +17,14 @@ hooks/crush-hooks.json            # hook registration, Crush (hand-merged into c
 hooks/                            # hook scripts (all four run them; only how they are addressed differs)
 hooks/detail.jq                   # what a tool call acts on, shared by two of those scripts
 hooks/win-run.cmd                 # runs one of those scripts on Windows (Codex)
-hooks/lich.js                     # the one module hooks/hooks.json names under `modules`: registers the five mods below
+hooks/lich.js                     # the one module hooks/hooks.json names under `modules`: registers the six mods below
 hooks/mod-control.js              # Claude Code mod: lich drives the session
 hooks/agent-cards.js              # Claude Code mod: a general-purpose subagent runs as a lich session
 hooks/mod-usage.js                # Claude Code mod: the session reports its own context, rate limits and cost
 hooks/edit-guard.js               # Claude Code mod: an edit says which other lich session edited the file
 hooks/worker-answer.js            # Claude Code mod: a lich subagent worker's last message answers its task
-hooks/status-line.js              # the one status line Claude Code gives the plugin, shared by the mods above
+hooks/mod-status.js               # Claude Code mod: the session's relay errands in the prompt footer
+hooks/status-line.js              # the lich line in the prompt footer, shared by the mods above
 opencode/lich.js                  # opencode client: a module, not a command
 omp/lich.js                       # omp client: a module, not a command
 docs/                             # lich ⇄ plugin communication contracts
@@ -63,6 +64,7 @@ Contracts are **canonical in the lich repository** (`docs/hooks/` there); this p
 - [docs/agent-cards.md](docs/agent-cards.md): a general-purpose subagent Claude Code starts runs as a lich session, through the `lich open` CLI rather than an HTTP contract; Claude Code only
 - [docs/mod-usage.md](docs/mod-usage.md): a Claude Code session reports the context window, rate limits and cost it measured itself, through a mod hooking `session.measure`; Claude Code only
 - [docs/mod-answer.md](docs/mod-answer.md): a lich subagent worker answers the task it was handed with its turn's final message, through a mod reading the main loop's `classic.Stop` and `turn.complete`; Claude Code only
+- [docs/mod-status.md](docs/mod-status.md): a Claude Code session shows the relay errands it is part of (owed, out, ready) in its prompt footer, through a mod reading `/mod/status`, which never collects; Claude Code only
 - [docs/edit-guard.md](docs/edit-guard.md): an edit to a file another lich session edited in the last minutes carries a note naming it, through markers in the checkout's git dir rather than an HTTP contract; Claude Code only
 - [docs/providers.md](docs/providers.md) — the per-harness map, including what installing on omp takes and what it cannot report
 
@@ -97,14 +99,16 @@ lich it subscribes to nothing at all.
 Claude Code mod, handing it a fake `$` and asserting its acks against the
 mod-control fixtures and its polls against the commands lich sends;
 [tests/mod-usage.test.mjs](tests/mod-usage.test.mjs) does the same for its
-usage reports against the mod-usage fixtures, and
+usage reports against the mod-usage fixtures,
 [tests/worker-answer.test.mjs](tests/worker-answer.test.mjs) for a worker's
-answer against the mod-answer fixtures.
+answer against the mod-answer fixtures, and
+[tests/mod-status.test.mjs](tests/mod-status.test.mjs) for the footer line it
+draws from the mod-status response.
 [tests/edit-guard.test.mjs](tests/edit-guard.test.mjs) hands the edit guard a
 fake `$` with an in-memory git dir and asserts the markers it leaves and the
 note another session's marker adds, and
 [tests/status-line.test.mjs](tests/status-line.test.mjs) that the mods share
-the one status line Claude Code gives the plugin.
+one lich line in the prompt footer.
 [tests/agent-cards.test.mjs](tests/agent-cards.test.mjs) hands the agent-cards
 mod the same kind of fake `$` and asserts the `lich open` argv
 it runs, the Agent result it answers each outcome with, and that a call it does
@@ -115,6 +119,7 @@ dependencies.
 [tests/mod-control.engine.test.ts](tests/mod-control.engine.test.ts) and
 [tests/agent-cards.engine.test.ts](tests/agent-cards.engine.test.ts) and
 [tests/mod-usage.engine.test.ts](tests/mod-usage.engine.test.ts) and
+[tests/mod-status.engine.test.ts](tests/mod-status.engine.test.ts) and
 [tests/worker-answer.engine.test.ts](tests/worker-answer.engine.test.ts) and
 [tests/edit-guard.engine.test.ts](tests/edit-guard.engine.test.ts) run the
 mods under Claude Code's own engine (`claude plugin test .`); they need a
@@ -168,6 +173,6 @@ Same standard as the `lich` repository (Keep a Changelog + SemVer). Releases are
 
 1. Move the `[Unreleased]` entries in `CHANGELOG.md` under the new version heading (with date) and refresh the compare links at the bottom.
 2. Pick the number by what changed: a release that sends anything lich's contract did not already accept (a new endpoint, header, field or value) bumps the **minor** (the major, from 1.0); anything else bumps the **patch**. lich accepts every release below the next minor of the contract it implements, so a contract change released as a patch reaches a lich that refuses it. `docs/hooks/README.md` in lich, Versioning, is the rule.
-3. Align `version` in `.claude-plugin/plugin.json` **and** `.codex-plugin/plugin.json` with the tag, and `plugin_version` in each `hooks/report-*.sh` and `PLUGIN_VERSION` in `opencode/lich.js`, `omp/lich.js`, `hooks/mod-control.js`, `hooks/mod-usage.js` and `hooks/worker-answer.js`, the header every report sends. The suite fails while any of them disagrees with the Claude Code manifest. The root `plugin.json` is not a third one to bump: Antigravity's manifest takes only a `name`, and lich writes its own carrying the tag when it installs a release.
+3. Align `version` in `.claude-plugin/plugin.json` **and** `.codex-plugin/plugin.json` with the tag, and `plugin_version` in each `hooks/report-*.sh` and `PLUGIN_VERSION` in `opencode/lich.js`, `omp/lich.js`, `hooks/mod-control.js`, `hooks/mod-usage.js`, `hooks/mod-status.js` and `hooks/worker-answer.js`, the header every report sends. The suite fails while any of them disagrees with the Claude Code manifest. The root `plugin.json` is not a third one to bump: Antigravity's manifest takes only a `name`, and lich writes its own carrying the tag when it installs a release.
 4. Annotated tag `vX.Y.Z` + push with the tag.
 5. `gh release create vX.Y.Z` with the notes taken from the matching `CHANGELOG.md` section.

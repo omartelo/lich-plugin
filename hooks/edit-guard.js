@@ -11,7 +11,7 @@
 // Every function that takes `$` is declared here at the top level: the loader
 // refuses a module that hands `$` to a nested function.
 
-import { statusLineWith } from "./status-line.js"
+import { setStatusPart } from "./status-line.js"
 
 // Long enough to span the other session's turn that made the edit, short
 // enough that a marker from work long finished stops raising notes.
@@ -147,7 +147,8 @@ let shownMarker
 function showEditBy($, marker, who) {
   shownMarker = marker
   const name = marker.path.slice(Math.max(marker.path.lastIndexOf("/"), marker.path.lastIndexOf("\\")) + 1)
-  $.ui.status(statusLineWith("edits", `${name} also edited by ${who}`))
+  setStatusPart("edits", `${name} also edited by ${who}`)
+  $.ui.invalidate("ui.render")
 }
 
 /**
@@ -157,7 +158,8 @@ function showEditBy($, marker, who) {
 function clearEditBy($, marker) {
   if (shownMarker !== marker) return
   shownMarker = undefined
-  $.ui.status(statusLineWith("edits", undefined))
+  setStatusPart("edits", undefined)
+  $.ui.invalidate("ui.render")
 }
 
 /** @param {Engine} $ @param {unknown} error */

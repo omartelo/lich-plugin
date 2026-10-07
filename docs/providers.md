@@ -28,6 +28,7 @@ This repository is one plugin, packaged for each harness it supports:
 | `hooks/mod-control.js`          | Claude Code | the mod-control client, a mod |
 | `hooks/agent-cards.js`          | Claude Code | runs a general-purpose subagent as a lich session, a mod |
 | `hooks/mod-usage.js`            | Claude Code | the mod-usage client, a mod |
+| `hooks/mod-status.js`           | Claude Code | the mod-status client, a mod |
 | `hooks/edit-guard.js`           | Claude Code | names the other lich session that edited a file, a mod |
 | `hooks/worker-answer.js`        | Claude Code | the mod-answer client: a worker's last message answers its task, a mod |
 | `opencode/lich.js`              | opencode    | the whole client, as a module |

@@ -9,11 +9,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **The prompt footer shows the session's errands.** Who it owes an answer, the
+  tasks it handed out that are still running (and how many wait on a human),
+  and the answers waiting to be collected: `lich: owes "docs" an answer, 2
+  tasks out (1 waiting), 1 answer to collect`. Reading never collects an
+  answer. While it shows, the worker count is left out, since it already counts
+  every worker. Needs a lich that takes the mod-status contract; an older one
+  shows nothing.
+
 - **The edit guard tells you too, not only the model.** When a file you edit
-  was also edited by another lich session in the last 10 minutes, the status
-  line under the prompt reads `lich: app.js also edited by "quiet-comet"` until
-  that edit leaves the window. It shares the line with the worker count:
+  was also edited by another lich session in the last 10 minutes, the prompt
+  footer reads `lich: app.js also edited by "quiet-comet"` until that edit
+  leaves the window. It shares the line with the worker count:
   `lich: 2 workers · app.js also edited by "quiet-comet"`.
+
+### Changed
+
+- **The lich line moved from the yellow warning to the prompt footer.** The
+  worker count and the notes above are drawn dim at the footer's right, beside
+  Claude Code's own mode labels, instead of as a `⚠` warning under the prompt.
 
 ## [0.17.0] - 2026-10-05
 

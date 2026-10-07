@@ -52,12 +52,11 @@ unless `LICH_SESSION_ID` is set.
    after the tool's result: the path, the session, the time and how long
    ago, and that `send_to_session` or `lich send` reaches that session. A
    refused call carries the line too, since it explains the refusal.
-6. The same edit puts `<file name> also edited by <session>` in the status
-   line under the prompt, for the user, who never reads the `context` line.
+6. The same edit puts `<file name> also edited by <session>` in the lich line
+   of the prompt footer, for the user, who never reads the `context` line.
    It stays until the marker leaves the 10-minute window, or a newer one
-   replaces it. Claude Code keeps one status line per plugin, so it shares the
-   line with the worker count of [agent-cards.md](agent-cards.md), through
-   `hooks/status-line.js`.
+   replaces it. The line is shared with the other mods through
+   `hooks/status-line.js` ([mod-status.md](mod-status.md), What the line reads).
 
 The line names the session by the label on its card, the name the user and
 `lich send` know it by. lich puts no label in a session's environment and no

@@ -12,6 +12,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 
+import { footerLine } from './contract.mjs'
 import { register } from '../hooks/edit-guard.js'
 import { register as registerEntry } from '../hooks/lich.js'
 
@@ -67,7 +68,7 @@ function session({
         return { cancel: () => {} }
       },
     },
-    ui: { log: (text) => logs.push(text), status: (text) => statuses.push(text) },
+    ui: { log: (text) => logs.push(text), invalidate: () => statuses.push(footerLine()) },
     process: {
       run: async (argv, options) => {
         if (argv[0] === LICH) {
@@ -319,10 +320,10 @@ test('the user sees the other session in the status line until its marker leaves
     roster: async () => ({ exitCode: 0, stdout: `${JSON.stringify([A_PEER])}\n`, stderr: '' }),
   })
 
-  assert.deepEqual(b.statuses, ['app.js also edited by "quiet-comet"'])
+  assert.deepEqual(b.statuses, ['lich: app.js also edited by "quiet-comet"'])
   assert.deepEqual(b.timers.map((t) => t.ms), [9 * MINUTE], 'cleared when the 10-minute window of A\'s edit ends')
   b.timers[0].fn()
-  assert.deepEqual(b.statuses, ['app.js also edited by "quiet-comet"', undefined])
+  assert.deepEqual(b.statuses, ['lich: app.js also edited by "quiet-comet"', undefined])
 })
 
 test('an older edit leaving the window does not clear a newer one from the status line', async () => {
@@ -339,7 +340,7 @@ test('an older edit leaving the window does not clear a newer one from the statu
   await b.edit(other)
   b.timers[0].fn()
 
-  assert.deepEqual(b.statuses, ['app.js also edited by lich-a', 'other.js also edited by lich-a'])
+  assert.deepEqual(b.statuses, ['lich: app.js also edited by lich-a', 'lich: other.js also edited by lich-a'])
 })
 
 test('no note, no status line', async () => {

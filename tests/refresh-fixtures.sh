@@ -23,3 +23,11 @@ for file in session-state.jsonl session-start.jsonl session-title.jsonl \
   curl -fsSL "$base/$file" -o "$here/fixtures/$file"
   echo "refreshed $file at $ref"
 done
+
+# The mod-status contract is in no lich release yet: its fixture is read at the
+# commit of lich's feat/mod-status branch that adds it, and folds into the list
+# above once a release ships it.
+status=6c207ba176a36ae2149977dfc5f9568d7410fb9b
+curl -fsSL "https://raw.githubusercontent.com/omartelo/lich/$status/docs/hooks/fixtures/mod-status.json" \
+  -o "$here/fixtures/mod-status.json"
+echo "refreshed mod-status.json at $status (unreleased)"

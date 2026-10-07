@@ -16,7 +16,8 @@ const json = (body: unknown): HttpResponse => ({ status: 200, ok: true, headers:
 
 /**
  * Answers the first polls with `batches`, one each, parks the rest, and records
- * every ack; also stands for the engine's own session start, which the kit
+ * every ack; reads of /mod/status (mod-status.js, loaded beside this mod) find
+ * no errands. Also stands for the engine's own session start, which the kit
  * leaves to the test.
  */
 function lich(on: On, ...batches: unknown[][]) {
@@ -24,6 +25,7 @@ function lich(on: On, ...batches: unknown[][]) {
   let polls = 0
   on('session.start', async (_$, e) => ({ cwd: e.cwd }))
   on('http.fetch', async (_$, e) => {
+    if (e.url.includes('/mod/status')) return { value: json({ owed: [], open: [], ready: [] }) }
     if (e.url.includes('/mod/acks')) {
       acks.push(JSON.parse(e.init?.body ?? '{}'))
       return { value: { status: 204, ok: true, headers: {}, text: '' } }

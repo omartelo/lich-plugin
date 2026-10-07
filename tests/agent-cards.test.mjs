@@ -14,6 +14,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 
+import { footerLine } from './contract.mjs'
 import { register } from '../hooks/agent-cards.js'
 
 const LICH_BIN = '/opt/lich/bin/lich'
@@ -98,7 +99,7 @@ function load({ env = ENV, runs = [], times = [1000, 4000] } = {}) {
         return answer(argv, init)
       },
     },
-    ui: { toast: (text) => toasts.push(text), status: (text) => statuses.push(text) },
+    ui: { toast: (text) => toasts.push(text), invalidate: () => statuses.push(footerLine()) },
   }
 
   return {
@@ -479,17 +480,17 @@ const SESSIONS = [LICH_BIN, 'sessions', '--json']
 // done but not finished.
 test('a worker in this checkout shows in the status line until lich closes it', async () => {
   const { mod } = await delegate([exits(2, openedHere('pending'))])
-  assert.deepEqual(mod.statuses, ['1 worker'])
+  assert.deepEqual(mod.statuses, ['lich: 1 worker'])
   assert.equal(mod.timers.length, 1)
 
   await mod.tick(listed(peer(SHARED, 'busy')))
   assert.deepEqual(mod.ran.at(-1).argv, SESSIONS)
   await mod.tick(listed(peer(SHARED, 'done')))
-  assert.deepEqual(mod.statuses, ['1 worker'])
+  assert.deepEqual(mod.statuses, ['lich: 1 worker'])
   assert.equal(mod.timers.length, 1)
 
   await mod.tick(listed())
-  assert.deepEqual(mod.statuses, ['1 worker', undefined])
+  assert.deepEqual(mod.statuses, ['lich: 1 worker', undefined])
   assert.equal(mod.timers.length, 0)
 })
 
@@ -498,23 +499,23 @@ test('a worker in this checkout shows in the status line until lich closes it', 
 test('an isolated worker shows in the status line until lich lists its turn done', async () => {
   const { mod } = await delegate([onBranch('main'), exits(2, opened('pending'))], ISOLATED)
   await mod.tick(listed(peer(OPENED, 'busy')))
-  assert.deepEqual(mod.statuses, ['1 worker'])
+  assert.deepEqual(mod.statuses, ['lich: 1 worker'])
   await mod.tick(listed(peer(OPENED, 'done')))
-  assert.deepEqual(mod.statuses, ['1 worker', undefined])
+  assert.deepEqual(mod.statuses, ['lich: 1 worker', undefined])
 })
 
 test('a worker waiting on a permission, or not reported yet, is still running', async () => {
   const { mod } = await delegate([exits(2, openedHere('pending'))])
   await mod.tick(listed(peer(SHARED, 'waiting')))
   await mod.tick(listed(peer(SHARED, '')))
-  assert.deepEqual(mod.statuses, ['1 worker'])
+  assert.deepEqual(mod.statuses, ['lich: 1 worker'])
   assert.equal(mod.timers.length, 1)
 })
 
 test('a worker lich no longer lists, closed once it reported, is finished', async () => {
   const { mod } = await delegate([exits(2, openedHere('pending'))])
   await mod.tick(listed())
-  assert.deepEqual(mod.statuses, ['1 worker', undefined])
+  assert.deepEqual(mod.statuses, ['lich: 1 worker', undefined])
   assert.equal(mod.timers.length, 0)
 })
 
@@ -523,18 +524,18 @@ test('two workers count as two, and one finishing leaves one', async () => {
   await mod.start()
   await mod.call(AGENT)
   await mod.call(ISOLATED)
-  assert.deepEqual(mod.statuses, ['1 worker', '2 workers'])
+  assert.deepEqual(mod.statuses, ['lich: 1 worker', 'lich: 2 workers'])
   assert.equal(mod.timers.length, 1, 'one watch for every worker')
 
   await mod.tick(listed(peer(OPENED, 'busy')))
-  assert.deepEqual(mod.statuses.at(-1), '1 worker')
+  assert.deepEqual(mod.statuses.at(-1), 'lich: 1 worker')
 })
 
 test('a list lich could not give keeps the count and asks again', async () => {
   const { mod } = await delegate([exits(2, openedHere('pending'))])
   await mod.tick(exits(1, '', 'lich: no lich is running\n'))
   await mod.tick(rejects('$.process.run(lich) failed'))
-  assert.deepEqual(mod.statuses, ['1 worker'])
+  assert.deepEqual(mod.statuses, ['lich: 1 worker'])
   assert.equal(mod.timers.length, 1)
 })
 
@@ -565,7 +566,7 @@ test('TaskStop on a worker in this checkout closes its session, which keeps noth
   assert.deepEqual(mod.ran.at(-1).argv, [LICH_BIN, 'close', SHARED.name])
   assert.deepEqual(passed, [])
   assert.deepEqual(answer, stopped(SHARED.name))
-  assert.deepEqual(mod.statuses, ['1 worker', undefined])
+  assert.deepEqual(mod.statuses, ['lich: 1 worker', undefined])
 })
 
 test('TaskStop on an isolated worker stops its turn and leaves its worktree and card', async () => {
@@ -593,5 +594,5 @@ test('TaskStop lich could not carry out is refused with its reason, and the work
   const { answer, passed } = await mod.call(taskStop(SHARED.name))
   assert.deepEqual(passed, [])
   assert.deepEqual(answer, { deny: `lich could not stop "${SHARED.label}": lich: no session named "${SHARED.name}"` })
-  assert.deepEqual(mod.statuses, ['1 worker'])
+  assert.deepEqual(mod.statuses, ['lich: 1 worker'])
 })

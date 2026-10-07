@@ -54,7 +54,7 @@ Nothing runs after that: the delivery `lich open` printed decides the answer.
 
 | delivery                      | the Agent call answers                                              |
 |-------------------------------|---------------------------------------------------------------------|
-| `pending`                     | `async_launched` at once, plus a note on how the report comes back; the worker is counted in the status line |
+| `pending`                     | `async_launched` at once, plus a note on how the report comes back; the worker is counted in the footer |
 | `answered`                    | `completed`: the report, then the checkout (and branch) it is on    |
 | `unanswered`                  | `async_launched`, as for `pending`: a turn that ended unanswered usually left a background command running, and the report still arrives as a [lich] note |
 | `unread`, `undelivered`       | denied: the task never reached the card                             |
@@ -110,10 +110,11 @@ for an isolated call.
   committed.** Uncommitted
   changes are not in the worker's checkout. On a detached HEAD, or when git
   cannot answer, the base is left to lich, which uses the project's current branch.
-- **Claude Code's status line counts the workers still running**, as its own
-  "N agents" hint counts background agents: `N workers` under the prompt
-  (`$.ui.status`), which Claude Code shows after the plugin's name as
-  `lich: N workers`, cleared at none. Every 5 seconds while any runs, the mod reads
+- **The prompt footer counts the workers still running**, as Claude Code's own
+  "N agents" hint counts background agents: `lich: N workers` in the lich line
+  of the footer (`hooks/status-line.js`, see [mod-status.md](mod-status.md)),
+  cleared at none, and left out while that line shows lich's errands, which
+  count every worker. Every 5 seconds while any runs, the mod reads
   `$LICH_BIN sessions --json`. A worker in this checkout is finished once lich
   no longer lists it: lich closes it after it reported and its turn ended
   (`lich open --subagent` in lich's docs/cli.md), while a turn it ended with a
