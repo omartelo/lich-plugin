@@ -22,7 +22,7 @@
 // Every function that takes `$` is declared at the top level: the loader
 // refuses a module that hands `$` to a nested function or keeps it in a variable.
 
-import { statusLineWith } from "./status-line.js"
+import { setStatusPart } from "./status-line.js"
 
 // lich's `promptLimit` (internal/relay). lich checks it only after the session
 // was opened, so a task over it would leave an empty card behind.
@@ -326,17 +326,16 @@ async function runAsSession($, state, e, next) {
 }
 
 /**
- * Pins how many workers this session waits on under its prompt, as Claude
- * Code's own hint does for its background agents, and clears it at none.
- * Claude Code puts the plugin's name before the line, so it reads
- * "lich: 2 workers" (measured on 2.1.289).
+ * Shows how many workers this session waits on in the footer's lich line, as
+ * Claude Code's own hint does for its background agents, and clears it at none.
  *
  * @param {Engine} $
  * @param {State} state
  */
 function showWorkers($, state) {
   const count = state.workers.size
-  $.ui.status(statusLineWith("workers", count === 0 ? undefined : `${count} worker${count === 1 ? "" : "s"}`))
+  setStatusPart("workers", count === 0 ? undefined : `${count} worker${count === 1 ? "" : "s"}`)
+  $.ui.invalidate("ui.render")
 }
 
 /**

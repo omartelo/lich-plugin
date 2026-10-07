@@ -17,14 +17,13 @@ const json = (body: unknown): HttpResponse => ({ status: 200, ok: true, headers:
 /**
  * Answers the first polls with `batches`, one each, parks the rest, and records
  * every ack; reads of /mod/status (mod-status.js, loaded beside this mod) find
- * no errands. Also stands for the engine's own session start and status line,
- * which the kit leaves to the test.
+ * no errands. Also stands for the engine's own session start, which the kit
+ * leaves to the test.
  */
 function lich(on: On, ...batches: unknown[][]) {
   const acks: Record<string, unknown>[] = []
   let polls = 0
   on('session.start', async (_$, e) => ({ cwd: e.cwd }))
-  on('ui.status', async () => ({ value: undefined }))
   on('http.fetch', async (_$, e) => {
     if (e.url.includes('/mod/status')) return { value: json({ owed: [], open: [], ready: [] }) }
     if (e.url.includes('/mod/acks')) {

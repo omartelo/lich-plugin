@@ -68,7 +68,7 @@ hooks/agent-cards.js              # a general-purpose subagent as a lich session
 hooks/mod-usage.js                # mod-usage client, a Claude Code mod
 hooks/edit-guard.js               # names the other lich session that edited a file, a Claude Code mod
 hooks/worker-answer.js            # mod-answer client: a lich worker's last message answers its task, a Claude Code mod
-hooks/mod-status.js               # mod-status client: the session's errands in its status line, a Claude Code mod
+hooks/mod-status.js               # mod-status client: the session's errands in the prompt footer, a Claude Code mod
 opencode/lich.js                  # opencode client: all four reports plus the seven tools, one module
 omp/lich.js                       # omp client: the reports, one module
 docs/                             # client-side docs, one per contract

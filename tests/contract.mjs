@@ -283,3 +283,23 @@ export const lichEnv = (port) => ({
   LICH_TOKEN: TOKEN,
   LICH_SESSION_ID,
 })
+
+// ------------------------------------------------------------ status line --
+
+import { register as registerStatusLine } from '../hooks/status-line.js'
+
+let drawFooter
+registerStatusLine((event, matcher, hook) => {
+  drawFooter = hook
+})
+
+/**
+ * The lich line the footer draws now, as Claude Code would draw it with no
+ * mode of its own on; undefined when it draws none. A fake engine calls it
+ * from `$.ui.invalidate`, where a mod asks for the redraw.
+ */
+export function footerLine() {
+  const e = { surface: 'terminal', component: 'SessionMode', requestId: 'footer', props: { modes: [] } }
+  const drawn = drawFooter({}, e, (next) => next)
+  return drawn.props.modes.at(-1)
+}

@@ -23,8 +23,8 @@ hooks/agent-cards.js              # Claude Code mod: a general-purpose subagent 
 hooks/mod-usage.js                # Claude Code mod: the session reports its own context, rate limits and cost
 hooks/edit-guard.js               # Claude Code mod: an edit says which other lich session edited the file
 hooks/worker-answer.js            # Claude Code mod: a lich subagent worker's last message answers its task
-hooks/mod-status.js               # Claude Code mod: the session's relay errands in its status line
-hooks/status-line.js              # the one status line Claude Code gives the plugin, shared by the mods above
+hooks/mod-status.js               # Claude Code mod: the session's relay errands in the prompt footer
+hooks/status-line.js              # the lich line in the prompt footer, shared by the mods above
 opencode/lich.js                  # opencode client: a module, not a command
 omp/lich.js                       # omp client: a module, not a command
 docs/                             # lich ⇄ plugin communication contracts
@@ -64,7 +64,7 @@ Contracts are **canonical in the lich repository** (`docs/hooks/` there); this p
 - [docs/agent-cards.md](docs/agent-cards.md): a general-purpose subagent Claude Code starts runs as a lich session, through the `lich open` CLI rather than an HTTP contract; Claude Code only
 - [docs/mod-usage.md](docs/mod-usage.md): a Claude Code session reports the context window, rate limits and cost it measured itself, through a mod hooking `session.measure`; Claude Code only
 - [docs/mod-answer.md](docs/mod-answer.md): a lich subagent worker answers the task it was handed with its turn's final message, through a mod reading the main loop's `classic.Stop` and `turn.complete`; Claude Code only
-- [docs/mod-status.md](docs/mod-status.md): a Claude Code session shows the relay errands it is part of (owed, out, ready) in its status line, through a mod reading `/mod/status`, which never collects; Claude Code only
+- [docs/mod-status.md](docs/mod-status.md): a Claude Code session shows the relay errands it is part of (owed, out, ready) in its prompt footer, through a mod reading `/mod/status`, which never collects; Claude Code only
 - [docs/edit-guard.md](docs/edit-guard.md): an edit to a file another lich session edited in the last minutes carries a note naming it, through markers in the checkout's git dir rather than an HTTP contract; Claude Code only
 - [docs/providers.md](docs/providers.md) — the per-harness map, including what installing on omp takes and what it cannot report
 
@@ -102,13 +102,13 @@ mod-control fixtures and its polls against the commands lich sends;
 usage reports against the mod-usage fixtures,
 [tests/worker-answer.test.mjs](tests/worker-answer.test.mjs) for a worker's
 answer against the mod-answer fixtures, and
-[tests/mod-status.test.mjs](tests/mod-status.test.mjs) for the status line it
+[tests/mod-status.test.mjs](tests/mod-status.test.mjs) for the footer line it
 draws from the mod-status response.
 [tests/edit-guard.test.mjs](tests/edit-guard.test.mjs) hands the edit guard a
 fake `$` with an in-memory git dir and asserts the markers it leaves and the
 note another session's marker adds, and
 [tests/status-line.test.mjs](tests/status-line.test.mjs) that the mods share
-the one status line Claude Code gives the plugin.
+one lich line in the prompt footer.
 [tests/agent-cards.test.mjs](tests/agent-cards.test.mjs) hands the agent-cards
 mod the same kind of fake `$` and asserts the `lich open` argv
 it runs, the Agent result it answers each outcome with, and that a call it does

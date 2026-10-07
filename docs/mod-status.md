@@ -4,7 +4,7 @@ Client side of the [mod-status contract](https://github.com/omartelo/lich/blob/m
 (the endpoint and the response are defined in the lich repository; this plugin
 only implements them).
 
-Shows, in the status line under the prompt, the relay errands the session is
+Shows, in the prompt footer, the relay errands the session is
 part of: who it owes an answer, the tasks it handed out that are still running,
 and the answers waiting to be collected. The card shows these in the window;
 this puts them in front of the person at the terminal.
@@ -27,12 +27,18 @@ Each list that is not empty adds a piece, in this order, joined by commas:
 | `open`  | `N tasks out`, plus `(M waiting)` for those whose session waits on a human               |
 | `ready` | `N answers to collect`                                                                  |
 
-Claude Code puts the plugin's name before it: `lich: 1 task out, 1 answer to
-collect`. With all three lists empty the piece is gone. It shares the one status
-line Claude Code gives the plugin through `hooks/status-line.js`, and while it
-shows, the worker count of [agent-cards.md](agent-cards.md) is left out of the
-line: every worker that mod opens is an errand of this session, so `open`
-already counts it.
+The line reads `lich: 1 task out, 1 answer to collect`. With all three lists
+empty the piece is gone.
+
+The mods share one lich line, built by `hooks/status-line.js`: the errands,
+then the worker count of [agent-cards.md](agent-cards.md), then the note of
+[edit-guard.md](edit-guard.md), joined by ` · `. While the errands show, the
+worker count is left out: every worker that mod opens is an errand of this
+session, so `open` already counts it. The line is drawn dim among the mode
+labels at the right of the prompt footer, by a `ui.render` hook on
+`SessionMode` that adds it after Claude Code's own labels. `$.ui.status` is
+not used: Claude Code draws it as a yellow warning under the prompt, and keeps
+only one per plugin.
 
 ## How it behaves
 

@@ -9,7 +9,7 @@
 // Every function that takes `$` is declared here at the top level: the loader
 // refuses a module that hands `$` to a nested function.
 
-import { statusLineWith } from "./status-line.js"
+import { setStatusPart } from "./status-line.js"
 
 // Sent as X-Lich-Plugin on every request; bumped at release (CLAUDE.md, Release).
 const PLUGIN_VERSION = "0.17.0"
@@ -86,7 +86,8 @@ async function read($, state) {
     // Unreachable or unreadable: the line goes until the next read works.
   }
   state.reading = false
-  $.ui.status(statusLineWith("errands", line))
+  setStatusPart("errands", line)
+  $.ui.invalidate("ui.render")
 }
 
 /** @param {import('claude-code').On} on */

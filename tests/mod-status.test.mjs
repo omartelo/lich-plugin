@@ -13,7 +13,7 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import path from 'node:path'
 
-import { LICH_SESSION_ID, PLUGIN_VERSION, ROOT, TOKEN, lichEnv } from './contract.mjs'
+import { LICH_SESSION_ID, PLUGIN_VERSION, ROOT, TOKEN, footerLine, lichEnv } from './contract.mjs'
 import { register } from '../hooks/mod-status.js'
 
 const PORT = 47997
@@ -42,7 +42,7 @@ function load({ env = lichEnv(PORT), answer = answering(NONE) } = {}) {
         return timer
       },
     },
-    ui: { status: (text) => statuses.push(text) },
+    ui: { invalidate: () => statuses.push(footerLine()) },
     http: {
       fetch: async (url, init = {}) => {
         reads.push({ url, method: init.method ?? 'GET', headers: init.headers ?? {} })
@@ -86,7 +86,7 @@ test("lich's status draws as one line", async () => {
   const mod = load({ answer: answering(STATUS) })
   await mod.start()
 
-  assert.deepEqual(mod.statuses, ['owes 2 answers, 4 tasks out (1 waiting), 2 answers to collect'])
+  assert.deepEqual(mod.statuses, ['lich: owes 2 answers, 4 tasks out (1 waiting), 2 answers to collect'])
 })
 
 test('one answer owed names the session that asked, unless it came from the command line', async () => {
@@ -96,8 +96,8 @@ test('one answer owed names the session that asked, unless it came from the comm
   await named.start()
   await cli.start()
 
-  assert.deepEqual(named.statuses, ['owes "Session 26" an answer'])
-  assert.deepEqual(cli.statuses, ['owes 1 answer'])
+  assert.deepEqual(named.statuses, ['lich: owes "Session 26" an answer'])
+  assert.deepEqual(cli.statuses, ['lich: owes 1 answer'])
 })
 
 test('nothing to show clears the line', async () => {
@@ -121,7 +121,7 @@ test('a failed read clears the line, is not retried, and the next one still runs
   answer = answering(STATUS)
   await mod.tick()
 
-  assert.deepEqual(mod.statuses.at(-1), 'owes 2 answers, 4 tasks out (1 waiting), 2 answers to collect')
+  assert.deepEqual(mod.statuses.at(-1), 'lich: owes 2 answers, 4 tasks out (1 waiting), 2 answers to collect')
   assert.equal(mod.timers[0].cancelled, false)
 })
 
