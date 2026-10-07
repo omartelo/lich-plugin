@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **The edit guard tells you too, not only the model.** When a file you edit
+  was also edited by another lich session in the last 10 minutes, the status
+  line under the prompt reads `lich: app.js also edited by "quiet-comet"` until
+  that edit leaves the window. It shares the line with the worker count:
+  `lich: 2 workers · app.js also edited by "quiet-comet"`.
+
 ## [0.17.0] - 2026-10-05
 
 ### Added

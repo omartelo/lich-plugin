@@ -22,6 +22,8 @@
 // Every function that takes `$` is declared at the top level: the loader
 // refuses a module that hands `$` to a nested function or keeps it in a variable.
 
+import { statusLineWith } from "./status-line.js"
+
 // lich's `promptLimit` (internal/relay). lich checks it only after the session
 // was opened, so a task over it would leave an empty card behind.
 const PROMPT_LIMIT_BYTES = 8192
@@ -334,7 +336,7 @@ async function runAsSession($, state, e, next) {
  */
 function showWorkers($, state) {
   const count = state.workers.size
-  $.ui.status(count === 0 ? undefined : `${count} worker${count === 1 ? "" : "s"}`)
+  $.ui.status(statusLineWith("workers", count === 0 ? undefined : `${count} worker${count === 1 ? "" : "s"}`))
 }
 
 /**

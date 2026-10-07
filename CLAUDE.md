@@ -23,6 +23,7 @@ hooks/agent-cards.js              # Claude Code mod: a general-purpose subagent 
 hooks/mod-usage.js                # Claude Code mod: the session reports its own context, rate limits and cost
 hooks/edit-guard.js               # Claude Code mod: an edit says which other lich session edited the file
 hooks/worker-answer.js            # Claude Code mod: a lich subagent worker's last message answers its task
+hooks/status-line.js              # the one status line Claude Code gives the plugin, shared by the mods above
 opencode/lich.js                  # opencode client: a module, not a command
 omp/lich.js                       # omp client: a module, not a command
 docs/                             # lich ⇄ plugin communication contracts
@@ -101,7 +102,9 @@ usage reports against the mod-usage fixtures, and
 answer against the mod-answer fixtures.
 [tests/edit-guard.test.mjs](tests/edit-guard.test.mjs) hands the edit guard a
 fake `$` with an in-memory git dir and asserts the markers it leaves and the
-note another session's marker adds.
+note another session's marker adds, and
+[tests/status-line.test.mjs](tests/status-line.test.mjs) that the mods share
+the one status line Claude Code gives the plugin.
 [tests/agent-cards.test.mjs](tests/agent-cards.test.mjs) hands the agent-cards
 mod the same kind of fake `$` and asserts the `lich open` argv
 it runs, the Agent result it answers each outcome with, and that a call it does
