@@ -23,3 +23,13 @@ test('parts share the one line in a fixed order, and the line goes with the last
     undefined,
   ])
 })
+
+test("the worker count is left out while lich's errands show, which include every worker", () => {
+  statusLineWith('workers', '1 worker')
+  const withErrands = statusLineWith('errands', '1 task out')
+  const without = statusLineWith('errands', undefined)
+  statusLineWith('workers', undefined)
+
+  assert.equal(withErrands, '1 task out')
+  assert.equal(without, '1 worker')
+})

@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **The status line shows the session's errands.** Who it owes an answer, the
+  tasks it handed out that are still running (and how many wait on a human),
+  and the answers waiting to be collected: `lich: owes "docs" an answer, 2
+  tasks out (1 waiting), 1 answer to collect`. Reading never collects an
+  answer. While it shows, the worker count is left out, since it already counts
+  every worker. Needs a lich that takes the mod-status contract; an older one
+  shows nothing.
+
 - **The edit guard tells you too, not only the model.** When a file you edit
   was also edited by another lich session in the last 10 minutes, the status
   line under the prompt reads `lich: app.js also edited by "quiet-comet"` until
