@@ -1,5 +1,6 @@
 #!/bin/sh
-# Refreshes the vendored copies of lich's hook-contract fixtures.
+# Refreshes the vendored copies of lich's hook-contract fixtures, and of the
+# theme template the theme skill hands out and validates against.
 #
 # The fixtures are canonical in the lich repository (docs/hooks/fixtures/
 # there). This repository only vendors them so the test suite never needs the
@@ -15,7 +16,8 @@ set -eu
 
 here=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 ref=$(tr -d '[:space:]' <"$here/lich-ref")
-base=https://raw.githubusercontent.com/omartelo/lich/$ref/docs/hooks/fixtures
+raw=https://raw.githubusercontent.com/omartelo/lich/$ref
+base=$raw/docs/hooks/fixtures
 
 for file in session-state.jsonl session-start.jsonl session-title.jsonl \
   session-touched.jsonl mod-usage.jsonl mod-control.jsonl mod-commands.json \
@@ -24,3 +26,7 @@ for file in session-state.jsonl session-start.jsonl session-title.jsonl \
   echo "refreshed $file at $ref"
 done
 
+# validate.mjs reads its token sets off this copy, so a token lich adds reaches
+# the validator by moving tests/lich-ref, not by hand.
+curl -fsSL "$raw/themes/template.json" -o "$here/../skills/theme/template.json"
+echo "refreshed skills/theme/template.json at $ref"

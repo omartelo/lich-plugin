@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **The theme validator knows the status tones.** `validate.mjs` read its
+  tokens off a template copied before lich 0.53.0 made `tone-pass` and
+  `tone-wait` required, so it called a current theme's tones unknown and passed
+  a theme without them that lich rejects on import. The template is now
+  refreshed from lich at `tests/lich-ref` with the contract fixtures, and CI
+  fails when the copy drifts; the skill lists the two tokens.
+
 ## [0.18.1] - 2026-10-08
 
 ### Fixed

@@ -25,7 +25,7 @@ jobs:
         run: tests/refresh-fixtures.sh
       - name: Fail if the vendored copies drifted
         run: |
-          git diff --exit-code -- tests/fixtures || {
-            echo "::error::A hook contract moved in lich. Run tests/refresh-fixtures.sh, then make the scripts match."
+          git diff --exit-code -- tests/fixtures skills/theme/template.json || {
+            echo "::error::A hook contract or the theme template moved in lich. Run tests/refresh-fixtures.sh, then make the scripts (or the theme skill) match."
             exit 1
           }

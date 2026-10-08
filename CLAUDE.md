@@ -72,7 +72,7 @@ Each doc carries the event mapping for **every** provider, one column each — a
 
 ## Skills
 
-- [skills/theme](skills/theme/SKILL.md) — writing, porting and validating lich color themes, as a single file or as a versioned theme repository. Mirrors the theme contract in the lich repository (`docs/themes.md` there); `template.json` is a copy of the starter lich itself hands out, and `validate.mjs` derives its token sets from that copy. A change to the theme shape, or to the repository contract, lands here too.
+- [skills/theme](skills/theme/SKILL.md) — writing, porting and validating lich color themes, as a single file or as a versioned theme repository. Mirrors the theme contract in the lich repository (`docs/themes.md` there); `template.json` is a copy of the starter lich itself hands out, vendored at `tests/lich-ref` by `tests/refresh-fixtures.sh` and diffed by CI like the fixtures, and `validate.mjs` derives its token sets from that copy. A change to the theme shape, or to the repository contract, lands here too.
 
 ## Tests
 
