@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **opencode has the six lich tools it was missing.** `control_session`
+  (`lich control`), `ask_session` (`lich ask`), `list_folders` (`lich folders`),
+  `file_session` (`lich file`), `rename_folder` (`lich rename-folder`) and
+  `color_folder` (`lich color-folder`) join the eight already there, under the
+  names, parameters and descriptions lich's MCP server gives them, so an opencode
+  session has the same fourteen as Claude Code and Codex. Like the rest they
+  shell out to the `lich` binary. `control_session` and `ask_session` need lich
+  0.58.0, `list_folders`, `file_session` and `rename_folder` 0.55.0, and
+  `color_folder` 0.62.0; on an older one the tool answers with that lich's own
+  "not a command" line.
+
 ### Fixed
 
 - **The theme validator passes `formatVersion: null`.** lich decodes a null

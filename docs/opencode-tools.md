@@ -3,7 +3,8 @@
 The other contracts in this directory are about **reporting**: they tell lich
 what a session is doing. This one is the other direction — what a session can
 *do* to the sessions beside it: list them, hand one a task, answer one, open a
-new one, rename one, close one, look at the worktrees.
+new one, rename one, close one, drive or ask one, look at the worktrees, file
+them into folders.
 
 lich exposes those operations twice, and both are documented in
 [`docs/cli.md`](https://github.com/omartelo/lich/blob/main/docs/cli.md) there:
@@ -14,7 +15,7 @@ What it can do is define tools, so that is what `opencode/lich.js` does.
 
 ## What is registered
 
-The same eight the MCP server offers, under the same names, because an agent
+The same fourteen the MCP server offers, under the same names, because an agent
 that learns one surface should find the other under the names it already knows:
 
 | Tool | What it does |
@@ -26,7 +27,13 @@ that learns one surface should find the other under the names it already knows:
 | `open_session` | Open a session, optionally on a fresh git worktree. |
 | `close_session` | Close one, and settle what happens to its checkout. |
 | `rename_session` | Rename one — or your own card, which is the form an agent has. |
+| `control_session` | Drive a Claude Code session: prompt, abort, model, effort, a slash command. |
+| `ask_session` | Ask a Claude Code session a side question, outside its conversation. |
 | `list_worktrees` | The checkouts, what is uncommitted, who is in them. |
+| `list_folders` | The sidebar folders, and the sessions filed under each, as JSON. |
+| `file_session` | File a session under a folder, or take it out with an empty one. |
+| `rename_folder` | Rename a folder, or take it apart with an empty name. |
+| `color_folder` | Paint a folder's sessions one color, or clear it with an empty one. |
 
 ## They shell out to `lich`
 
@@ -69,3 +76,5 @@ it exists.
 A wait that runs out exits 2 and one whose errand ended with no answer coming
 exits 3 (`docs/cli.md` in lich). Both are results, so the tool returns what lich
 printed, the ticket or the reason, rather than reporting a failure.
+`control_session` reads the same two codes the same way: 2 is a command the
+session took and has not confirmed yet, 3 one it ended before confirming.
