@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **The theme validator agrees with lich's install on three edge cases.**
+  `formatVersion: 0` passes, as lich reads it as omitted; a `source` that does
+  not decode into `{url, version}` fails, as lich fails to parse the file, while
+  any decodable one passes, since lich replaces it on install; and a directory
+  named `*.json` in a theme repository is skipped instead of counted as a theme.
+
 ## [0.18.2] - 2026-10-08
 
 ### Fixed
