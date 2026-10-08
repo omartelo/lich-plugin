@@ -95,10 +95,16 @@ test('every operation lich offers is a tool', async () => {
   // The same set the MCP server registers for Claude Code and Codex: an agent
   // that learns one surface should find the other one under the same names.
   assert.deepEqual(Object.keys(tools).sort(), [
+    'ask_session',
     'close_session',
+    'color_folder',
+    'control_session',
+    'file_session',
+    'list_folders',
     'list_sessions',
     'list_worktrees',
     'open_session',
+    'rename_folder',
     'rename_session',
     'reply_to_session',
     'send_to_session',
@@ -201,6 +207,83 @@ test('a rename sends the target only when it names one', async () => {
   assert.deepEqual(shell.calls[0].args, ['rename', 'auth-fix', 'the login bug'])
   assert.deepEqual(shell.calls[1].args, ['rename', 'planner'])
   assert.deepEqual(shell.calls[2].args, ['rename', '--project', 'lich', 'docs', 'planner'])
+})
+
+test('a side question carries its target and its words', async () => {
+  const shell = fakeShell({ stdout: 'On the parser.\n' })
+  await inLich(shell, async (tools) => {
+    assert.equal(await tools.ask_session.execute({ session: 'docs', question: 'what are you on?' }), 'On the parser.')
+    await tools.ask_session.execute({ project: 'lich', session: 'docs', question: 'x' })
+  })
+
+  assert.deepEqual(shell.calls[0].args, ['ask', 'docs', 'what are you on?'])
+  assert.deepEqual(shell.calls[1].args, ['ask', '--project', 'lich', 'docs', 'x'])
+})
+
+test('a control sends the value only when the action carries one', async () => {
+  const shell = fakeShell()
+  await inLich(shell, async (tools) => {
+    await tools.control_session.execute({ session: 'docs', action: 'abort' })
+    await tools.control_session.execute({ session: 'docs', action: 'prompt', value: 'run the tests' })
+    await tools.control_session.execute({ project: 'lich', session: 'docs', action: 'command', value: 'compact', args: 'keep the plan' })
+    // The value and the arguments are both positional: arguments with no value
+    // keep the value's place empty rather than sliding into it.
+    await tools.control_session.execute({ session: 'docs', action: 'command', args: 'x' })
+  })
+
+  assert.deepEqual(shell.calls[0].args, ['control', 'docs', 'abort'])
+  assert.deepEqual(shell.calls[1].args, ['control', 'docs', 'prompt', 'run the tests'])
+  assert.deepEqual(shell.calls[2].args, ['control', '--project', 'lich', 'docs', 'command', 'compact', 'keep the plan'])
+  assert.deepEqual(shell.calls[3].args, ['control', 'docs', 'command', '', 'x'])
+})
+
+// lich control exits 2 when the session took the command but has not confirmed
+// it, and 3 when it ended first: the MCP tool answers both as a result.
+for (const exitCode of [2, 3]) {
+  test(`a control that exits ${exitCode} comes back as its own words`, async () => {
+    const stdout = '"docs" took the command (abort, id 7) and has not confirmed it yet.'
+    const shell = fakeShell({ exitCode, stdout: `${stdout}\n`, stderr: 'noise on stderr\n' })
+
+    await inLich(shell, async (tools) => {
+      assert.equal(await tools.control_session.execute({ session: 'docs', action: 'abort' }), stdout)
+    })
+  })
+}
+
+test('the folders are listed as JSON', async () => {
+  const shell = fakeShell({ stdout: '[]' })
+  await inLich(shell, async (tools) => {
+    await tools.list_folders.execute({})
+    await tools.list_folders.execute({ project: 'lich' })
+  })
+
+  assert.deepEqual(shell.calls[0].args, ['folders', '--json'])
+  assert.deepEqual(shell.calls[1].args, ['folders', '--json', '--project', 'lich'])
+})
+
+test('an empty folder, name or color is sent, not dropped', async () => {
+  const shell = fakeShell()
+  await inLich(shell, async (tools) => {
+    await tools.file_session.execute({ folder: 'apps' })
+    // "" is the instruction itself: take the session out, take the folder
+    // apart, clear the color. Dropping it would change the command.
+    await tools.file_session.execute({ folder: '' })
+    await tools.file_session.execute({ project: 'lich', session: 'docs', folder: 'apps' })
+    await tools.rename_folder.execute({ folder: 'apps', to: '' })
+    await tools.rename_folder.execute({ project: 'lich', folder: 'apps', to: 'web' })
+    await tools.color_folder.execute({ folder: 'apps', color: '' })
+    await tools.color_folder.execute({ project: 'lich', folder: 'apps', color: 'teal' })
+  })
+
+  assert.deepEqual(shell.calls.map((call) => call.args), [
+    ['file', 'apps'],
+    ['file', ''],
+    ['file', '--project', 'lich', 'docs', 'apps'],
+    ['rename-folder', 'apps', ''],
+    ['rename-folder', '--project', 'lich', 'apps', 'web'],
+    ['color-folder', 'apps', ''],
+    ['color-folder', '--project', 'lich', 'apps', 'teal'],
+  ])
 })
 
 test('a refusal comes back as lich worded it', async () => {

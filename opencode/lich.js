@@ -83,6 +83,15 @@ function flag(name, value) {
   return typeof value === "string" && value !== "" ? [name, value] : []
 }
 
+// controlWords is what follows `lich control <session> <action>`: the value,
+// then a slash command's arguments. Both are positional, so arguments without a
+// value keep the value's place with an empty one instead of taking it.
+function controlWords(value, commandArgs) {
+  const word = typeof value === "string" ? value : ""
+  if (typeof commandArgs === "string" && commandArgs !== "") return [word, commandArgs]
+  return word !== "" ? [word] : []
+}
+
 // runner turns a tool call into a `lich` invocation.
 //
 // Shelling out rather than posting to the endpoint directly is deliberate. lich
@@ -151,6 +160,16 @@ async function lichTools($, helper) {
   const run = runner($)
   const session = s.string().describe("The session, by the label on its card or the name it answers to.")
   const project = s.string().optional().describe("Project to narrow to, when the same label exists in more than one.")
+  // The newer tools word their project the way lich's MCP server does today:
+  // either a name or a directory path resolves it.
+  const projectByPath = s
+    .string()
+    .optional()
+    .describe("Project to narrow to, by name or by directory path, when the same label exists in more than one.")
+  const folderProject = s
+    .string()
+    .optional()
+    .describe("Project the folder is in, by name or by directory path. Defaults to your own.")
 
   return {
     list_sessions: tool({
@@ -296,6 +315,57 @@ async function lichTools($, helper) {
         ]),
     }),
 
+    control_session: tool({
+      description:
+        "Drive another running Claude Code session in lich: type a prompt into it, stop the " +
+        "turn it is running, set the model or reasoning effort its next requests use, or run one " +
+        "of its slash commands, such as compact or clear. It waits up to 10 seconds (60 for a " +
+        "slash command) for the session to confirm. A result saying delivered, with an id, is " +
+        "not a failure: the command still goes through. One the session never took fails, and " +
+        "nothing ran. Claude Code sessions only, and never your own. model and effort change " +
+        "that session only; the slash commands /model and /effort are refused because Claude " +
+        "Code would save them as the user's default for every new session.",
+      args: {
+        session: s.string().describe("The session to drive, by the label on its card or the name it answers to."),
+        action: s.string().describe("One of prompt, abort, model, effort, command."),
+        value: s
+          .string()
+          .optional()
+          .describe(
+            "prompt: the text (required). model: the model name, or omit to go back to the " +
+              "session's own. effort: low, medium, high, xhigh or max, or omit likewise. " +
+              "command: the slash command's name, with or without the slash (required). " +
+              "abort: omit.",
+          ),
+        args: s.string().optional().describe("command only: what follows the command's name, as typed."),
+        project: projectByPath,
+      },
+      execute: (args) =>
+        run([
+          "control",
+          ...flag("--project", args.project),
+          args.session,
+          args.action,
+          ...controlWords(args.value, args.args),
+        ], ERRAND_OUTCOMES),
+    }),
+
+    ask_session: tool({
+      description:
+        "Ask another running Claude Code session in lich a side question and get its " +
+        "answer, without interrupting it: it answers from its own conversation while its turn " +
+        "goes on, and neither the question nor the answer enters that conversation. It sees " +
+        "the conversation as of its last finished reply, not the step it is taking right now, " +
+        "and cannot use tools to find out more. Waits up to 90 seconds; ask for a brief " +
+        "answer. Claude Code sessions only, and never your own.",
+      args: {
+        session: s.string().describe("The session to ask, by the label on its card or the name it answers to."),
+        question: s.string().describe("The question."),
+        project: projectByPath,
+      },
+      execute: (args) => run(["ask", ...flag("--project", args.project), args.session, args.question]),
+    }),
+
     list_worktrees: tool({
       description:
         "A project's git worktrees as JSON: what each is called, whether it has uncommitted " +
@@ -303,6 +373,80 @@ async function lichTools($, helper) {
         "and before closing one — the last session in a checkout decides that checkout's fate.",
       args: { project: s.string().optional().describe("Project to list. Defaults to your own.") },
       execute: (args) => run(["worktrees", "--json", ...flag("--project", args.project)]),
+    }),
+
+    list_folders: tool({
+      description:
+        "The sidebar folders of a project: each folder's name and the sessions " +
+        "filed under it, by label. A folder groups sessions by the work they are on rather " +
+        "than the checkout they live in, and exists only while a session is filed under it. " +
+        "Use it before filing a session, to reuse a name exactly: names are matched as " +
+        'written, so "apps" beside "Apps" is a second folder.',
+      args: { project: s.string().optional().describe("Project to list, by name or by directory path. Defaults to your own.") },
+      execute: (args) => run(["folders", "--json", ...flag("--project", args.project)]),
+    }),
+
+    file_session: tool({
+      description:
+        'Move a lich session into a sidebar folder, the window\'s "Move to ' +
+        'folder". Omit the session to file your own. A session is in at most one folder, ' +
+        "so filing it moves it; a folder no session carries yet starts existing with this " +
+        "one in it, and an empty folder takes the session out of the one it is in.",
+      args: {
+        folder: s
+          .string()
+          .describe(
+            "Folder to file the session under, exactly as list_folders names it, or a new " +
+              "name. An empty string takes the session out of its folder.",
+          ),
+        session: s
+          .string()
+          .optional()
+          .describe(
+            "Session to file, by the label on its card or the name it answers to. Omit to " +
+              "file the session you are running in.",
+          ),
+        project: projectByPath,
+      },
+      // The folder is sent even when empty: "" is what takes the session out.
+      // The target is dropped when empty, as rename_session's is.
+      execute: (args) =>
+        run([
+          "file",
+          ...flag("--project", args.project),
+          ...(typeof args.session === "string" && args.session !== "" ? [args.session] : []),
+          args.folder,
+        ]),
+    }),
+
+    rename_folder: tool({
+      description:
+        "Rename a sidebar folder across every session filed under it (the " +
+        'window\'s "Rename folder"), or, with an empty new name, take it apart: its ' +
+        "sessions go back among their checkout's cards. Renaming onto a name the project " +
+        "already has merges the two folders. Returns every session that moved.",
+      args: {
+        folder: s.string().describe("The folder to rename, exactly as list_folders names it."),
+        to: s.string().describe("Its new name. An empty string takes the folder apart."),
+        project: folderProject,
+      },
+      execute: (args) => run(["rename-folder", ...flag("--project", args.project), args.folder, args.to]),
+    }),
+
+    color_folder: tool({
+      description:
+        "Paint every session filed under a sidebar folder with one color, the " +
+        'window\'s folder "Color", or with an empty color hand them back to the theme. ' +
+        "A folder has no color of its own: it shows the one its cards share, so a card " +
+        "filed later keeps its own. Returns every session painted.",
+      args: {
+        folder: s.string().describe("The folder to paint, exactly as list_folders names it."),
+        color: s
+          .string()
+          .describe("One of red, orange, amber, green, teal, blue, violet, pink. An empty string clears it."),
+        project: folderProject,
+      },
+      execute: (args) => run(["color-folder", ...flag("--project", args.project), args.folder, args.color]),
     }),
   }
 }
