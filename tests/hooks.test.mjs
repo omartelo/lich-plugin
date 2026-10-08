@@ -520,6 +520,21 @@ test('every registered state argument is an accepted state', () => {
   }
 })
 
+// Claude Code fires StopFailure *instead of* Stop when an API error ends the
+// turn (a usage limit, an overload, a failed login), so a registration with
+// Stop alone leaves the card spinning, and lich never gets to read the limit
+// off the transcript (lich docs/hooks/session-state.md).
+test('claude ends a turn an API error stopped like any other', () => {
+  const failure = REGISTRATIONS.filter(
+    (r) => r.provider === 'claude' && r.event === 'StopFailure' && r.script === 'report-state.sh',
+  )
+  assert.deepEqual(
+    failure.map((r) => [r.argument, r.matcher]),
+    [['done', undefined]],
+    'StopFailure reports done for every error',
+  )
+})
+
 test('every registered provider argument is a registered provider', () => {
   for (const r of REGISTRATIONS.filter((r) => r.script === 'report-session-start.sh')) {
     assert.ok(
