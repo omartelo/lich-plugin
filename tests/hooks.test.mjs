@@ -521,7 +521,7 @@ test('every registered state argument is an accepted state', () => {
 })
 
 // Claude Code fires StopFailure *instead of* Stop when an API error ends the
-// turn — a usage limit, an overload, a failed login — so a registration with
+// turn (a usage limit, an overload, a failed login), so a registration with
 // Stop alone leaves the card spinning, and lich never gets to read the limit
 // off the transcript (lich docs/hooks/session-state.md).
 test('claude ends a turn an API error stopped like any other', () => {
