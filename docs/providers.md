@@ -73,7 +73,7 @@ swallows its own errors and never awaits a report.
 | `busy`              | `UserPromptSubmit`, `PostToolUse` | `UserPromptSubmit`, `PostToolUse` | `PreInvocation`        | `session.status` (`busy`) | `input`, `turn_start` | —              |
 | `busy` + tool       | `PreToolUse`                 | `PreToolUse`                 | `PreToolUse`                 | `tool.execute.before`     | `tool_call`              | —                           |
 | `waiting` + reason  | `Notification`               | `PermissionRequest`          | — (not measured)             | any `*.asked`             | — (see below)            | —                           |
-| `done`              | `Stop`                       | `Stop`                       | `Stop`                       | `session.status` (`idle`) | `session_stop`           | —                           |
+| `done`              | `Stop`, `StopFailure`        | `Stop`                       | `Stop`                       | `session.status` (`idle`) | `session_stop`           | —                           |
 | title               | `Stop`                       | `Stop`                       | `Stop`                       | `session.updated`         | `session_stop`, `turn_start` | —                       |
 | `idle`              | `SessionEnd`                 | — (registered, never fires)  | — (never fires)              | — (nothing outlives it)   | — (nothing outlives it)  | —                           |
 | touched             | `PostToolUse` (write tools)  | `PostToolUse` (write tools)  | `PostToolUse` (write tools)  | `file.edited`             | `tool_result` (write tools) | `PreToolUse` (write tools) |

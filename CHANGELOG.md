@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **A Claude Code card stops spinning when an API error ends the turn.** A usage
+  limit, an overload or a failed login ends a Claude Code turn with
+  `StopFailure` instead of `Stop`, which the plugin did not register, so the card
+  kept its spinner until the next prompt. It now reports the turn done, and a
+  lich that reads the limit off the transcript picks the turn up again once the
+  limit resets.
+
 ## [0.18.0] - 2026-10-07
 
 ### Added
