@@ -56,6 +56,11 @@ test('formatVersion 0 passes, the way lich reads an omitted one', () => {
   assert.equal(result.status, 0, result.stderr)
 })
 
+test('formatVersion null passes, as decoding null into an int leaves lich at 0', () => {
+  const result = validateTheme({ formatVersion: null })
+  assert.equal(result.status, 0, result.stderr)
+})
+
 test('a negative formatVersion is rejected with lich\'s message', () => {
   const result = validateTheme({ formatVersion: -1 })
   assert.equal(result.status, 1)
