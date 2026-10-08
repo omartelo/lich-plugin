@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **The theme validator passes `formatVersion: null`.** lich decodes a null
+  `formatVersion` the way it decodes an omitted one and installs the theme;
+  the validator rejected it as not a positive integer.
+
 ## [0.18.3] - 2026-10-08
 
 ### Fixed

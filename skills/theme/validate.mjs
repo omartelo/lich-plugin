@@ -40,9 +40,9 @@ if (!target) {
 }
 
 function formatVersionError(document) {
-  if (!("formatVersion" in document)) return null
   const version = document.formatVersion
-  // 0 is what lich decodes an omitted formatVersion to, so it reads as 1.
+  // lich decodes an omitted or null formatVersion to 0, and reads 0 as 1.
+  if (version === undefined || version === null) return null
   if (!Number.isInteger(version) || version < 0)
     return `theme formatVersion ${JSON.stringify(version)} must be a positive integer`
   if (version > FORMAT_VERSION)
