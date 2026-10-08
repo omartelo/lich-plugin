@@ -122,7 +122,7 @@ manifest**, commit, push. The user takes it with **Update** on the theme's row.
   `com1`–`com9`, `lpt1`–`lpt9`) — the id names a file.
 - `name`: required, non-blank, ≤ 128 characters.
 - `scheme`: `light` or `dark`. Nothing else.
-- `app`: **every one of the 31 tokens** must be present. An unknown token is an
+- `app`: **every one of the 33 tokens** must be present. An unknown token is an
   error, not a warning.
 - `terminal`: `background` and `foreground` required; the other 20 tokens
   optional. Unknown tokens rejected.
@@ -199,6 +199,7 @@ pair contrasty, they are never used apart):
 | `muted` / `muted-foreground` | secondary text, resting icons, paths, meta |
 | `primary` / `primary-foreground` | the single high-emphasis button fill, and the Switch when on |
 | `destructive` | destructive actions and diff removals — must stay legible as red |
+| `tone-pass` / `tone-wait` | status tones: a pass (green) and a wait (amber) on session icons, pull request checks and reviews. Drawn as text and icons on `background`/`card`, so they need contrast there. Required since lich 0.53.0 — a pack that carries them is one an older lich rejects as unknown tokens, which is what `minLichVersion: "0.53.0"` names |
 | `border` | hairline seams. Translucent works well in dark (`oklch(1 0 0 / 10%)`) |
 | `input` | input and control edges, usually a touch stronger than `border` |
 | `ring` | focus ring, always visible |
