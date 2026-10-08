@@ -22,7 +22,7 @@
 // refuses a module that hands `$` to a nested function.
 
 // Sent as X-Lich-Plugin on every request; bumped at release (CLAUDE.md, Release).
-const PLUGIN_VERSION = "0.18.3"
+const PLUGIN_VERSION = "0.18.4"
 
 // The value lich spawns a `--subagent` session with.
 const CARDS_OFF = "off"
