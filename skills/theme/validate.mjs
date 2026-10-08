@@ -42,11 +42,21 @@ if (!target) {
 function formatVersionError(document) {
   if (!("formatVersion" in document)) return null
   const version = document.formatVersion
-  if (!Number.isInteger(version) || version < 1)
+  // 0 is what lich decodes an omitted formatVersion to, so it reads as 1.
+  if (!Number.isInteger(version) || version < 0)
     return `theme formatVersion ${JSON.stringify(version)} must be a positive integer`
   if (version > FORMAT_VERSION)
     return `theme format ${version} is newer than this lich reads (up to ${FORMAT_VERSION}); update lich`
   return null
+}
+
+// lich replaces a written source on install, so its contents are never checked;
+// only one that does not decode into {url, version} fails, as a parse error.
+function sourceDecodes(source) {
+  if (source === undefined || source === null) return true
+  if (typeof source !== "object" || Array.isArray(source)) return false
+  const decodesToString = (value) => value === undefined || value === null || typeof value === "string"
+  return decodesToString(source.url) && decodesToString(source.version)
 }
 
 function themeErrors(theme) {
@@ -60,6 +70,8 @@ function themeErrors(theme) {
   if ([...(theme.name ?? "")].length > 128) errors.push("name cannot exceed 128 characters")
   if (theme.scheme !== "light" && theme.scheme !== "dark")
     errors.push('scheme must be "light" or "dark"')
+  if (!sourceDecodes(theme.source))
+    errors.push("parse theme JSON: source must be an object whose url and version are strings")
 
   const checkColors = (group, allowed, pattern, requireAll) => {
     const colors = theme[group]
@@ -115,8 +127,9 @@ function checkRepository(dir) {
       `${MANIFEST}: manifest minLichVersion ${JSON.stringify(minimum)} must be MAJOR.MINOR.PATCH`,
     )
 
-  const files = readdirSync(dir)
-    .filter((name) => name !== MANIFEST && extname(name) === ".json")
+  const files = readdirSync(dir, { withFileTypes: true })
+    .filter((entry) => !entry.isDirectory() && entry.name !== MANIFEST && extname(entry.name) === ".json")
+    .map((entry) => entry.name)
     .sort()
   if (files.length === 0) errors.push(`no theme JSON next to ${MANIFEST}`)
   if (files.length > MAX_THEMES) errors.push(`more than ${MAX_THEMES} themes in one repository`)
@@ -124,7 +137,6 @@ function checkRepository(dir) {
   const seen = new Map()
   for (const name of files) {
     const path = join(dir, name)
-    if (statSync(path).isDirectory()) continue
     errors.push(...checkTheme(path))
     const { value } = read(path)
     const id = value?.id
