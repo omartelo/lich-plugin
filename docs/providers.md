@@ -35,6 +35,7 @@ This repository is one plugin, packaged for each harness it supports:
 | `hooks/edit-guard.js`           | Claude Code | names the other lich session that edited a file, a mod |
 | `hooks/worker-answer.js`        | Claude Code | the mod-answer client: a worker's last message answers its task, a mod |
 | `hooks/mod-compacting.js`       | Claude Code | the session-state `compacting` report, a mod |
+| `hooks/self-command.js`         | Claude Code | runs a built-in slash command the user asked the session for, a mod |
 | `opencode/lich.js`              | opencode    | the whole client, as a module |
 | `omp/lich.js`                   | omp         | the whole client, as a module |
 | `skills/`                       | all         | skills, same layout           |

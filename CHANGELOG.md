@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **A Claude Code session runs a built-in slash command when asked to.** Told
+  "run /compact", the model used to answer that it could not. A new mod,
+  `hooks/self-command.js`, takes the Skill tool's refusal of a built-in command
+  and queues the command with `$.command.run`, so it runs on the session itself
+  once the turn that asked ends; the Skill tool's description says so. Nothing
+  goes through lich, whose `control` refuses a session's own. `/model` and
+  `/effort` are refused, since run this way Claude Code saves them as the
+  default for every new session.
+
 ## [0.19.0] - 2026-10-08
 
 ### Added
