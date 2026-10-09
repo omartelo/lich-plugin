@@ -313,7 +313,7 @@ async function runAsSession($, state, e, next) {
   if (!lich || !session) return next(e)
   if (cards === CARDS_OFF) {
     if (!isWorkerDepth(depth)) return next(e)
-    return runNatively($, e, next, "this session is itself a lich subagent, and lich keeps its own subagents native at this depth")
+    return runNatively($, e, next, "this session is itself a lich subagent card, and lich keeps its subagents inside it")
   }
   const bytes = new TextEncoder().encode(e.prompt).length
   if (bytes > PROMPT_LIMIT_BYTES) {

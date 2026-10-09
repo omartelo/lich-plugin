@@ -273,7 +273,7 @@ test('a worker lich keeps native at its depth limit runs natively, with a toast 
   await mod.start()
   assertNativeUntouched({ mod, ...(await mod.call()) })
   assert.deepEqual(mod.toasts, [
-    'lich: ran "Fix the auth flow" as a Claude Code subagent: this session is itself a lich subagent, and lich keeps its own subagents native at this depth',
+    'lich: ran "Fix the auth flow" as a Claude Code subagent: this session is itself a lich subagent card, and lich keeps its subagents inside it',
   ])
 })
 
