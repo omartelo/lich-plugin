@@ -26,18 +26,18 @@ for file in session-start.jsonl session-title.jsonl \
   echo "refreshed $file at $ref"
 done
 
-# mod-answer gained `unanswered` in lich's commit 040195f5, in no release yet,
+# mod-answer gained `unanswered` in lich's merge commit 19e808e4 (#705), in no release yet,
 # so it is read at that commit. Once a release ships it, move tests/lich-ref to
 # that release and put the file back in the loop above.
-unreleased=040195f593ae213154d4485a13ed2bdb905311fb
+unreleased=19e808e4dc177cbeedd4a289f7d8fac739254c05
 curl -fsSL "https://raw.githubusercontent.com/omartelo/lich/$unreleased/docs/hooks/fixtures/mod-answer.jsonl" \
   -o "$here/fixtures/mod-answer.jsonl"
 echo "refreshed mod-answer.jsonl at $unreleased (unreleased)"
 
-# session-state gained `provider_session_id` in lich's commit faa40def, in no
+# session-state gained `provider_session_id` in lich's merge commit ce8c36a6 (#709), in no
 # release yet, so it is read at that commit. Once a release ships it, move
 # tests/lich-ref to that release and put the file back in the loop above.
-unreleased=faa40defc2eedf550843aa4a817de308b9afe563
+unreleased=ce8c36a6bd9f28786b45a6be527f81bb3a4a3634
 curl -fsSL "https://raw.githubusercontent.com/omartelo/lich/$unreleased/docs/hooks/fixtures/session-state.jsonl" \
   -o "$here/fixtures/session-state.jsonl"
 echo "refreshed session-state.jsonl at $unreleased (unreleased)"
