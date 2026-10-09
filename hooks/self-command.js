@@ -7,7 +7,7 @@
 // that tool's refusal by queueing the command: the Skill tool, which refuses a
 // built-in ("compact is a built-in CLI command, not a skill"), and lich's
 // control_session, which refuses the session's own ("... is this session, and
-// a session cannot control itself"). A tool of the mod's own is not an option:
+// a session cannot control itself"), told apart by `lich whoami`. A tool of the mod's own is not an option:
 // Claude Code lists it as `mcp__lich__<name>`, and `$.tool.register` refuses
 // that in a session whose MCP config already has lich's own server under that
 // name, which is every lich session (measured on 2.1.295).
@@ -23,14 +23,14 @@ const SKILL_NOTE =
   "\n\nIn this session a built-in slash command (compact, clear, and the like) can be named here too, " +
   "when the user asks you to run it: it is queued and runs once your turn ends, so end your turn right after."
 
-// The name Claude Code gives lich's tool, and the words lich refuses a
-// session's own label with (both measured on 2.1.295 with lich's MCP server).
+// The name Claude Code gives lich's tool (measured on 2.1.295 with lich's MCP
+// server).
 const CONTROL_TOOL = "mcp__lich__control_session"
-const CONTROLS_ITSELF = /is this session, and a session cannot control itself/
 
-// A session cannot look its own label up: `list_sessions` and `lich sessions`
-// leave it out. The note names it by `LICH_SESSION_ID` instead, which lich
-// answers with "no session named" and the mod takes as this session.
+const WHOAMI_TIMEOUT_MS = 2_000
+
+// `list_sessions` leaves this session out, so the model does not know its own
+// label; the note names it by `LICH_SESSION_ID`, which lich takes as a target too.
 /** @param {string} sessionId */
 const controlNote = (sessionId) =>
   `\n\nIn this session, action command is accepted with this session itself as the target: pass session ` +
@@ -89,6 +89,25 @@ async function queueBuiltin($, name, args) {
   return `/${[name, args].filter(Boolean).join(" ")}`
 }
 
+/**
+ * Whether `target` names this session: its id, or the label or name
+ * `lich whoami` prints for it, which lich matches without regard to case.
+ *
+ * @param {Engine} $
+ * @param {string} target
+ * @param {string} sessionId
+ */
+async function isThisSession($, target, sessionId) {
+  if (target === sessionId) return true
+  const lich = await $.env.get("LICH_BIN")
+  if (!lich) return false
+  const { exitCode, stdout } = await $.process.run([lich, "whoami", "--json"], { timeoutMs: WHOAMI_TIMEOUT_MS })
+  if (exitCode !== 0) return false
+  const self = JSON.parse(stdout)
+  const wanted = target.toLowerCase()
+  return [self.label, self.name].some((name) => typeof name === "string" && name.toLowerCase() === wanted)
+}
+
 /** @param {string} name */
 const bareName = (name) => name.trim().replace(/^\//, "")
 
@@ -138,8 +157,7 @@ export function register(on) {
     const native = await next(e)
     if (!state.sessionId || e.action !== "command" || typeof e.value !== "string") return native
     if (!("isError" in native && native.isError)) return native
-    const targetsItself = e.session === state.sessionId || CONTROLS_ITSELF.test(native.text)
-    if (!targetsItself) return native
+    if (!(await isThisSession($, e.session, state.sessionId))) return native
     const queued = await queueBuiltin($, bareName(e.value), e.args?.trim() ?? "")
     if (queued === undefined) return native
     if (typeof queued !== "string") return queued

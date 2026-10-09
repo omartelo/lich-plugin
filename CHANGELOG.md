@@ -15,8 +15,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   another session to run it on them. The self-command mod now takes that
   refusal for action `command` and queues the built-in the way it does for the
   Skill tool, `/model` and `/effort` refused alike. The tool's description says
-  so and names the session by its `LICH_SESSION_ID`, since a session cannot
-  look its own label up.
+  so and names the session by its `LICH_SESSION_ID`. A session named by its
+  label is told apart by `lich whoami --json` (lich 0.64), not by the words of
+  lich's refusal.
 
 ## [0.19.1] - 2026-10-09
 

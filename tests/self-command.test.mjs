@@ -4,7 +4,8 @@
 //
 // Like the other mod suites it imports the module and hands it a fake engine:
 // `$.command.list` answers a few commands, `$.command.run` records each run,
-// and a `$.clock.after` timer runs when the test fires it.
+// `$.process.run` answers `lich whoami --json` with this session, and a
+// `$.clock.after` timer runs when the test fires it.
 //
 // Run: node --test tests/
 
@@ -41,8 +42,16 @@ const DELIVERED = { ref: 1, result: 'ran /compact on "peer"', text: 'ran /compac
 
 const CONTROL = 'mcp__lich__control_session'
 
+// This session as `lich whoami --json` prints it (docs/cli.md in lich).
+const WHOAMI = { label: 'fix/x', name: 'lich-plugin-a1b2', project: 'lich-plugin', kind: 'claude', state: 'busy', id: 'lich-1' }
+
 /** Registers the module against a fake engine started with `env`. */
-async function session({ env = { LICH_SESSION_ID: 'lich-1' }, isInteractive = true, runFails = false } = {}) {
+async function session({
+  env = { LICH_SESSION_ID: 'lich-1', LICH_BIN: '/bin/lich' },
+  isInteractive = true,
+  runFails = false,
+  whoami = { exitCode: 0, stdout: JSON.stringify(WHOAMI) },
+} = {}) {
   const hooks = {}
   register((event, matcher, hook) => {
     hooks[`${event} ${JSON.stringify(matcher)}`] = hook
@@ -51,6 +60,7 @@ async function session({ env = { LICH_SESSION_ID: 'lich-1' }, isInteractive = tr
   const toasts = []
   const timers = []
   const invalidated = []
+  const processes = []
   const $ = {
     env: { get: async (name) => env[name] },
     clock: { after: (ms, fn) => timers.push({ ms, fn }) },
@@ -63,6 +73,13 @@ async function session({ env = { LICH_SESSION_ID: 'lich-1' }, isInteractive = tr
       },
     },
     ui: { toast: (text) => toasts.push(text), invalidate: (event) => invalidated.push(event) },
+    process: {
+      run: async (argv) => {
+        processes.push(argv)
+        assert.deepEqual(argv, ['/bin/lich', 'whoami', '--json'])
+        return { stderr: '', ...whoami }
+      },
+    },
   }
   const start = hooks['session.start {"isInteractive":true}']
   if (isInteractive) await start($, { cwd: '/w', surface: 'terminal', isInteractive }, async (e) => e)
@@ -71,6 +88,7 @@ async function session({ env = { LICH_SESSION_ID: 'lich-1' }, isInteractive = tr
     toasts,
     timers,
     invalidated,
+    processes,
     describe: (description) =>
       hooks['tool.describe {"tool":"Skill"}']($, { tool: 'Skill', description }, async (e) => ({ description: e.description })),
     call: (input, beneath) =>
@@ -160,13 +178,34 @@ test('a built-in lich refused because the target is this session is queued on it
   assert.deepEqual(mod.runs, [{ command: 'compact', args: 'keep the plan' }])
 })
 
-test('control_session naming this session by its LICH_SESSION_ID is queued on it', async () => {
+test('control_session naming this session by its id, label or name, in any case, is queued on it', async () => {
+  for (const target of ['lich-1', 'fix/x', 'FIX/X', 'lich-plugin-a1b2']) {
+    const mod = await session()
+    const answer = await mod.control({ session: target, action: 'command', value: 'compact' }, SELF_REFUSAL)
+    assert.match(answer.result, /\/compact is queued on this session/, target)
+    await mod.fire()
+    assert.deepEqual(mod.runs, [{ command: 'compact', args: '' }], target)
+  }
+})
+
+test('lich refusing a target that whoami does not name as this session reaches the model untouched', async () => {
   const mod = await session()
-  const notFound = { ref: 1, result: 'Error: no session named "lich-1"', text: 'no session named "lich-1"', isError: true }
-  const answer = await mod.control({ session: 'lich-1', action: 'command', value: 'compact' }, notFound)
+  assert.equal(await mod.control({ session: 'other', action: 'command', value: 'compact' }, SELF_REFUSAL), SELF_REFUSAL)
+  assert.equal(mod.timers.length, 0)
+})
+
+test('when whoami fails, only the session id is taken as this session', async () => {
+  const mod = await session({ whoami: { exitCode: 1, stdout: '' } })
+  assert.equal(await mod.control({ session: 'fix/x', action: 'command', value: 'compact' }, SELF_REFUSAL), SELF_REFUSAL)
+  const answer = await mod.control({ session: 'lich-1', action: 'command', value: 'compact' }, SELF_REFUSAL)
   assert.match(answer.result, /\/compact is queued on this session/)
-  await mod.fire()
-  assert.deepEqual(mod.runs, [{ command: 'compact', args: '' }])
+})
+
+test('whoami runs only for a refused command, never for a delivered one', async () => {
+  const mod = await session()
+  await mod.control({ session: 'peer', action: 'command', value: 'compact' }, DELIVERED)
+  await mod.control({ session: 'fix/x', action: 'abort' }, SELF_REFUSAL)
+  assert.deepEqual(mod.processes, [])
 })
 
 test('control_session on this session refuses /model and /effort, and never runs them', async () => {
