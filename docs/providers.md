@@ -5,9 +5,12 @@ lich drives an agent CLI inside a PTY and injects the same three variables
 [hook contracts](https://github.com/omartelo/lich/blob/main/docs/hooks/README.md)
 are therefore provider-agnostic: what changes per provider is only *how the
 harness registers hooks* and *what its lifecycle events are called*. A Claude
-Code session also carries `LICH_BIN`, and `LICH_SUBAGENT_CARDS=off` when
-"Subagents as lich sessions" is off in lich's Settings › Providers › Claude
-Code; both are read only by the agent-cards mod ([agent-cards.md](agent-cards.md)).
+Code session also carries `LICH_BIN`; `LICH_SUBAGENT_DEPTH`, how many
+`--subagent` levels down the session was opened (`0` for one nobody opened as a
+worker); and `LICH_SUBAGENT_CARDS=off` when "Subagents as lich sessions" is off
+in lich's Settings › Providers › Claude Code, or in a worker at lich's depth
+limit. The agent-cards mod ([agent-cards.md](agent-cards.md)) reads all three,
+and the worker-answer mod ([mod-answer.md](mod-answer.md)) the last two.
 
 This repository is one plugin, packaged for each harness it supports:
 

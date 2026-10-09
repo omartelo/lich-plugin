@@ -154,6 +154,44 @@ test('an ordinary session never answers', async () => {
   assert.equal(mod.requests.length, 0)
 })
 
+test('a worker lich names by its depth answers, with subagent cards left on', async () => {
+  const mod = load({ env: { ...lichEnv(PORT), LICH_SUBAGENT_DEPTH: '1' } })
+  await mod.start()
+
+  await mod.turn(stop('Done.'), complete('Done.'))
+
+  assert.deepEqual(mod.bodies(), [{ session_id: LICH_SESSION_ID, text: 'Done.' }])
+})
+
+test('a worker at lich\'s depth limit answers, though its subagent cards are off', async () => {
+  const mod = load({ env: { ...WORKER_ENV, LICH_SUBAGENT_DEPTH: '2' } })
+  await mod.start()
+
+  await mod.turn(stop('Done.'), complete('Done.'))
+
+  assert.equal(mod.requests.length, 1)
+})
+
+// The depth decides once lich sets it: cards off at depth 0 is the user's
+// setting, not a worker.
+test('a top-level session with subagent cards turned off never answers', async () => {
+  const mod = load({ env: { ...WORKER_ENV, LICH_SUBAGENT_DEPTH: '0' } })
+  await mod.start()
+
+  await mod.turn(stop('Done.'), complete('Done.'))
+
+  assert.equal(mod.requests.length, 0)
+})
+
+test('a lich older than the depth variable marks a worker by cards off alone', async () => {
+  const mod = load({ env: WORKER_ENV })
+  await mod.start()
+
+  await mod.turn(stop('Done.'), complete('Done.'))
+
+  assert.equal(mod.requests.length, 1)
+})
+
 test('outside lich nothing is sent', async () => {
   const mod = load({ env: { LICH_SUBAGENT_CARDS: 'off' } })
   await mod.start()

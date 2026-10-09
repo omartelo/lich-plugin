@@ -145,6 +145,15 @@ test('turned off in lich, every subagent stays native and lich is never run', as
   expect(w.argvs).toEqual([])
 })
 
+test('a worker at lich\'s depth limit keeps its subagents native, with a toast saying why', async ($, on) => {
+  const w = worldWith(on, { ...ENV, LICH_SUBAGENT_CARDS: 'off', LICH_SUBAGENT_DEPTH: '2' })
+  await $.session.start({ cwd: '/w', surface: 'terminal', isInteractive: true })
+  await $.tool.call(CALL)
+  expect(w.native).toEqual(['Fix the auth flow'])
+  expect(w.argvs).toEqual([])
+  expect(w.toasts).toEqual([expect.stringContaining('this session is itself a lich subagent')])
+})
+
 test('a running worker shows in the footer until lich closes it, and TaskStop closes one', async ($, on) => {
   const pending = { ...OPENED, delivery: { ticket: 't1', target: BRANCH, status: 'pending', answer: '' } }
   const peer = (name: string, state: string) => ({ label: name, name, project: 'lich', kind: 'claude', state })

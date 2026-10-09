@@ -25,21 +25,36 @@ of these hold, and every other one goes on to Claude Code untouched:
   Claude Code's own error;
 - it names no `team_name` and no `isolation: remote`, so a teammate and a
   remote agent keep Claude Code's own route;
-- the session is not itself a worker, so a worker's own subagents stay native
-  instead of opening cards from cards. lich starts every `--subagent` session
-  with `LICH_SUBAGENT_CARDS=off` (below), which covers a worker in the asking
-  session's checkout; an isolated call also stays native when the session is on
-  a branch under `subagent/`, which only this mod opens;
+- under a lich older than `LICH_SUBAGENT_DEPTH` (below), the session is not
+  itself a worker, so a worker's own subagents stay native instead of opening
+  cards from cards. That lich starts every `--subagent` session with
+  `LICH_SUBAGENT_CARDS=off`, which covers a worker in the asking session's
+  checkout; an isolated call also stays native when the session is on a branch
+  under `subagent/`, which only this mod opens. A lich that sets the depth
+  decides how deep cards open from cards through `LICH_SUBAGENT_CARDS` alone,
+  so a worker below its limit opens cards of its own, from a `subagent/` branch
+  too;
 - the session is interactive (`session.start` saw `isInteractive`), since a
   `claude -p` started from a tool inside a lich session inherits its variables;
 - `LICH_BIN` and `LICH_SESSION_ID` are set, which is to say the session runs
   inside lich;
 - `LICH_SUBAGENT_CARDS` is not `off`. lich sets it to `off` in a Claude Code
   session it starts while "Subagents as lich sessions" is off in Settings ›
-  Providers › Claude Code, and in every session opened with `--subagent`, and
-  leaves it out otherwise, so the default is on.
+  Providers › Claude Code, and in a worker at lich's own depth limit for cards
+  opened from cards, and leaves it out otherwise, so the default is on. A lich
+  older than `LICH_SUBAGENT_DEPTH` sets it in every session opened with
+  `--subagent` instead.
   A session's environment is fixed when it starts, so turning the setting over
-  reaches the sessions started after that.
+  reaches the sessions started after that. When it is `off` in a worker, which
+  `LICH_SUBAGENT_DEPTH` above `0` marks, the native agent runs with a toast
+  saying lich keeps that session's subagents native; in any other session it
+  runs silently.
+
+`LICH_SUBAGENT_DEPTH` is set by lich on every Claude Code session it starts:
+`0` for one nobody opened with `--subagent`, `n` for a worker opened `n`
+`--subagent` levels down. The depth limit is lich's; this mod reads the
+variable only to tell a worker from a top-level session and an older lich from
+a current one.
 
 A taken call runs:
 

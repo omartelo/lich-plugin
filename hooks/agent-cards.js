@@ -33,8 +33,10 @@ const PROMPT_LIMIT_BYTES = 8192
 // internal/cli/cli.go. This bound only has to outlast lich's own.
 const OPEN_TIMEOUT_MS = 120000
 
-// The value lich's Settings › Providers › Claude Code writes into a session's
-// environment when "Subagents as lich sessions" is off.
+// The value lich writes into a session's environment to keep its subagents
+// native: when "Subagents as lich sessions" is off in Settings › Providers ›
+// Claude Code, and in a worker at lich's own depth limit for cards opened from
+// cards. A lich older than LICH_SUBAGENT_DEPTH writes it into every worker.
 const CARDS_OFF = "off"
 
 // The bounds lich's own worktree dialog slugs a typed name with
@@ -45,10 +47,10 @@ const MAX_WORDS = 5
 const MIN_CHARS = 10
 const MAX_CHARS = 40
 const FALLBACK_SLUG = "agent"
-// Marks a worker's branch, so the mod inside that worker leaves its own
-// subagents native instead of opening cards from cards. A worker in this
-// session's checkout has no branch of its own: lich starts every `--subagent`
-// session with LICH_SUBAGENT_CARDS=off instead.
+// Marks a worker's branch. Under a lich older than LICH_SUBAGENT_DEPTH, the mod
+// inside an isolated worker reads it to leave its own subagents native instead
+// of opening cards from cards; a lich that sets the depth decides that alone,
+// through LICH_SUBAGENT_CARDS.
 const WORKER_BRANCH_PREFIX = "subagent/"
 
 // How often the status line asks lich which workers still run. Claude Code's
@@ -273,6 +275,17 @@ function answerFor(e, opened, branch, report, durationMs) {
 }
 
 /**
+ * A worker lich opened with `--subagent`, `depth` levels below a session nobody
+ * opened as one.
+ *
+ * @param {string | undefined} depth LICH_SUBAGENT_DEPTH
+ */
+function isWorkerDepth(depth) {
+  const levels = Number(depth)
+  return Number.isInteger(levels) && levels > 0
+}
+
+/**
  * @param {Engine} $
  * @param {AgentCall} e
  * @param {(e: AgentCall) => Promise<unknown>} next
@@ -291,13 +304,17 @@ function runNatively($, e, next, reason) {
  */
 async function runAsSession($, state, e, next) {
   if (!isDelegable(e, next, state)) return next(e)
-  const [lich, session, cards] = await Promise.all([
+  const [lich, session, cards, depth] = await Promise.all([
     $.env.get("LICH_BIN"),
     $.env.get("LICH_SESSION_ID"),
     $.env.get("LICH_SUBAGENT_CARDS"),
+    $.env.get("LICH_SUBAGENT_DEPTH"),
   ])
   if (!lich || !session) return next(e)
-  if (cards === CARDS_OFF) return next(e)
+  if (cards === CARDS_OFF) {
+    if (!isWorkerDepth(depth)) return next(e)
+    return runNatively($, e, next, "this session is itself a lich subagent, and lich keeps its own subagents native at this depth")
+  }
   const bytes = new TextEncoder().encode(e.prompt).length
   if (bytes > PROMPT_LIMIT_BYTES) {
     return runNatively($, e, next, `the task is ${bytes} bytes, over lich's ${PROMPT_LIMIT_BYTES}`)
@@ -305,7 +322,7 @@ async function runAsSession($, state, e, next) {
 
   const isolated = e.isolation === "worktree"
   const base = isolated ? await currentBranch($) : ""
-  if (base.startsWith(WORKER_BRANCH_PREFIX)) return next(e)
+  if (depth === undefined && base.startsWith(WORKER_BRANCH_PREFIX)) return next(e)
   const startedMs = await $.clock.now()
   const branch = isolated ? branchFor(e) : ""
   /** @type {Opened & { delivery: Report }} */

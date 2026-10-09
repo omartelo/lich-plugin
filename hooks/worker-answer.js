@@ -4,10 +4,12 @@
 // https://github.com/omartelo/lich/blob/main/docs/hooks/mod-answer.md
 //
 // A Claude Code mod, registered by hooks/lich.js beside mod-control.js. Only a
-// worker reports: lich spawns every `lich open --subagent` session with
-// LICH_SUBAGENT_CARDS=off, which a session the user turned subagent cards off
-// for also carries; lich ignores the report from a session with no subagent
-// errand open, so that one costs a request per turn and nothing else.
+// worker reports: lich sets LICH_SUBAGENT_DEPTH on every Claude Code session it
+// starts, 0 at the top and n for a worker n `lich open --subagent` levels down.
+// A lich older than that variable spawns every worker with
+// LICH_SUBAGENT_CARDS=off instead, which a session the user turned subagent
+// cards off for also carries; lich ignores the report from a session with no
+// subagent errand open, so that one costs a request per turn and nothing else.
 //
 // A turn is the worker's answer when its main-loop `classic.Stop` lists no
 // background task (a shell, subagent, monitor or workflow still running means
@@ -24,7 +26,8 @@
 // Sent as X-Lich-Plugin on every request; bumped at release (CLAUDE.md, Release).
 const PLUGIN_VERSION = "0.18.4"
 
-// The value lich spawns a `--subagent` session with.
+// The value a lich older than LICH_SUBAGENT_DEPTH spawns every `--subagent`
+// session with.
 const CARDS_OFF = "off"
 
 // The contract cuts an answer at this many UTF-16 units, as mod-control.js
@@ -38,19 +41,30 @@ const ANSWER_LIMIT = 16000
  */
 
 /**
+ * @param {string | undefined} depth LICH_SUBAGENT_DEPTH
+ * @param {string | undefined} cards LICH_SUBAGENT_CARDS
+ */
+function isWorker(depth, cards) {
+  if (depth === undefined) return cards === CARDS_OFF
+  const levels = Number(depth)
+  return Number.isInteger(levels) && levels > 0
+}
+
+/**
  * The link to lich, for a worker only.
  *
  * @param {Engine} $
  * @returns {Promise<Link | undefined>}
  */
 async function workerLink($) {
-  const [port, token, session, cards] = await Promise.all([
+  const [port, token, session, depth, cards] = await Promise.all([
     $.env.get("LICH_PORT"),
     $.env.get("LICH_TOKEN"),
     $.env.get("LICH_SESSION_ID"),
+    $.env.get("LICH_SUBAGENT_DEPTH"),
     $.env.get("LICH_SUBAGENT_CARDS"),
   ])
-  if (!port || !token || !session || cards !== CARDS_OFF) return undefined
+  if (!port || !token || !session || !isWorker(depth, cards)) return undefined
   return { base: `http://127.0.0.1:${port}`, token, session }
 }
 

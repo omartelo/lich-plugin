@@ -58,3 +58,14 @@ test('a turn with work in the background answers nothing', async ($, on) => {
   await clock.settle()
   expect(world.answers).toHaveLength(0)
 })
+
+test('a worker lich names by its depth answers with subagent cards left on', async ($, on) => {
+  mock.env(on, { LICH_PORT: '47999', LICH_TOKEN: 'tok', LICH_SESSION_ID: 'lich-1', LICH_SUBAGENT_DEPTH: '1' })
+  const clock = mock.clock(on)
+  const world = lich(on)
+  await $.session.start({ cwd: '/w', surface: 'terminal', isInteractive: true })
+  await $.classic.Stop({ stop_hook_active: false, last_assistant_message: 'Rewrote docs/cli.md.', background_tasks: [] })
+  await $.turn.complete(ANSWERED)
+  await clock.settle()
+  expect(world.answers).toEqual([{ session_id: 'lich-1', text: 'Rewrote docs/cli.md.' }])
+})
