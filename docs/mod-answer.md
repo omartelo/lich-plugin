@@ -20,10 +20,14 @@ reply instructions, and answers the errand with what this mod posts.
 
 ## How it behaves
 
-- **Only a worker answers.** It reads `LICH_SUBAGENT_CARDS` in `session.start`
-  and reports only when it is `off`, which lich sets on every `--subagent`
-  session. A session the user turned subagent cards off for carries it too;
-  lich ignores a report from a session with no subagent errand open.
+- **Only a worker answers.** It reads `LICH_SUBAGENT_DEPTH` in `session.start`,
+  which lich sets on every Claude Code session it starts, and reports only when
+  it is an integer above `0`: a session opened `n` `--subagent` levels down
+  carries `n`, any other `0`. Under a lich older than that variable it reads
+  `LICH_SUBAGENT_CARDS` instead and reports only when it is `off`, which that
+  lich sets on every `--subagent` session. A session the user turned subagent
+  cards off for carries it too; lich ignores a report from a session with no
+  subagent errand open.
 - **A turn that handed work to the background does not answer.** Its main-loop
   `classic.Stop` lists what is still running in `background_tasks` (a shell, a
   subagent, a monitor, a workflow); Claude Code resumes in a new turn when that

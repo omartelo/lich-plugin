@@ -259,6 +259,38 @@ test('subagents as lich sessions turned off in lich keeps every call native', as
   assertNativeUntouched({ mod, ...(await mod.call()) })
 })
 
+// lich sets the depth on every Claude Code session it starts; at 0 the session
+// is nobody's worker and cards off is only the user's setting.
+test('a top-level session with subagent cards turned off stays native without a toast', async () => {
+  const mod = load({ env: { ...ENV, LICH_SUBAGENT_CARDS: 'off', LICH_SUBAGENT_DEPTH: '0' } })
+  await mod.start()
+  assertNativeUntouched({ mod, ...(await mod.call()) })
+  assert.deepEqual(mod.toasts, [])
+})
+
+test('a worker lich keeps native at its depth limit runs natively, with a toast saying why', async () => {
+  const mod = load({ env: { ...ENV, LICH_SUBAGENT_CARDS: 'off', LICH_SUBAGENT_DEPTH: '2' } })
+  await mod.start()
+  assertNativeUntouched({ mod, ...(await mod.call()) })
+  assert.deepEqual(mod.toasts, [
+    'lich: ran "Fix the auth flow" as a Claude Code subagent: this session is itself a lich subagent card, and lich keeps its subagents inside it',
+  ])
+})
+
+// With the depth set, lich's LICH_SUBAGENT_CARDS is the only gate: the
+// subagent/ branch an isolated worker sits on no longer keeps it native.
+test('a worker below lich\'s depth limit opens cards of its own, even from a subagent/ branch', async () => {
+  const base = 'subagent/fix-the-auth-flow-ab12'
+  const { mod, answer, passed } = await delegate(
+    [onBranch(base), exits(0, opened('pending'))],
+    ISOLATED,
+    { env: { ...ENV, LICH_SUBAGENT_DEPTH: '1' } },
+  )
+  assert.deepEqual(passed, [])
+  assert.deepEqual(answer, backgrounded())
+  assert.deepEqual(mod.ran[1].argv.slice(5, 9), ['--worktree', BRANCH, '--base', base])
+})
+
 test('outside lich every call stays native', async () => {
   for (const missing of ['LICH_BIN', 'LICH_SESSION_ID']) {
     const env = { ...ENV }

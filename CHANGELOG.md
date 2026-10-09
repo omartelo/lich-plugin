@@ -17,6 +17,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the card on `done` and an automatic one on a bare spinner. A lich older than
   the contract answers `compacting` with a 400 and still takes the closing state.
 
+### Changed
+
+- **A lich worker can open cards of its own.** With a lich that sets
+  `LICH_SUBAGENT_DEPTH`, a general-purpose subagent started inside a worker runs
+  as a lich session too, until the depth lich allows; the `subagent/` branch an
+  isolated worker sits on no longer keeps its subagents native. A worker at that
+  limit runs them natively, with a toast saying why. The worker's answer is told
+  by the same variable, so a top-level session with subagent cards turned off
+  no longer posts one. An older lich keeps today's behaviour.
+
 ## [0.18.4] - 2026-10-08
 
 ### Added
