@@ -135,7 +135,9 @@ test('input reports busy', async () => {
     emit('input', { type: 'input', text: 'ship it', source: 'interactive' }, ctxWith()),
   )
   assert.equal(requests.length, 1)
-  assert.equal(assertContractHonoured('/hook', requests[0]).body.state, 'busy')
+  const { body } = assertContractHonoured('/hook', requests[0])
+  assert.equal(body.state, 'busy')
+  assert.equal(body.provider_session_id, OMP_SESSION_ID)
 })
 
 // A turn omp starts on its own — a continuation, a retry, print mode — has no
@@ -145,7 +147,9 @@ test('turn_start reports busy', async () => {
     emit('turn_start', { type: 'turn_start', timestamp: 0 }, ctxWith()),
   )
   assert.equal(requests.length, 1)
-  assert.equal(assertContractHonoured('/hook', requests[0]).body.state, 'busy')
+  const { body } = assertContractHonoured('/hook', requests[0])
+  assert.equal(body.state, 'busy')
+  assert.equal(body.provider_session_id, OMP_SESSION_ID)
 })
 
 test('session_stop reports done', async () => {
@@ -154,6 +158,28 @@ test('session_stop reports done', async () => {
   const { body } = assertContractHonoured('/hook', requests[0])
   assert.equal(body.state, 'done')
   assert.equal(body.session_id, LICH_SESSION_ID)
+  assert.equal(body.provider_session_id, OMP_SESSION_ID)
+})
+
+// omp 17.3.4 hands tool_call the same ctx as every other handler
+// (ExtensionRunner.emitToolCall, createContext).
+test('tool_call names the conversation it runs in', async () => {
+  const requests = await reportsFor(({ emit }) =>
+    emit('tool_call', { type: 'tool_call', toolCallId: 'c', toolName: 'bash', input: { command: 'ls' } }, ctxWith()),
+  )
+  assert.equal(assertContractHonoured('/hook', requests[0]).body.provider_session_id, OMP_SESSION_ID)
+})
+
+test('a report without a session id at hand leaves the conversation out', async () => {
+  const requests = await reportsFor(({ emit }) => {
+    emit('turn_start', { type: 'turn_start', timestamp: 0 }, ctxWith({ id: '' }))
+    emit('tool_call', { type: 'tool_call', toolCallId: 'c', toolName: 'bash', input: { command: 'ls' } })
+  })
+  assert.equal(requests.length, 2)
+  for (const request of requests) {
+    const { body } = assertContractHonoured('/hook', request)
+    assert.ok(!('provider_session_id' in body), `sent an empty conversation: ${request.raw}`)
+  }
 })
 
 // --------------------------------------------------------------- tool line --

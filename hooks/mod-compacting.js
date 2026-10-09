@@ -45,16 +45,21 @@ async function linkFromEnv($) {
 }
 
 /**
+ * Posts one state, naming the conversation it comes from (`$.session.id()`, the
+ * id SessionStart hands lich) so lich can tell it from an agent CLI nested in
+ * the session (docs/session-state.md, Nested agent CLIs).
+ *
  * @param {Engine} $
  * @param {Link} link
  * @param {'compacting' | Closing} sessionState
  */
 async function report($, link, sessionState) {
   try {
+    const conversation = await $.session.id()
     await $.http.fetch(`${link.base}/hook?token=${link.token}`, {
       method: "POST",
       headers: { "content-type": "application/json", "X-Lich-Plugin": PLUGIN_VERSION },
-      body: JSON.stringify({ session_id: link.session, state: sessionState }),
+      body: JSON.stringify({ session_id: link.session, state: sessionState, provider_session_id: conversation }),
     })
   } catch {
     // The contract drops a report that cannot be sent; it never retries one.

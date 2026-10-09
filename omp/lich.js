@@ -67,6 +67,19 @@ function detailOf(input) {
 // it front-runs.
 const WRITERS = new Set(["write", "edit", "bash", "notebook"])
 
+// The id of the session the manager holds, or undefined when it holds none.
+function sessionIdOf(ctx) {
+  const id = ctx?.sessionManager?.getSessionId?.()
+  return typeof id === "string" && id !== "" ? id : undefined
+}
+
+// The conversation a state report comes from, so lich can drop one from an
+// agent CLI nested in the session (docs/session-state.md, Nested agent CLIs).
+function conversation(ctx) {
+  const id = sessionIdOf(ctx)
+  return id === undefined ? {} : { provider_session_id: id }
+}
+
 // omp catches what a handler throws, but a throwing extension is still a
 // visible startup warning and a line in its log. Nothing here is worth either.
 const safely = (fn) => (event, ctx) => {
@@ -105,10 +118,8 @@ export default function lichPlugin(pi) {
   pi.on(
     "session_start",
     safely((_event, ctx) => {
-      const id = ctx?.sessionManager?.getSessionId?.()
-      if (typeof id === "string" && id !== "") {
-        report("session-start", { provider_session_id: id, provider: "omp" })
-      }
+      const id = sessionIdOf(ctx)
+      if (id !== undefined) report("session-start", { provider_session_id: id, provider: "omp" })
     }),
   )
 
@@ -116,7 +127,7 @@ export default function lichPlugin(pi) {
   // session, which is the only kind lich spawns.
   pi.on(
     "input",
-    safely(() => report("hook", { state: "busy" })),
+    safely((_event, ctx) => report("hook", { state: "busy", ...conversation(ctx) })),
   )
 
   // Every turn passes through here, including the ones no `input` precedes — a
@@ -126,7 +137,7 @@ export default function lichPlugin(pi) {
   pi.on(
     "turn_start",
     safely((_event, ctx) => {
-      report("hook", { state: "busy" })
+      report("hook", { state: "busy", ...conversation(ctx) })
       reportTitle(ctx)
     }),
   )
@@ -136,9 +147,9 @@ export default function lichPlugin(pi) {
   // nothing, always.
   pi.on(
     "tool_call",
-    safely((event) => {
+    safely((event, ctx) => {
       if (typeof event?.toolName !== "string" || event.toolName === "") return
-      report("hook", { state: "busy", tool: event.toolName, detail: detailOf(event.input) })
+      report("hook", { state: "busy", tool: event.toolName, detail: detailOf(event.input), ...conversation(ctx) })
     }),
   )
 
@@ -162,7 +173,7 @@ export default function lichPlugin(pi) {
   pi.on(
     "session_stop",
     safely((_event, ctx) => {
-      report("hook", { state: "done" })
+      report("hook", { state: "done", ...conversation(ctx) })
       reportTitle(ctx)
     }),
   )

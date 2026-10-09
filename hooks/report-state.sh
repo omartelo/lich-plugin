@@ -1,7 +1,8 @@
 #!/bin/sh
 # Reports session state to lich. Contract: docs/session-state.md
 # Usage: report-state.sh <busy|done|waiting|idle>
-# stdin: the hook payload — read for `waiting` alone, for the reason below.
+# stdin: the hook payload — read for the conversation id, and on `waiting` for
+# the reason below.
 
 # Outside lich (vars absent) → no-op. Safe to install globally.
 [ -n "$LICH_PORT" ] && [ -n "$LICH_TOKEN" ] && [ -n "$LICH_SESSION_ID" ] || exit 0
@@ -12,13 +13,21 @@ plugin_version=0.19.2
 state=$1
 body="{\"session_id\":\"${LICH_SESSION_ID}\",\"state\":\"${state}\"}"
 
+# Read with the bound curl has below: `busy`, `done` and `idle` ride events
+# whose payload only names the conversation, and a harness that left the pipe
+# open and unwritten must not hold the turn. The reader's input is fd 3 because
+# an asynchronous command's stdin is /dev/null unless redirected, and the timer's
+# output goes nowhere so the substitution never waits on it.
+exec 3<&0
+payload=$(cat <&3 & reader=$!; (exec >/dev/null 2>&1; sleep 1 && kill "$reader") & wait "$reader")
+exec 3<&-
+
 # `reason` says what the agent is blocked on, and belongs to `waiting` alone —
-# lich drops it on every other state, so no other branch reads stdin. It is
+# lich drops it on every other state, so no other branch looks for one. It is
 # optional in both directions: an absent one still rings the bell, and a value
 # lich finds too long is capped there rather than refused, so nothing here
 # measures it.
 if [ "$state" = waiting ]; then
-  payload=$(cat)
   if command -v jq >/dev/null 2>&1; then
     # Claude Code's Notification is the one payload carrying a sentence written
     # for a human ("Claude needs your permission to use Bash"), and it writes one
@@ -52,6 +61,19 @@ if [ "$state" = waiting ]; then
       body="{\"session_id\":\"${LICH_SESSION_ID}\",\"state\":\"waiting\",\"reason\":\"${tool}\"}"
   fi
 fi
+
+# The conversation that fired the hook, so lich can drop a report from an agent
+# CLI nested in the session (docs/session-state.md, Nested agent CLIs). Parsed as
+# report-session-start.sh parses it; an id needs no escaping, and none is left
+# out rather than sent empty.
+if command -v jq >/dev/null 2>&1; then
+  provider_session_id=$(printf '%s' "$payload" | jq -r '.conversationId // .session_id // empty' 2>/dev/null)
+else
+  provider_session_id=$(printf '%s' "$payload" | \
+    sed -n -e 's/.*"conversationId"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' \
+           -e 's/.*"session_id"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -n 1)
+fi
+[ -n "$provider_session_id" ] && body="${body%\}},\"provider_session_id\":\"${provider_session_id}\"}"
 
 curl -s -o /dev/null --max-time 1 \
   -X POST "http://127.0.0.1:${LICH_PORT}/hook?token=${LICH_TOKEN}" \

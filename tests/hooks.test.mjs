@@ -254,7 +254,7 @@ function antigravityTranscript(content, name = 'antigravity.jsonl') {
 function binWithout(missing) {
   const dir = path.join(TMP, `bin-without-${missing}`)
   mkdirSync(dir, { recursive: true })
-  for (const tool of ['sh', 'sed', 'grep', 'cut', 'head', 'tail', 'cat', 'curl', 'jq']) {
+  for (const tool of ['sh', 'sed', 'grep', 'cut', 'head', 'tail', 'cat', 'sleep', 'curl', 'jq']) {
     if (tool === missing) continue
     const found = spawnSync('sh', ['-c', `command -v ${tool}`], { encoding: 'utf8' }).stdout.trim()
     if (!found) continue
@@ -584,6 +584,11 @@ for (const registration of REGISTRATIONS) {
         if (argument === 'waiting') assert.equal(body.reason, WAITING_REASON[provider])
         else assert.ok(!('reason' in body), `${argument} sent a reason: ${stub.requests[0].raw}`)
       }
+      if (script === 'report-state.sh' || script === 'report-tool.sh') {
+        // Names the conversation that fired the hook, so lich can drop a report
+        // from an agent CLI nested in the session.
+        assert.equal(body.provider_session_id, PROVIDER_SESSION_ID[provider])
+      }
       if (script === 'report-tool.sh') {
         assert.equal(body.state, 'busy')
         assert.equal(body.tool, TOOL_CALL[provider].tool_name ?? TOOL_CALL[provider].toolCall?.name)
@@ -679,6 +684,34 @@ for (const state of ['busy', 'done', 'idle']) {
       assert.equal(code, 0)
       assert.equal(stub.requests.length, 1)
       assert.equal(assertContractHonoured('/hook', stub.requests[0]).body.state, state)
+    })
+  })
+}
+
+for (const [script, argument] of [['report-state.sh', 'busy'], ['report-tool.sh', '']]) {
+  const command = `"${ROOT}/hooks/${script}" ${argument}`
+  test(`${script} names the conversation without jq`, async () => {
+    await withStub(async (stub) => {
+      const result = await runHook(command, {
+        env: { ...lichEnv(stub.port), PATH: binWithout('jq') },
+        stdin: stdinFor({ provider: 'claude', event: 'PreToolUse' }),
+      })
+      assertHookSucceeded(result)
+      const { body } = assertContractHonoured('/hook', stub.requests[0])
+      assert.equal(body.provider_session_id, PROVIDER_SESSION_ID.claude)
+    })
+  })
+
+  test(`${script} leaves the conversation out when the payload names none`, async () => {
+    await withStub(async (stub) => {
+      const { session_id: _, ...payload } = JSON.parse(stdinFor({ provider: 'claude', event: 'PreToolUse' }))
+      const result = await runHook(command, {
+        env: lichEnv(stub.port),
+        stdin: JSON.stringify(payload),
+      })
+      assertHookSucceeded(result)
+      const { body } = assertContractHonoured('/hook', stub.requests[0])
+      assert.ok(!('provider_session_id' in body), `sent an empty conversation: ${stub.requests[0].raw}`)
     })
   })
 }

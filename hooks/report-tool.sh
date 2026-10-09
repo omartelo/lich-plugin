@@ -46,6 +46,19 @@ else
   body="{\"session_id\":\"${LICH_SESSION_ID}\",\"state\":\"busy\",\"tool\":\"${tool}\"}"
 fi
 
+# The conversation that fired the hook, so lich can drop a report from an agent
+# CLI nested in the session (docs/session-state.md, Nested agent CLIs). Parsed as
+# report-session-start.sh parses it; an id needs no escaping, and none is left
+# out rather than sent empty.
+if [ -n "$has_jq" ]; then
+  provider_session_id=$(printf '%s' "$payload" | jq -r '.conversationId // .session_id // empty' 2>/dev/null)
+else
+  provider_session_id=$(printf '%s' "$payload" | \
+    sed -n -e 's/.*"conversationId"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' \
+           -e 's/.*"session_id"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -n 1)
+fi
+[ -n "$provider_session_id" ] && body="${body%\}},\"provider_session_id\":\"${provider_session_id}\"}"
+
 curl -s -o /dev/null --max-time 1 \
   -X POST "http://127.0.0.1:${LICH_PORT}/hook?token=${LICH_TOKEN}" \
   -H 'Content-Type: application/json' \

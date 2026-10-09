@@ -16,6 +16,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   error ended still reports nothing: Claude Code's `StopFailure` carries no
   `background_tasks`, so the mod cannot tell it left nothing running. Needs a
   lich that accepts `unanswered`.
+- **Every state report names the conversation it comes from**, in
+  `provider_session_id`, so lich can drop one from an agent CLI the session
+  runs as a tool (`claude -p`, `cursor-agent -p`), which inherits the session's
+  `LICH_*` variables and used to report as the card. The scripts, opencode, omp
+  and the compacting mod all send it; one the harness did not hand over is left
+  out. `report-state.sh` now reads stdin for every state, with a one-second
+  bound so a pipe nobody writes to cannot hold the turn.
 
 ## [0.19.2] - 2026-10-09
 

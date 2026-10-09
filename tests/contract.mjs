@@ -174,14 +174,25 @@ export function isJsonObject(raw) {
  * Returns the name of the case it matches, or null.
  */
 export function matchingAcceptCase(endpoint, body) {
-  const shape = (o) =>
-    Object.keys(o)
-      .sort()
-      .map((k) => `${k}:${blank(o[k]) ? typeof o[k] + '(blank)' : typeof o[k]}`)
-      .join(',')
-  const sent = shape(body)
+  const field = (o, k) => `${k}:${blank(o[k]) ? typeof o[k] + '(blank)' : typeof o[k]}`
+  const shape = (o) => Object.keys(o).sort().map((k) => field(o, k)).join(',')
+  const rest = { ...body }
+  for (const k of ANY_SHAPE[endpoint] ?? []) {
+    if (!(k in rest)) continue
+    if (!accepted(endpoint).some((c) => c.body && k in c.body && field(c.body, k) === field(rest, k))) return null
+    delete rest[k]
+  }
+  const sent = shape(rest)
   return accepted(endpoint).find((c) => c.body && shape(c.body) === sent)?.name ?? null
 }
+
+/**
+ * Fields the contract makes optional on every report to an endpoint, so they
+ * ride any accepted shape rather than the one case that shows them; the value
+ * must still match that case's. session-state.md: `provider_session_id` names
+ * the conversation on any state report, and one without it is taken as before.
+ */
+const ANY_SHAPE = { '/hook': ['provider_session_id'] }
 
 export function assertContractHonoured(endpoint, request) {
   assert.equal(request.method, 'POST')

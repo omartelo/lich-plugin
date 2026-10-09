@@ -29,6 +29,7 @@ const COMPACTED = {
 }
 
 const NO_CONTENT = { status: 204, ok: true, headers: {}, text: '' }
+const CONVERSATION = '9f1c7c1e-8f2a-4c3b-9d5e-2a7b6c4d1e05'
 
 /** Waits for `predicate` to hold, failing after a second of real time. */
 async function until(predicate, what) {
@@ -56,6 +57,7 @@ function load({ env = lichEnv(PORT), answer = () => Promise.resolve(NO_CONTENT) 
   const requests = []
   const $ = {
     env: { get: async (name) => env[name] },
+    session: { id: async () => CONVERSATION },
     http: {
       fetch: (url, init = {}) => {
         const { pathname, search } = new URL(url)
@@ -90,8 +92,8 @@ test('a manual /compact is bracketed by compacting and done, as the contract spe
   assert.deepEqual(
     mod.requests.map((r) => JSON.parse(r.raw)),
     [
-      { session_id: LICH_SESSION_ID, state: 'compacting' },
-      { session_id: LICH_SESSION_ID, state: 'done' },
+      { session_id: LICH_SESSION_ID, state: 'compacting', provider_session_id: CONVERSATION },
+      { session_id: LICH_SESSION_ID, state: 'done', provider_session_id: CONVERSATION },
     ],
   )
 })
