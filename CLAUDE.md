@@ -150,8 +150,10 @@ commit it pins until a release ships it.
 
 - **The fixtures are upstream truth — never edit one to get a green run.** A
   payload that disagrees with a fixture is a bug in the script, or a contract
-  change that lands in lich first (prose, then fixtures, then its endpoint, then
-  here).
+  change. That one merges in lich first (prose, then fixtures, then its
+  endpoint), `tests/lich-ref` pins that merge commit, the plugin release that
+  speaks it is tagged here next, and the lich release that installs it is cut
+  last.
 - A hook must never block or fail the user's turn: short timeout, errors swallowed, always exit 0. On Codex the exit code is louder still — `2` on `PermissionRequest` denies the request, so silence and exit 0 are what keep a report an observation.
 - Outside lich (env vars absent) every hook is a no-op with exit 0 — the plugin must be safe to install globally.
 - A skill must be useful from any working directory: the user runs the agent CLI on their own project, not on the lich checkout.
@@ -182,7 +184,7 @@ symlink the clone into `~/.gemini/config/plugins/lich`.
 Same standard as the `lich` repository (Keep a Changelog + SemVer). Releases are cut by tagging `vX.Y.Z`:
 
 1. Move the `[Unreleased]` entries in `CHANGELOG.md` under the new version heading (with date) and refresh the compare links at the bottom.
-2. Pick the number by what changed: a release that sends anything lich's contract did not already accept (a new endpoint, header, field or value) bumps the **minor** (the major, from 1.0); anything else bumps the **patch**. lich accepts every release below the next minor of the contract it implements, so a contract change released as a patch reaches a lich that refuses it. `docs/hooks/README.md` in lich, Versioning, is the rule.
+2. Pick the number by what changed: a release that sends anything lich's contract did not already accept (a new endpoint, header, field or value) bumps the **minor** (the major, from 1.0); anything else bumps the **patch**. lich accepts every release below the next minor of the contract it implements, so a contract change released as a patch reaches a lich that refuses it. A contract change is tagged here once lich has merged it and before the lich release that installs it, since that lich may fetch files only this release ships; an older lich never picks it up, because its ceiling stops below this minor. `docs/hooks/README.md` in lich, Versioning, is the rule.
 3. Align `version` in `.claude-plugin/plugin.json` **and** `.codex-plugin/plugin.json` with the tag, and `plugin_version` in each `hooks/report-*.sh` and `PLUGIN_VERSION` in `opencode/lich.js`, `omp/lich.js`, `hooks/mod-control.js`, `hooks/mod-usage.js`, `hooks/mod-status.js`, `hooks/mod-compacting.js` and `hooks/worker-answer.js`, the header every report sends. The suite fails while any of them disagrees with the Claude Code manifest. The root `plugin.json` is not a third one to bump: Antigravity's manifest takes only a `name`, and lich writes its own carrying the tag when it installs a release.
 4. Annotated tag `vX.Y.Z` + push with the tag.
 5. `gh release create vX.Y.Z` with the notes taken from the matching `CHANGELOG.md` section.
