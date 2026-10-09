@@ -60,6 +60,7 @@ export const rejected = (endpoint) => CASES[endpoint].filter((c) => c.reject)
 export const STATES = new Set(accepted('/hook').map((c) => c.accept.state))
 export const PROVIDERS = new Set(accepted('/session-start').map((c) => c.accept.provider))
 export const MOD_KINDS = new Set(accepted('/mod/acks').map((c) => c.body.kind))
+export const UNANSWERED = new Set(accepted('/mod/answer').flatMap((c) => c.body.unanswered ?? []))
 
 /**
  * Providers this plugin already reports for, and lich does not accept yet.
@@ -136,7 +137,9 @@ export const REJECT_RULES = {
   },
   '/mod/answer': {
     'missing session_id': (b) => !('session_id' in b),
-    'missing text': (b) => !('text' in b),
+    'neither text nor unanswered': (b) => !('text' in b) && !('unanswered' in b),
+    'text and unanswered together': (b) => 'text' in b && 'unanswered' in b,
+    'an aborted turn is not reported': (b) => 'unanswered' in b && !UNANSWERED.has(b.unanswered),
     'blank text': (b) => typeof b.text === 'string' && b.text.trim() === '',
     'text is not a string': (b) => 'text' in b && typeof b.text !== 'string',
     'malformed json': (b, raw) => !isJsonObject(raw),

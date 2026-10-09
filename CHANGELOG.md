@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **A lich subagent worker whose turn has nothing to answer now says so.** A
+  final turn that ends blank or refused, with nothing left running in the
+  background, posts `unanswered` (`blank` or `refusal`) to `/mod/answer`,
+  so the caller hears the errand ended instead of waiting on it. A turn an API
+  error ended still reports nothing: Claude Code's `StopFailure` carries no
+  `background_tasks`, so the mod cannot tell it left nothing running. Needs a
+  lich that accepts `unanswered`.
+
 ## [0.19.2] - 2026-10-09
 
 ### Fixed

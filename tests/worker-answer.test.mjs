@@ -46,7 +46,7 @@ function load({ env = WORKER_ENV, answer = () => Promise.resolve(NO_CONTENT) } =
   const hooks = new Map()
   register((event, ...rest) => {
     const hook = rest.pop()
-    hooks.set(event, { matcher: rest[0] ?? {}, hook })
+    hooks.set(event, [...(hooks.get(event) ?? []), { matcher: rest[0] ?? {}, hook }])
   })
   const requests = []
   const $ = {
@@ -62,9 +62,11 @@ function load({ env = WORKER_ENV, answer = () => Promise.resolve(NO_CONTENT) } =
   }
   const passOn = async (e) => e
   const fire = (event, e) => {
-    const { matcher, hook } = hooks.get(event)
-    const matches = Object.entries(matcher).every(([key, value]) => e[key] === value)
-    return matches ? hook($, e, passOn) : passOn(e)
+    const matching = hooks.get(event).filter(({ matcher }) =>
+      Object.entries(matcher).every(([key, value]) => e[key] === value),
+    )
+    const chain = matching.reduceRight((next, { hook }) => (ev) => hook($, ev, next), passOn)
+    return chain(e)
   }
   const turn = async (stopEvent, completeEvent) => {
     if (stopEvent) await fire('classic.Stop', stopEvent)
@@ -101,23 +103,71 @@ test('a turn that handed work to the background answers only once it resumes', a
   assert.deepEqual(mod.bodies().map((b) => b.text), ['FINISHED: DONE'])
 })
 
-test('an aborted, failed or refused turn answers nothing', async () => {
-  const mod = load()
-  await mod.start()
-
-  await mod.turn(undefined, complete('half a sentence', 'aborted'))
-  await mod.turn(stop('partial'), complete('partial', 'error'))
-  await mod.turn(stop('I cannot help with that.'), complete('I cannot help with that.', 'refusal'))
-
-  assert.equal(mod.requests.length, 0)
-})
-
-test('a blank final message answers nothing', async () => {
+test('a blank final message is reported unanswered as the contract spells it', async () => {
   const mod = load()
   await mod.start()
 
   await mod.turn(stop(' \n'), complete(' \n'))
   await mod.turn(stop(undefined), complete(''))
+
+  assert.deepEqual(mod.bodies(), [
+    { session_id: LICH_SESSION_ID, unanswered: 'blank' },
+    { session_id: LICH_SESSION_ID, unanswered: 'blank' },
+  ])
+  for (const request of mod.requests) assertContractHonoured('/mod/answer', request)
+})
+
+test('a refused turn is reported unanswered as the contract spells it', async () => {
+  const mod = load()
+  await mod.start()
+
+  await mod.turn(stop('I cannot help with that.'), complete('I cannot help with that.', 'refusal'))
+
+  assert.deepEqual(mod.bodies(), [{ session_id: LICH_SESSION_ID, unanswered: 'refusal' }])
+  assertContractHonoured('/mod/answer', mod.requests[0])
+})
+
+test('a blank or refused turn that handed work to the background reports nothing', async () => {
+  const mod = load()
+  await mod.start()
+
+  await mod.turn(stop('', [SHELL]), complete(''))
+  await mod.turn(stop('I cannot help with that.', [SHELL]), complete('I cannot help with that.', 'refusal'))
+
+  assert.equal(mod.requests.length, 0)
+})
+
+// A refused turn reads its background work off its own Stop; one without a
+// Stop cannot tell whether work is still running.
+test('a refused turn with no Stop of its own reports nothing', async () => {
+  const mod = load()
+  await mod.start()
+
+  await mod.turn(undefined, complete('', 'refusal'))
+
+  assert.equal(mod.requests.length, 0)
+})
+
+// An API error fires StopFailure, which carries no background_tasks, so the
+// mod cannot tell the failed turn left nothing running (docs/mod-answer.md).
+test('an aborted or failed turn reports nothing', async () => {
+  const mod = load()
+  await mod.start()
+
+  await mod.turn(undefined, complete('half a sentence', 'aborted'))
+  await mod.turn(undefined, complete('', 'error'))
+  await mod.turn(stop('partial'), complete('partial', 'error'))
+  await mod.turn(stop(''), complete('', 'error'))
+
+  assert.equal(mod.requests.length, 0)
+})
+
+test('an aborted turn drops the Stop it read, so a later refusal cannot use it', async () => {
+  const mod = load()
+  await mod.start()
+
+  await mod.turn(stop(''), complete('', 'aborted'))
+  await mod.turn(undefined, complete('', 'refusal'))
 
   assert.equal(mod.requests.length, 0)
 })

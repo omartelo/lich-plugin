@@ -11,14 +11,21 @@
 // cards off for also carries; lich ignores the report from a session with no
 // subagent errand open, so that one costs a request per turn and nothing else.
 //
-// A turn is the worker's answer when its main-loop `classic.Stop` lists no
-// background task (a shell, subagent, monitor or workflow still running means
-// the turn handed work to the background, and the turn Claude Code resumes in
-// once it finishes is the one that answers) and its `turn.complete` ended with
-// an answer that is not blank. Measured on Claude Code 2.1.289: `classic.Stop`
-// fires on the main loop only, before `turn.complete`, and its
-// `last_assistant_message` equals the completion's `answer`; an aborted turn
-// fires no Stop.
+// A main-loop turn reports only when its `classic.Stop` lists no background
+// task (a shell, subagent, monitor or workflow still running means the turn
+// handed work to the background, and the turn Claude Code resumes in once it
+// finishes is the one that reports). Its `turn.complete` then says what: an
+// answer that is not blank is the worker's answer, a blank one is
+// `unanswered: "blank"`, a refusal `unanswered: "refusal"`. Measured on
+// Claude Code 2.1.289: `classic.Stop` fires on the main loop only, before
+// `turn.complete`, and its `last_assistant_message` equals the completion's
+// `answer`; an aborted turn fires no Stop.
+//
+// A turn an API error ended reports nothing, though the contract has
+// `unanswered: "error"` for it: such a turn fires `StopFailure` instead of
+// `Stop`, and read off the Claude Code 2.1.296 bundle neither `StopFailure`'s
+// input nor `turn.complete`'s carries `background_tasks`, so nothing tells
+// whether the failed turn left work running.
 //
 // Every function that takes `$` is declared here at the top level: the loader
 // refuses a module that hands `$` to a nested function.
@@ -37,7 +44,9 @@ const ANSWER_LIMIT = 16000
 /**
  * @typedef {import('claude-code').EngineInterface} Engine
  * @typedef {{ base: string, token: string, session: string }} Link
- * @typedef {{ link?: Link, idleText?: string }} State
+ * @typedef {{ idle: boolean, text: string }} Stop
+ * @typedef {{ link?: Link, stop?: Stop }} State
+ * @typedef {{ text: string } | { unanswered: "blank" | "refusal" }} Report
  */
 
 /**
@@ -75,24 +84,56 @@ function cut(text) {
 }
 
 /**
- * Posts one answer beside the chain. One that cannot be sent is dropped: the
+ * What a finished main-loop turn reports, if anything. The Stop must be the
+ * turn's own: an answer's text equals the completion's, a blank Stop comes
+ * with a blank completion.
+ *
+ * @param {Stop | undefined} stop the turn's main-loop `classic.Stop`
+ * @param {import('claude-code').TurnCompleteInput} e
+ * @returns {Report | undefined}
+ */
+function reportOf(stop, e) {
+  if (stop === undefined || !stop.idle) return undefined
+  if (e.reason === "refusal") return { unanswered: "refusal" }
+  if (e.reason !== "answer") return undefined
+  if (stop.text.trim() === "") return e.answer.trim() === "" ? { unanswered: "blank" } : undefined
+  return stop.text === e.answer ? { text: cut(stop.text) } : undefined
+}
+
+/**
+ * Posts one report beside the chain. One that cannot be sent is dropped: the
  * worker's card still holds it, and a second copy of a report is worse than
  * none.
  *
  * @param {Engine} $
  * @param {Link} link
- * @param {string} text
+ * @param {Report} body
  */
-async function report($, link, text) {
+async function report($, link, body) {
   try {
     await $.http.fetch(`${link.base}/mod/answer?token=${link.token}`, {
       method: "POST",
       headers: { "content-type": "application/json", "X-Lich-Plugin": PLUGIN_VERSION },
-      body: JSON.stringify({ session_id: link.session, text: cut(text) }),
+      body: JSON.stringify({ session_id: link.session, ...body }),
     })
   } catch {
     // The contract's client rule: a report that cannot be sent is dropped.
   }
+}
+
+/**
+ * @param {Engine} $
+ * @param {State} state
+ * @param {import('claude-code').TurnCompleteInput} e
+ * @param {(e: import('claude-code').TurnCompleteInput) => unknown} next
+ */
+function settleTurn($, state, e, next) {
+  const stop = state.stop
+  state.stop = undefined
+  const link = state.link
+  const body = link !== undefined && e.agentId === undefined ? reportOf(stop, e) : undefined
+  if (link !== undefined && body !== undefined) void report($, link, body)
+  return next(e)
 }
 
 /** @param {import('claude-code').On} on */
@@ -108,21 +149,17 @@ export function register(on) {
   })
 
   on("classic.Stop", ($, e, next) => {
-    const idle = (e.background_tasks ?? []).length === 0
-    const text = e.last_assistant_message ?? ""
-    state.idleText = idle && text.trim() !== "" ? text : undefined
+    state.stop = { idle: (e.background_tasks ?? []).length === 0, text: e.last_assistant_message ?? "" }
     return next(e)
   })
 
-  // The matcher keeps this beside mod-control.js's own turn.complete hook, which
-  // has none: Claude Code refuses one plugin's second hook on an event with no
-  // matcher. An aborted, failed or refused turn never matches.
-  on("turn.complete", { reason: "answer" }, ($, e, next) => {
-    const text = state.idleText
-    state.idleText = undefined
-    const link = state.link
-    const isWorkersAnswer = link !== undefined && e.agentId === undefined && !e.isAborted && text === e.answer
-    if (isWorkersAnswer && text !== undefined) void report($, link, text)
-    return next(e)
-  })
+  // One hook per reason a turn ends with: the matchers keep them beside
+  // mod-control.js's own turn.complete hook, which has none, and Claude Code
+  // refuses one plugin's second hook on an event with no matcher. The aborted
+  // and failed ones report nothing; they are here so every turn drops the Stop
+  // it read, and a later turn never inherits it.
+  on("turn.complete", { reason: "answer" }, ($, e, next) => settleTurn($, state, e, next))
+  on("turn.complete", { reason: "refusal" }, ($, e, next) => settleTurn($, state, e, next))
+  on("turn.complete", { reason: "error" }, ($, e, next) => settleTurn($, state, e, next))
+  on("turn.complete", { reason: "aborted" }, ($, e, next) => settleTurn($, state, e, next))
 }

@@ -17,6 +17,8 @@ reply instructions, and answers the errand with what this mod posts.
 | event                                     | sent                                                        |
 |-------------------------------------------|-------------------------------------------------------------|
 | `classic.Stop`, then `turn.complete{reason=answer}` | `POST /mod/answer` with `{"session_id", "text"}`  |
+| `classic.Stop` with a blank message, then `turn.complete{reason=answer}` | `POST /mod/answer` with `{"session_id", "unanswered": "blank"}` |
+| `classic.Stop`, then `turn.complete{reason=refusal}` | `POST /mod/answer` with `{"session_id", "unanswered": "refusal"}` |
 
 ## How it behaves
 
@@ -33,18 +35,31 @@ reply instructions, and answers the errand with what this mod posts.
   subagent, a monitor, a workflow); Claude Code resumes in a new turn when that
   work finishes, and that turn's `Stop`, with nothing listed, is the one that
   answers.
-- **An aborted, failed or refused turn does not answer**, and neither does one
-  whose final message is blank. `turn.complete` is matched on
-  `reason: "answer"`, which also keeps the hook beside mod-control's own
+- **A turn with nothing to answer says so.** One whose final message is blank
+  posts `unanswered: "blank"`, a refused one `unanswered: "refusal"`, so the
+  caller hears the errand ended instead of waiting on it. Both follow the rule
+  above: only when the turn's own `classic.Stop` lists nothing running. A
+  refused turn with no `Stop` of its own reports nothing.
+- **An aborted turn does not report**: its user took the worker over, and the
+  turn they start next is the one that answers.
+- **A failed turn does not report either**, though the contract has
+  `unanswered: "error"` for it. An API error fires `StopFailure` instead of
+  `Stop`, and read off the Claude Code 2.1.296 bundle neither `StopFailure`'s
+  input (`error`, `error_details`, `last_assistant_message`) nor
+  `turn.complete`'s carries `background_tasks`, and no mod engine call lists
+  them. Nothing tells whether the failed turn left work running, so `error` is
+  pending until Claude Code exposes that list on the failure.
+- `turn.complete` is matched once per `reason` (`answer`, `refusal`,
+  `error`, `aborted`), which keeps the hooks beside mod-control's own
   `turn.complete` hook: Claude Code refuses one plugin's second hook on an event
-  with no matcher.
+  with no matcher. Every one of them drops the `Stop` it read.
 - **A subagent's turn inside the worker does not answer.** `classic.Stop` fires
   on the main loop only, and a `turn.complete` that carries an `agentId` is
   skipped.
 - **A Stop answers only for its own turn.** The text is posted when the
-  completion's `answer` equals the Stop's `last_assistant_message`, and the
-  Stop's verdict is dropped once a completion read it: an aborted turn fires no
-  Stop, and must not inherit the last one.
+  completion's `answer` equals the Stop's `last_assistant_message`, a blank
+  Stop only beside a blank `answer`, and the Stop is dropped once a completion
+  read it: an aborted turn fires no Stop, and must not inherit the last one.
 - **The text is cut at 16,000 UTF-16 units** and marked `[truncated]`, as an
   `ask`'s answer is.
 - **The turn is never held up.** The answer is posted beside the chain; one
