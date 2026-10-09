@@ -28,9 +28,12 @@ named by its own label with an error result whose text is `"<label>" is this
 session, and a session cannot control itself: …` (measured on 2.1.295).
 `tool.describe` fires for it even while it is deferred behind ToolSearch.
 
-A session cannot look its own label up: `list_sessions` and `lich sessions`
-leave it out, and lich answers its `LICH_SESSION_ID` with `no session named`.
-Told to target itself, a session measured on 2.1.295 tried that id and gave up.
+A session cannot look its own label up through `list_sessions` or `lich
+sessions`, which leave it out. Before lich 0.64 lich also answered its
+`LICH_SESSION_ID` with `no session named`, and told to target itself, a session
+measured on 2.1.295 tried that id and gave up. From lich 0.64 every tool that
+names a session takes its id too, and `lich whoami --json` prints the session it
+runs in, `{label, name, project, kind, state, id}` (`docs/cli.md` in lich).
 
 A tool of the mod's own was the first design and does not work: Claude Code
 lists a mod's tool as `mcp__<plugin>__<name>`, this plugin is `lich`, and
@@ -53,8 +56,10 @@ variables).
   ends.
 - `tool.call` on `mcp__lich__control_session` lets lich answer first, so a
   command for another session stays lich's. Only an error answer to action
-  `command` is looked at, and only when the target is this session: named by
-  its `LICH_SESSION_ID`, or lich's refusal says it is this session. The command
+  `command` is looked at, and only when the target is this session: its
+  `LICH_SESSION_ID`, or the label or name `lich whoami --json` prints for it,
+  matched without regard to case as lich matches them. `lich whoami` runs only
+  for such an error answer, and when it fails only the id counts. The command
   then goes the way a Skill call's does below, `/model` and `/effort` refused
   alike, and the call is answered with a text saying it is queued and to end
   the turn.
@@ -90,9 +95,10 @@ and compacted.
 
 ## Known ceilings
 
-- **The `control_session` path reads lich's refusal by its words.** lich has no
-  contract for it; should the words change, a session named by its label gets
-  lich's refusal back unchanged, and the `LICH_SESSION_ID` path still works.
+- **A session named by its label needs lich 0.64 or later.** An older lich has
+  no `whoami`, so only the `LICH_SESSION_ID` the description names is taken as
+  this session, and lich answers that id with `no session named` rather than its
+  refusal; the mod queues the command either way.
 
 - **The transcript shows the call as `Successfully loaded skill`.** The answer
   takes the Skill tool's own `inline` shape, which is what Claude Code draws.
