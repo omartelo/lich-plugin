@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **A session asked to run /compact on itself through `control_session` now
+  does.** Asked "run /compact", models mostly reached for lich's
+  `control_session`, which refuses a session's own, and either gave up or asked
+  another session to run it on them. The self-command mod now takes that
+  refusal for action `command` and queues the built-in the way it does for the
+  Skill tool, `/model` and `/effort` refused alike. The tool's description says
+  so and names the session by its `LICH_SESSION_ID`, since a session cannot
+  look its own label up.
+
 ## [0.19.1] - 2026-10-09
 
 ### Added

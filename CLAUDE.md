@@ -67,7 +67,7 @@ Contracts are **canonical in the lich repository** (`docs/hooks/` there); this p
 - [docs/mod-usage.md](docs/mod-usage.md): a Claude Code session reports the context window, rate limits and cost it measured itself, through a mod hooking `session.measure`; Claude Code only
 - [docs/mod-answer.md](docs/mod-answer.md): a lich subagent worker answers the task it was handed with its turn's final message, through a mod reading the main loop's `classic.Stop` and `turn.complete`; Claude Code only
 - [docs/mod-status.md](docs/mod-status.md): a Claude Code session shows the relay errands it is part of (owed, out, ready) in its prompt footer, through a mod reading `/mod/status`, which never collects; Claude Code only
-- [docs/self-command.md](docs/self-command.md): a Claude Code session runs a built-in slash command the user asked it for (`/compact`), queued after the turn, through a mod answering the Skill tool's refusal of a built-in rather than lich's `control`, which refuses a session's own; Claude Code only
+- [docs/self-command.md](docs/self-command.md): a Claude Code session runs a built-in slash command the user asked it for (`/compact`), queued after the turn, through a mod answering the Skill tool's refusal of a built-in, and lich's `control_session` refusal of the session's own, by queueing the command itself; Claude Code only
 - [docs/edit-guard.md](docs/edit-guard.md): an edit to a file another lich session edited in the last minutes carries a note naming it, through markers in the checkout's git dir rather than an HTTP contract; Claude Code only
 - [docs/providers.md](docs/providers.md) — the per-harness map, including what installing on omp takes and what it cannot report
 

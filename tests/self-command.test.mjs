@@ -28,6 +28,19 @@ const refusedBy = (name) => {
 }
 const LOADED = { ref: 1, result: { success: true, commandName: 'review' }, text: 'Launching skill: review' }
 
+// What lich's control_session answers, as the lich MCP server did on Claude
+// Code 2.1.295: a session targeting itself, and one targeting a peer.
+const SELF_REFUSAL = (() => {
+  const text =
+    '"fix/x" is this session, and a session cannot control itself: an abort would end the turn asking for it, ' +
+    'and a prompt or a slash command would only run once that turn is over'
+  return { ref: 1, result: `Error: ${text}`, text, isError: true }
+})()
+const NO_SUCH = { ref: 1, result: 'Error: no session named "ghost"', text: 'no session named "ghost"', isError: true }
+const DELIVERED = { ref: 1, result: 'ran /compact on "peer"', text: 'ran /compact on "peer"' }
+
+const CONTROL = 'mcp__lich__control_session'
+
 /** Registers the module against a fake engine started with `env`. */
 async function session({ env = { LICH_SESSION_ID: 'lich-1' }, isInteractive = true, runFails = false } = {}) {
   const hooks = {}
@@ -62,6 +75,12 @@ async function session({ env = { LICH_SESSION_ID: 'lich-1' }, isInteractive = tr
       hooks['tool.describe {"tool":"Skill"}']($, { tool: 'Skill', description }, async (e) => ({ description: e.description })),
     call: (input, beneath) =>
       hooks['tool.call {"tool":"Skill"}']($, { tool: 'Skill', tool_use_id: 'toolu_1', ...input }, async () => beneath),
+    describeControl: (description) =>
+      hooks[`tool.describe {"tool":"${CONTROL}"}`]($, { tool: CONTROL, description }, async (e) => ({
+        description: e.description,
+      })),
+    control: (input, beneath) =>
+      hooks[`tool.call {"tool":"${CONTROL}"}`]($, { tool: CONTROL, tool_use_id: 'toolu_2', ...input }, async () => beneath),
     fire: async () => {
       for (const timer of timers.splice(0)) await timer.fn()
     },
@@ -127,6 +146,61 @@ test('the Skill description tells the model it can name a built-in, and is redra
   assert.match(description, /built-in slash command .* queued and runs once your turn ends/)
 })
 
+test('a built-in lich refused because the target is this session is queued on it', async () => {
+  const mod = await session()
+  const answer = await mod.control(
+    { session: 'fix/x', action: 'command', value: '/compact', args: ' keep the plan ' },
+    SELF_REFUSAL,
+  )
+
+  assert.match(answer.result, /\/compact keep the plan is queued on this session and runs once this turn ends/)
+  assert.equal(answer.isError, undefined)
+  assert.deepEqual(mod.runs, [], 'ran inside the hook the turn is waiting on')
+  await mod.fire()
+  assert.deepEqual(mod.runs, [{ command: 'compact', args: 'keep the plan' }])
+})
+
+test('control_session naming this session by its LICH_SESSION_ID is queued on it', async () => {
+  const mod = await session()
+  const notFound = { ref: 1, result: 'Error: no session named "lich-1"', text: 'no session named "lich-1"', isError: true }
+  const answer = await mod.control({ session: 'lich-1', action: 'command', value: 'compact' }, notFound)
+  assert.match(answer.result, /\/compact is queued on this session/)
+  await mod.fire()
+  assert.deepEqual(mod.runs, [{ command: 'compact', args: '' }])
+})
+
+test('control_session on this session refuses /model and /effort, and never runs them', async () => {
+  const mod = await session()
+  for (const name of ['model', 'effort']) {
+    const answer = await mod.control({ session: 'fix/x', action: 'command', value: name }, SELF_REFUSAL)
+    assert.match(answer.deny, new RegExp(`/${name} .*default for every new Claude Code session`))
+  }
+  await mod.fire()
+  assert.deepEqual(mod.runs, [])
+})
+
+test('what lich answered for another session, or for no self command, reaches the model untouched', async () => {
+  const mod = await session()
+  for (const [input, beneath] of [
+    [{ session: 'peer', action: 'command', value: 'compact' }, DELIVERED],
+    [{ session: 'ghost', action: 'command', value: 'compact' }, NO_SUCH],
+    [{ session: 'fix/x', action: 'abort' }, SELF_REFUSAL],
+    [{ session: 'fix/x', action: 'prompt', value: 'hi' }, SELF_REFUSAL],
+    [{ session: 'fix/x', action: 'command', value: 'deploy' }, SELF_REFUSAL],
+  ]) {
+    assert.equal(await mod.control(input, beneath), beneath)
+  }
+  assert.equal(mod.timers.length, 0)
+})
+
+test('the control_session description says a command on this session is accepted', async () => {
+  const mod = await session()
+  const { description } = await mod.describeControl('Drive another session. Claude Code sessions only, and never your own.')
+  assert.ok(description.startsWith('Drive another session.'))
+  assert.match(description, /action command .* this session itself as the target: pass session "lich-1"/)
+  assert.match(description, /queued and runs once your turn ends/)
+})
+
 for (const [why, options] of [
   ['outside lich', { env: {} }],
   ['in a non-interactive run', { isInteractive: false }],
@@ -136,6 +210,8 @@ for (const [why, options] of [
     const refused = refusedBy('compact')
     assert.equal(await mod.call({ skill: 'compact' }, refused), refused)
     assert.deepEqual(await mod.describe('Execute a skill.'), { description: 'Execute a skill.' })
+    assert.equal(await mod.control({ session: 'fix/x', action: 'command', value: 'compact' }, SELF_REFUSAL), SELF_REFUSAL)
+    assert.deepEqual(await mod.describeControl('Drive.'), { description: 'Drive.' })
     assert.equal(mod.timers.length, 0)
     assert.deepEqual(mod.invalidated, [])
   })
