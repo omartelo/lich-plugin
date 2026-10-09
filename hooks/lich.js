@@ -8,6 +8,7 @@ import { register as registerEditGuard } from "./edit-guard.js"
 import { register as registerModControl } from "./mod-control.js"
 import { register as registerModStatus } from "./mod-status.js"
 import { register as registerModUsage } from "./mod-usage.js"
+import { register as registerSelfCommand } from "./self-command.js"
 import { register as registerStatusLine } from "./status-line.js"
 import { register as registerWorkerAnswer } from "./worker-answer.js"
 
@@ -20,5 +21,6 @@ export function register(on) {
   registerWorkerAnswer(on)
   registerModStatus(on)
   registerCompacting(on)
+  registerSelfCommand(on)
   registerStatusLine(on)
 }

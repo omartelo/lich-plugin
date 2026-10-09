@@ -25,6 +25,7 @@ hooks/edit-guard.js               # Claude Code mod: an edit says which other li
 hooks/worker-answer.js            # Claude Code mod: a lich subagent worker's last message answers its task
 hooks/mod-status.js               # Claude Code mod: the session's relay errands in the prompt footer
 hooks/mod-compacting.js           # Claude Code mod: the card says when the conversation is being compacted
+hooks/self-command.js             # Claude Code mod: the session runs a built-in slash command the user asked for
 hooks/status-line.js              # the lich line in the prompt footer, shared by the mods above
 opencode/lich.js                  # opencode client: a module, not a command
 omp/lich.js                       # omp client: a module, not a command
@@ -66,6 +67,7 @@ Contracts are **canonical in the lich repository** (`docs/hooks/` there); this p
 - [docs/mod-usage.md](docs/mod-usage.md): a Claude Code session reports the context window, rate limits and cost it measured itself, through a mod hooking `session.measure`; Claude Code only
 - [docs/mod-answer.md](docs/mod-answer.md): a lich subagent worker answers the task it was handed with its turn's final message, through a mod reading the main loop's `classic.Stop` and `turn.complete`; Claude Code only
 - [docs/mod-status.md](docs/mod-status.md): a Claude Code session shows the relay errands it is part of (owed, out, ready) in its prompt footer, through a mod reading `/mod/status`, which never collects; Claude Code only
+- [docs/self-command.md](docs/self-command.md): a Claude Code session runs a built-in slash command the user asked it for (`/compact`), queued after the turn, through a mod answering the Skill tool's refusal of a built-in rather than lich's `control`, which refuses a session's own; Claude Code only
 - [docs/edit-guard.md](docs/edit-guard.md): an edit to a file another lich session edited in the last minutes carries a note naming it, through markers in the checkout's git dir rather than an HTTP contract; Claude Code only
 - [docs/providers.md](docs/providers.md) — the per-harness map, including what installing on omp takes and what it cannot report
 
@@ -116,6 +118,9 @@ one lich line in the prompt footer.
 mod the same kind of fake `$` and asserts the `lich open` argv
 it runs, the Agent result it answers each outcome with, and that a call it does
 not take, or one lich cannot take, reaches the native agent untouched.
+[tests/self-command.test.mjs](tests/self-command.test.mjs) does the same for
+the self-command mod: which Skill calls it takes, that the command runs only
+after the call is answered, and that `/model` and `/effort` never run.
 [tests/contract.mjs](tests/contract.mjs) is the fixtures, the assertions and the
 stub, shared so every client answers to the same lines. Node only, no
 dependencies.
@@ -124,7 +129,8 @@ dependencies.
 [tests/mod-usage.engine.test.ts](tests/mod-usage.engine.test.ts) and
 [tests/mod-status.engine.test.ts](tests/mod-status.engine.test.ts) and
 [tests/worker-answer.engine.test.ts](tests/worker-answer.engine.test.ts) and
-[tests/edit-guard.engine.test.ts](tests/edit-guard.engine.test.ts) run the
+[tests/edit-guard.engine.test.ts](tests/edit-guard.engine.test.ts) and
+[tests/self-command.engine.test.ts](tests/self-command.engine.test.ts) run the
 mods under Claude Code's own engine (`claude plugin test .`); they need a
 `claude` binary, so CI does not run them. The kit does not check a `tool.call`
 result against the tool's output schema (measured on 2.1.289), so whether
