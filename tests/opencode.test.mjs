@@ -106,6 +106,7 @@ for (const [type, state] of STATUS_STATES) {
     assert.equal(requests.length, 1)
     const { body } = assertContractHonoured('/hook', requests[0])
     assert.equal(body.state, state)
+    assert.equal(body.provider_session_id, OPENCODE_SESSION_ID)
   })
 }
 
@@ -163,6 +164,7 @@ for (const [type, properties] of Object.entries(ASKED_EVENTS)) {
     const { body } = assertContractHonoured('/hook', requests[0])
     assert.equal(body.state, 'waiting')
     assert.equal(body.reason, ASKED_REASON[type])
+    assert.equal(body.provider_session_id, OPENCODE_SESSION_ID)
   })
 }
 
@@ -220,6 +222,7 @@ test('tool.execute.before names the tool and what it acts on', async () => {
   assert.equal(body.state, 'busy')
   assert.equal(body.tool, 'write')
   assert.equal(body.detail, 'oc-probe.txt')
+  assert.equal(body.provider_session_id, OPENCODE_SESSION_ID)
 })
 
 // The detail is optional in the contract: absent, never blank.

@@ -27,6 +27,20 @@ every turn passes through it, including the ones no `input` precedes. **Crush is
 absent from the table on purpose**: its only event is `PreToolUse`, and a `busy`
 nothing can end would pin a spinner to a card. See [providers.md](providers.md).
 
+**Every report names the conversation it comes from** in
+`provider_session_id`, the id [session-start](session-start.md) reports: an
+agent CLI the session runs as a tool (`claude -p`, `cursor-agent -p`) inherits
+the `LICH_*` variables, and lich drops a report naming any conversation but the
+one bound to the card (Nested agent CLIs in the contract). The scripts read it
+off the stdin payload (`.conversationId // .session_id`, with
+report-session-start.sh's `sed` fallback when jq is absent), opencode off the
+event's `sessionID`, omp off `ctx.sessionManager.getSessionId()`, and
+`mod-compacting.js` off `$.session.id()`. An id the harness did not hand over
+is left out, and lich takes the report as before. Because `busy`, `done` and
+`idle` now read stdin too, `report-state.sh` reads it with the one-second bound
+curl has: a harness that left the pipe open and unwritten still cannot hold the
+turn.
+
 **omp reports no `waiting`.** It raises `tool_approval_requested` when it asks to
 run something, but that event was never observed on a real run here, and a name
 taken off a type declaration is a report that silently never fires. An omp card

@@ -10,7 +10,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { spawn, spawnSync } from 'node:child_process'
-import { readFileSync, writeFileSync, mkdtempSync, mkdirSync, symlinkSync } from 'node:fs'
+import { readFileSync, writeFileSync, mkdtempSync, mkdirSync, symlinkSync, copyFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 
@@ -254,7 +254,7 @@ function antigravityTranscript(content, name = 'antigravity.jsonl') {
 function binWithout(missing) {
   const dir = path.join(TMP, `bin-without-${missing}`)
   mkdirSync(dir, { recursive: true })
-  for (const tool of ['sh', 'sed', 'grep', 'cut', 'head', 'tail', 'cat', 'curl', 'jq']) {
+  for (const tool of ['sh', 'sed', 'grep', 'cut', 'head', 'tail', 'cat', 'sleep', 'curl', 'jq']) {
     if (tool === missing) continue
     const found = spawnSync('sh', ['-c', `command -v ${tool}`], { encoding: 'utf8' }).stdout.trim()
     if (!found) continue
@@ -584,6 +584,11 @@ for (const registration of REGISTRATIONS) {
         if (argument === 'waiting') assert.equal(body.reason, WAITING_REASON[provider])
         else assert.ok(!('reason' in body), `${argument} sent a reason: ${stub.requests[0].raw}`)
       }
+      if (script === 'report-state.sh' || script === 'report-tool.sh') {
+        // Names the conversation that fired the hook, so lich can drop a report
+        // from an agent CLI nested in the session.
+        assert.equal(body.provider_session_id, PROVIDER_SESSION_ID[provider])
+      }
       if (script === 'report-tool.sh') {
         assert.equal(body.state, 'busy')
         assert.equal(body.tool, TOOL_CALL[provider].tool_name ?? TOOL_CALL[provider].toolCall?.name)
@@ -679,6 +684,63 @@ for (const state of ['busy', 'done', 'idle']) {
       assert.equal(code, 0)
       assert.equal(stub.requests.length, 1)
       assert.equal(assertContractHonoured('/hook', stub.requests[0]).body.state, state)
+    })
+  })
+}
+
+for (const [script, argument] of [['report-state.sh', 'busy'], ['report-tool.sh', '']]) {
+  const command = `"${ROOT}/hooks/${script}" ${argument}`
+  test(`${script} names the conversation without jq`, async () => {
+    await withStub(async (stub) => {
+      const result = await runHook(command, {
+        env: { ...lichEnv(stub.port), PATH: binWithout('jq') },
+        stdin: stdinFor({ provider: 'claude', event: 'PreToolUse' }),
+      })
+      assertHookSucceeded(result)
+      const { body } = assertContractHonoured('/hook', stub.requests[0])
+      assert.equal(body.provider_session_id, PROVIDER_SESSION_ID.claude)
+    })
+  })
+
+  test(`${script} leaves the conversation out when the payload names none`, async () => {
+    await withStub(async (stub) => {
+      const { session_id: _, ...payload } = JSON.parse(stdinFor({ provider: 'claude', event: 'PreToolUse' }))
+      const result = await runHook(command, {
+        env: lichEnv(stub.port),
+        stdin: JSON.stringify(payload),
+      })
+      assertHookSucceeded(result)
+      const { body } = assertContractHonoured('/hook', stub.requests[0])
+      assert.ok(!('provider_session_id' in body), `sent an empty conversation: ${stub.requests[0].raw}`)
+    })
+  })
+}
+
+// lich writes the scripts of a file-shipped harness one by one (Antigravity,
+// Kiro), so an install can carry them without conversation-id.sh. Each says so
+// on stderr and reports what it can without it.
+const WITHOUT_HELPER = [
+  ['report-state.sh', 'busy', 'reporting without provider_session_id', 1],
+  ['report-tool.sh', '', 'reporting without provider_session_id', 1],
+  ['report-session-start.sh', 'claude', 'session-start not reported', 0],
+]
+
+for (const [script, argument, lost, reports] of WITHOUT_HELPER) {
+  test(`${script} without conversation-id.sh says so and ${reports ? 'reports without the id' : 'reports nothing'}`, async () => {
+    const dir = mkdtempSync(path.join(TMP, 'no-helper-'))
+    copyFileSync(path.join(ROOT, 'hooks', script), path.join(dir, script))
+    await withStub(async (stub) => {
+      const result = await runHook(`"${dir}/${script}" ${argument}`, {
+        env: lichEnv(stub.port),
+        stdin: stdinFor({ provider: 'claude', event: 'PreToolUse' }),
+      })
+      assertHookSucceeded(result)
+      assert.equal(result.stderr, `lich-plugin: hooks/conversation-id.sh missing; ${lost}\n`)
+      assert.equal(stub.requests.length, reports)
+      if (reports) {
+        const { body } = assertContractHonoured('/hook', stub.requests[0])
+        assert.ok(!('provider_session_id' in body), `sent a conversation it cannot read: ${stub.requests[0].raw}`)
+      }
     })
   })
 }

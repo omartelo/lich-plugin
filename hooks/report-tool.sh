@@ -14,6 +14,17 @@
 plugin_version=0.19.2
 
 here=$(dirname "$0")
+
+# A file-shipped install that lacks conversation-id.sh says so and still
+# runs: sourcing a missing file would end the script. `${0%/*}` rather than
+# dirname: it needs no tool on PATH.
+if [ -r "${0%/*}/conversation-id.sh" ]; then
+  . "${0%/*}/conversation-id.sh"
+else
+  echo "lich-plugin: hooks/conversation-id.sh missing; reporting without provider_session_id" >&2
+  conversation_id() { :; }
+fi
+
 payload=$(cat)
 command -v jq >/dev/null 2>&1 && has_jq=1 || has_jq=
 
@@ -45,6 +56,12 @@ if [ -n "$detail" ]; then
 else
   body="{\"session_id\":\"${LICH_SESSION_ID}\",\"state\":\"busy\",\"tool\":\"${tool}\"}"
 fi
+
+# The conversation that fired the hook, so lich can drop a report from an agent
+# CLI nested in the session (docs/session-state.md, Nested agent CLIs). An id
+# needs no escaping, and none is left out rather than sent empty.
+provider_session_id=$(printf '%s' "$payload" | conversation_id)
+[ -n "$provider_session_id" ] && body="${body%\}},\"provider_session_id\":\"${provider_session_id}\"}"
 
 curl -s -o /dev/null --max-time 1 \
   -X POST "http://127.0.0.1:${LICH_PORT}/hook?token=${LICH_TOKEN}" \

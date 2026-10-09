@@ -28,6 +28,13 @@ function report(path, body) {
   } catch {}
 }
 
+// The conversation a state report comes from, so lich can drop one from an
+// agent CLI nested in the session (docs/session-state.md, Nested agent CLIs).
+// An id opencode did not give is left out rather than sent empty.
+function conversation(sessionID) {
+  return typeof sessionID === "string" && sessionID !== "" ? { provider_session_id: sessionID } : {}
+}
+
 // The name a card shows under a session's label, and the words for what it acts
 // on. opencode's args are per-tool; these are the keys that identify a call.
 function detailOf(args) {
@@ -504,8 +511,10 @@ export const LichPlugin = async ({ $ } = {}, helper) => {
           // lich's own `idle` means the CLI has left, which nothing here can
           // report — the plugin dies with the server that would say it.
           const type = properties.status?.type
-          if (type === "idle") report("hook", { state: "done" })
-          else if (type === "busy" || type === "retry") report("hook", { state: "busy" })
+          if (type === "idle") report("hook", { state: "done", ...conversation(properties.sessionID) })
+          else if (type === "busy" || type === "retry") {
+            report("hook", { state: "busy", ...conversation(properties.sessionID) })
+          }
           return
         }
         case "file.edited":
@@ -522,7 +531,7 @@ export const LichPlugin = async ({ $ } = {}, helper) => {
           // next status report, which follows a reply within ~100ms; a missing
           // one costs the user the session.
           if (event?.type?.endsWith(".asked") && !subSessions.has(properties.sessionID)) {
-            report("hook", { state: "waiting", reason: reasonOf(properties) })
+            report("hook", { state: "waiting", reason: reasonOf(properties), ...conversation(properties.sessionID) })
           }
       }
     },
@@ -531,7 +540,12 @@ export const LichPlugin = async ({ $ } = {}, helper) => {
     // report, so this one only decorates the state.
     "tool.execute.before": async (input, output) => {
       if (!input?.tool || subSessions.has(input.sessionID)) return
-      report("hook", { state: "busy", tool: input.tool, detail: detailOf(output?.args) })
+      report("hook", {
+        state: "busy",
+        tool: input.tool,
+        detail: detailOf(output?.args),
+        ...conversation(input.sessionID),
+      })
     },
 
     // Absent outside lich, and absent when the helper cannot be imported: the

@@ -19,12 +19,28 @@ ref=$(tr -d '[:space:]' <"$here/lich-ref")
 raw=https://raw.githubusercontent.com/omartelo/lich/$ref
 base=$raw/docs/hooks/fixtures
 
-for file in session-start.jsonl session-state.jsonl session-title.jsonl \
+for file in session-start.jsonl session-title.jsonl \
   session-touched.jsonl mod-usage.jsonl mod-control.jsonl mod-commands.json \
-  mod-answer.jsonl mod-status.json; do
+  mod-status.json; do
   curl -fsSL "$base/$file" -o "$here/fixtures/$file"
   echo "refreshed $file at $ref"
 done
+
+# mod-answer gained `unanswered` in lich's merge commit 19e808e4 (#705), in no release yet,
+# so it is read at that commit. Once a release ships it, move tests/lich-ref to
+# that release and put the file back in the loop above.
+unreleased=19e808e4dc177cbeedd4a289f7d8fac739254c05
+curl -fsSL "https://raw.githubusercontent.com/omartelo/lich/$unreleased/docs/hooks/fixtures/mod-answer.jsonl" \
+  -o "$here/fixtures/mod-answer.jsonl"
+echo "refreshed mod-answer.jsonl at $unreleased (unreleased)"
+
+# session-state gained `provider_session_id` in lich's merge commit ce8c36a6 (#709), in no
+# release yet, so it is read at that commit. Once a release ships it, move
+# tests/lich-ref to that release and put the file back in the loop above.
+unreleased=ce8c36a6bd9f28786b45a6be527f81bb3a4a3634
+curl -fsSL "https://raw.githubusercontent.com/omartelo/lich/$unreleased/docs/hooks/fixtures/session-state.jsonl" \
+  -o "$here/fixtures/session-state.jsonl"
+echo "refreshed session-state.jsonl at $unreleased (unreleased)"
 
 # validate.mjs reads its token sets off this copy, so a token lich adds reaches
 # the validator by moving tests/lich-ref, not by hand.
