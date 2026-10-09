@@ -44,4 +44,5 @@ own figures renamed: one it does not have is left out, never zeroed.
 
 Claude Code fires `session.measure` once at start, at the end of every
 main-thread turn, and when a rate-limit window moves a whole point; never
-mid-turn, never on a compaction (measured on 2.1.289).
+mid-turn (measured on 2.1.289). A compaction fires it once more, just before
+the `SessionStart` it reports as `compact` (measured on 2.1.295).
