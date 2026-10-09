@@ -17,13 +17,14 @@ hooks/crush-hooks.json            # hook registration, Crush (hand-merged into c
 hooks/                            # hook scripts (all four run them; only how they are addressed differs)
 hooks/detail.jq                   # what a tool call acts on, shared by two of those scripts
 hooks/win-run.cmd                 # runs one of those scripts on Windows (Codex)
-hooks/lich.js                     # the one module hooks/hooks.json names under `modules`: registers the six mods below
+hooks/lich.js                     # the one module hooks/hooks.json names under `modules`: registers the mods below
 hooks/mod-control.js              # Claude Code mod: lich drives the session
 hooks/agent-cards.js              # Claude Code mod: a general-purpose subagent runs as a lich session
 hooks/mod-usage.js                # Claude Code mod: the session reports its own context, rate limits and cost
 hooks/edit-guard.js               # Claude Code mod: an edit says which other lich session edited the file
 hooks/worker-answer.js            # Claude Code mod: a lich subagent worker's last message answers its task
 hooks/mod-status.js               # Claude Code mod: the session's relay errands in the prompt footer
+hooks/mod-compacting.js           # Claude Code mod: the card says when the conversation is being compacted
 hooks/status-line.js              # the lich line in the prompt footer, shared by the mods above
 opencode/lich.js                  # opencode client: a module, not a command
 omp/lich.js                       # omp client: a module, not a command
@@ -56,7 +57,7 @@ registered for it.
 
 Contracts are **canonical in the lich repository** (`docs/hooks/` there); this plugin only implements the client side. Each hook has a doc in `docs/` here that points at its contract and describes the plugin-side behavior. Read it before creating or changing a hook:
 
-- [docs/session-state.md](docs/session-state.md) — session-state reporting (`busy`/`done`) via `UserPromptSubmit`/`Stop`, and the tool a turn is running via `PreToolUse`
+- [docs/session-state.md](docs/session-state.md) — session-state reporting (`busy`/`done`) via `UserPromptSubmit`/`Stop`, the tool a turn is running via `PreToolUse`, and `compacting` through a mod bracketing `session.compact` (Claude Code only)
 - [docs/session-start.md](docs/session-start.md) — Claude session id via `SessionStart`
 - [docs/session-title.md](docs/session-title.md) — the provider's own session title, via `PostToolUse`/`PreInvocation` and `Stop`
 - [docs/session-touched.md](docs/session-touched.md) — git-status refresh signal via `PostToolUse` (file-mutating tools only)
@@ -101,9 +102,11 @@ mod-control fixtures and its polls against the commands lich sends;
 [tests/mod-usage.test.mjs](tests/mod-usage.test.mjs) does the same for its
 usage reports against the mod-usage fixtures,
 [tests/worker-answer.test.mjs](tests/worker-answer.test.mjs) for a worker's
-answer against the mod-answer fixtures, and
+answer against the mod-answer fixtures,
 [tests/mod-status.test.mjs](tests/mod-status.test.mjs) for the footer line it
-draws from the mod-status response.
+draws from the mod-status response, and
+[tests/mod-compacting.test.mjs](tests/mod-compacting.test.mjs) for the
+`compacting` bracket against the session-state fixtures.
 [tests/edit-guard.test.mjs](tests/edit-guard.test.mjs) hands the edit guard a
 fake `$` with an in-memory git dir and asserts the markers it leaves and the
 note another session's marker adds, and
@@ -173,6 +176,6 @@ Same standard as the `lich` repository (Keep a Changelog + SemVer). Releases are
 
 1. Move the `[Unreleased]` entries in `CHANGELOG.md` under the new version heading (with date) and refresh the compare links at the bottom.
 2. Pick the number by what changed: a release that sends anything lich's contract did not already accept (a new endpoint, header, field or value) bumps the **minor** (the major, from 1.0); anything else bumps the **patch**. lich accepts every release below the next minor of the contract it implements, so a contract change released as a patch reaches a lich that refuses it. `docs/hooks/README.md` in lich, Versioning, is the rule.
-3. Align `version` in `.claude-plugin/plugin.json` **and** `.codex-plugin/plugin.json` with the tag, and `plugin_version` in each `hooks/report-*.sh` and `PLUGIN_VERSION` in `opencode/lich.js`, `omp/lich.js`, `hooks/mod-control.js`, `hooks/mod-usage.js`, `hooks/mod-status.js` and `hooks/worker-answer.js`, the header every report sends. The suite fails while any of them disagrees with the Claude Code manifest. The root `plugin.json` is not a third one to bump: Antigravity's manifest takes only a `name`, and lich writes its own carrying the tag when it installs a release.
+3. Align `version` in `.claude-plugin/plugin.json` **and** `.codex-plugin/plugin.json` with the tag, and `plugin_version` in each `hooks/report-*.sh` and `PLUGIN_VERSION` in `opencode/lich.js`, `omp/lich.js`, `hooks/mod-control.js`, `hooks/mod-usage.js`, `hooks/mod-status.js`, `hooks/mod-compacting.js` and `hooks/worker-answer.js`, the header every report sends. The suite fails while any of them disagrees with the Claude Code manifest. The root `plugin.json` is not a third one to bump: Antigravity's manifest takes only a `name`, and lich writes its own carrying the tag when it installs a release.
 4. Annotated tag `vX.Y.Z` + push with the tag.
 5. `gh release create vX.Y.Z` with the notes taken from the matching `CHANGELOG.md` section.

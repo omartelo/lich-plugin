@@ -16,6 +16,7 @@ toast) when the agent is blocked on the user.
 | `report-state.sh done`    | `done`           | `Stop`             | `Stop`              | `Stop`             | `session.status` (`idle`) | `session_stop`  |
 | `report-state.sh waiting` | `waiting`+`reason`| `Notification`    | `PermissionRequest` | — (not measured)   | any `*.asked`             | — (not measured)|
 | `report-state.sh idle`    | `idle`           | `SessionEnd`       | — (never fires)     | — (never fires)    | — (never fires)           | — (never fires) |
+| `mod-compacting.js`      | `compacting`     | `session.compact` (mod) | —              | —                  | —                         | —               |
 
 opencode and omp run no scripts: `opencode/lich.js` and `omp/lich.js` send the
 same payloads off the events their harness hands a loaded module. opencode's
@@ -114,6 +115,46 @@ does not fire `UserPromptSubmit`, but the tool that resumes work fires
 the turn without another tool call stays `waiting` until `Stop`. Codex recovers
 the same way: an approved request runs the tool it was asking about, and that
 tool's `PostToolUse` re-arms the spinner.
+
+## Compacting
+
+`hooks/mod-compacting.js` reports `compacting` while Claude Code compacts the
+conversation, so the card says so instead of sitting on `done` through a manual
+`/compact` (no `UserPromptSubmit` fires for it) or on a bare spinner through an
+automatic one. It is a mod, registered by `hooks/lich.js`, because it has to
+see the compaction end whichever way it ends: `session.compact`'s `next(e)`
+settles when it does, and a settings hook has nothing to match that with.
+`PostCompact` never fires for a compaction that fails, and two do, measured on
+Claude Code 2.1.295:
+
+| trigger  | when                                     | ends                                                                      | closed with |
+|----------|------------------------------------------|---------------------------------------------------------------------------|-------------|
+| `manual` | `/compact`, at an idle prompt            | resolves after the summary (~6s), or rejects on Esc ("Request was aborted") | `done`      |
+| `auto`   | inside a turn, after `UserPromptSubmit`, before the model request | resolves after the summary (~14s), or rejects within ~40ms when the engine gives up ("reactive compaction did not settle ok") and the turn goes on | `busy`      |
+
+`compacting` goes out before `next(e)` is called and the closing state once it
+settles, either way; the error, if any, goes on to Claude Code untouched. An
+automatic compaction closes with `busy` because its turn is still running; the
+turn's own `Stop` reports `done`. Esc during an automatic compaction did not
+abort it on the measured run: the summary finished and the turn ended normally.
+
+The rest follows the other mods:
+
+- **Outside lich, or in a `claude -p`, it never reports.** It reads the three
+  variables in a `session.start` hook matching `isInteractive: true`.
+- **Only `manual` and `auto` are reported**, each by a hook matching its
+  `trigger`. `precompute` runs ahead of time, out of sight, and `plugin` (a
+  mod's own `$.session.compact`) was never observed.
+- **A subagent's compaction is left alone.** It carries `agentId`; the main
+  conversation's does not. That field is read off Claude Code's type
+  declarations, not a payload: no subagent compaction was measured.
+- **The compaction is never held up.** Reports go out beside the chain, one at
+  a time so the closing one never lands first, and one that fails is dropped.
+
+Known ceiling: an automatic compaction the engine gives up on still puts
+`compacting` on the card for the ~40ms before `busy`. With the threshold forced
+low (`CLAUDE_AUTOCOMPACT_PCT_OVERRIDE=1`) that happened on most turns; how
+often it happens at the default threshold was not measured.
 
 ## The tool report
 

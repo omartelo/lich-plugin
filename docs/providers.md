@@ -24,13 +24,14 @@ This repository is one plugin, packaged for each harness it supports:
 | `hooks/crush-hooks.json`        | Crush       | hook registration, merged by hand |
 | `hooks/*.sh`                    | the four    | the reports themselves        |
 | `hooks/win-run.cmd`             | Codex       | runs a script on Windows      |
-| `hooks/lich.js`                 | Claude Code | the one module `hooks/hooks.json` names under `modules`; registers the five below |
+| `hooks/lich.js`                 | Claude Code | the one module `hooks/hooks.json` names under `modules`; registers the mods below |
 | `hooks/mod-control.js`          | Claude Code | the mod-control client, a mod |
 | `hooks/agent-cards.js`          | Claude Code | runs a general-purpose subagent as a lich session, a mod |
 | `hooks/mod-usage.js`            | Claude Code | the mod-usage client, a mod |
 | `hooks/mod-status.js`           | Claude Code | the mod-status client, a mod |
 | `hooks/edit-guard.js`           | Claude Code | names the other lich session that edited a file, a mod |
 | `hooks/worker-answer.js`        | Claude Code | the mod-answer client: a worker's last message answers its task, a mod |
+| `hooks/mod-compacting.js`       | Claude Code | the session-state `compacting` report, a mod |
 | `opencode/lich.js`              | opencode    | the whole client, as a module |
 | `omp/lich.js`                   | omp         | the whole client, as a module |
 | `skills/`                       | all         | skills, same layout           |
@@ -74,6 +75,7 @@ swallows its own errors and never awaits a report.
 | `busy` + tool       | `PreToolUse`                 | `PreToolUse`                 | `PreToolUse`                 | `tool.execute.before`     | `tool_call`              | —                           |
 | `waiting` + reason  | `Notification`               | `PermissionRequest`          | — (not measured)             | any `*.asked`             | — (see below)            | —                           |
 | `done`              | `Stop`, `StopFailure`        | `Stop`                       | `Stop`                       | `session.status` (`idle`) | `session_stop`           | —                           |
+| `compacting`        | `session.compact` (a mod)    | —                            | —                            | —                         | —                        | —                           |
 | title               | `Stop`                       | `Stop`                       | `Stop`                       | `session.updated`         | `session_stop`, `turn_start` | —                       |
 | `idle`              | `SessionEnd`                 | — (registered, never fires)  | — (never fires)              | — (nothing outlives it)   | — (nothing outlives it)  | —                           |
 | touched             | `PostToolUse` (write tools)  | `PostToolUse` (write tools)  | `PostToolUse` (write tools)  | `file.edited`             | `tool_result` (write tools) | `PreToolUse` (write tools) |

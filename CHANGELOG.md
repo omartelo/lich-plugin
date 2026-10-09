@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **A Claude Code card says when its conversation is being compacted.** A new
+  mod, `hooks/mod-compacting.js`, reports the session-state contract's
+  `compacting` when `session.compact` starts and closes it when the compaction
+  settles, whether it stood or failed: `done` after a manual `/compact`, `busy`
+  after an automatic one, whose turn goes on. Until now a manual `/compact` left
+  the card on `done` and an automatic one on a bare spinner. A lich older than
+  the contract answers `compacting` with a 400 and still takes the closing state.
+
 ## [0.18.4] - 2026-10-08
 
 ### Added
