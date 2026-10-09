@@ -382,7 +382,7 @@ test('the vendored fixtures parse and carry exactly one body and one verdict', (
       )
     }
   }
-  assert.deepEqual([...STATES].sort(), ['busy', 'done', 'idle', 'waiting'])
+  assert.deepEqual([...STATES].sort(), ['busy', 'compacting', 'done', 'idle', 'waiting'])
   assert.deepEqual(
     [...PROVIDERS].sort(),
     ['antigravity', 'claude', 'codex', 'crush', 'cursor', 'kiro', 'omp', 'opencode'],
@@ -497,12 +497,15 @@ test('every registered state argument is an accepted state', () => {
   const sent = REGISTRATIONS.filter((r) => r.script === 'report-state.sh').map((r) => r.argument)
   assert.ok(sent.length > 0)
   for (const state of sent) assert.ok(STATES.has(state), `registration reports unknown state "${state}"`)
-  // A harness that reports state at all wires up the whole vocabulary; Codex's
-  // SessionEnd never fires today, but the entry is deliberate. Antigravity reports
-  // busy and done. Crush reports no state at all — see docs/providers.md for all three.
+  // A harness that reports state at all wires up the whole vocabulary but
+  // `compacting`, which only Claude Code reports, from a mod
+  // (mod-compacting.test.mjs); Codex's SessionEnd never fires today, but the
+  // entry is deliberate. Antigravity reports busy and done. Crush reports no
+  // state at all — see docs/providers.md for all three.
+  const SCRIPTED_STATES = new Set([...STATES].filter((state) => state !== 'compacting'))
   const EXPECTED_STATES = {
-    claude: STATES,
-    codex: STATES,
+    claude: SCRIPTED_STATES,
+    codex: SCRIPTED_STATES,
     antigravity: new Set(['busy', 'done']),
   }
   for (const [provider, scripts] of Object.entries(REGISTERED_SCRIPTS)) {
@@ -514,7 +517,7 @@ test('every registered state argument is an accepted state', () => {
     )
     assert.deepEqual(
       [...states].sort(),
-      [...(EXPECTED_STATES[provider] ?? STATES)].sort(),
+      [...(EXPECTED_STATES[provider] ?? SCRIPTED_STATES)].sort(),
       `${provider} misses a state`,
     )
   }

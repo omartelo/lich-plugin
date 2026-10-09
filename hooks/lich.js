@@ -3,6 +3,7 @@
 // from here.
 
 import { register as registerAgentCards } from "./agent-cards.js"
+import { register as registerCompacting } from "./mod-compacting.js"
 import { register as registerEditGuard } from "./edit-guard.js"
 import { register as registerModControl } from "./mod-control.js"
 import { register as registerModStatus } from "./mod-status.js"
@@ -18,5 +19,6 @@ export function register(on) {
   registerEditGuard(on)
   registerWorkerAnswer(on)
   registerModStatus(on)
+  registerCompacting(on)
   registerStatusLine(on)
 }
