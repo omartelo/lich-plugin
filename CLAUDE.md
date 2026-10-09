@@ -16,6 +16,7 @@ hooks/codex-hooks.json            # hook registration, Codex
 hooks/crush-hooks.json            # hook registration, Crush (hand-merged into crush.json)
 hooks/                            # hook scripts (all four run them; only how they are addressed differs)
 hooks/detail.jq                   # what a tool call acts on, shared by two of those scripts
+hooks/conversation-id.sh          # the conversation a payload comes from, sourced by three of them
 hooks/win-run.cmd                 # runs one of those scripts on Windows (Codex)
 hooks/lich.js                     # the one module hooks/hooks.json names under `modules`: registers the mods below
 hooks/mod-control.js              # Claude Code mod: lich drives the session

@@ -14,6 +14,12 @@
 plugin_version=0.19.2
 
 here=$(dirname "$0")
+
+# A file-shipped install that lacks conversation-id.sh still reports, only
+# without the conversation: sourcing a missing file would end the script.
+# `${0%/*}` rather than dirname: it needs no tool on PATH.
+[ -r "${0%/*}/conversation-id.sh" ] && . "${0%/*}/conversation-id.sh"
+
 payload=$(cat)
 command -v jq >/dev/null 2>&1 && has_jq=1 || has_jq=
 
@@ -47,16 +53,9 @@ else
 fi
 
 # The conversation that fired the hook, so lich can drop a report from an agent
-# CLI nested in the session (docs/session-state.md, Nested agent CLIs). Parsed as
-# report-session-start.sh parses it; an id needs no escaping, and none is left
-# out rather than sent empty.
-if [ -n "$has_jq" ]; then
-  provider_session_id=$(printf '%s' "$payload" | jq -r '.conversationId // .session_id // empty' 2>/dev/null)
-else
-  provider_session_id=$(printf '%s' "$payload" | \
-    sed -n -e 's/.*"conversationId"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' \
-           -e 's/.*"session_id"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -n 1)
-fi
+# CLI nested in the session (docs/session-state.md, Nested agent CLIs). An id
+# needs no escaping, and none is left out rather than sent empty.
+provider_session_id=$(printf '%s' "$payload" | conversation_id)
 [ -n "$provider_session_id" ] && body="${body%\}},\"provider_session_id\":\"${provider_session_id}\"}"
 
 curl -s -o /dev/null --max-time 1 \

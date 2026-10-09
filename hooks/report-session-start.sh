@@ -9,14 +9,14 @@
 # Sent as X-Lich-Plugin on every report; bumped at release (CLAUDE.md, Release).
 plugin_version=0.19.2
 provider=${1:-claude}
-# Parse session_id from the stdin payload. Prefer jq; fall back to sed so the
-# hook works on Windows, where jq is usually absent but sed (Git Bash) is not.
-if command -v jq >/dev/null 2>&1; then
-  provider_session_id=$(jq -r '.conversationId // .session_id // empty' 2>/dev/null)
-else
-  provider_session_id=$(sed -n -e 's/.*"conversationId"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' \
-                               -e 's/.*"session_id"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -n 1)
-fi
+
+# A file-shipped install that lacks conversation-id.sh still reports, only
+# without the conversation: sourcing a missing file would end the script.
+# `${0%/*}` rather than dirname: it needs no tool on PATH.
+[ -r "${0%/*}/conversation-id.sh" ] && . "${0%/*}/conversation-id.sh"
+
+payload=$(cat)
+provider_session_id=$(printf '%s' "$payload" | conversation_id)
 [ -n "$provider_session_id" ] || exit 0
 
 # Values are ids (UUID / lich-controlled / this file's own literal), no JSON
