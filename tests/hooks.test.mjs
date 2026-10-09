@@ -10,7 +10,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { spawn, spawnSync } from 'node:child_process'
-import { readFileSync, writeFileSync, mkdtempSync, mkdirSync, symlinkSync } from 'node:fs'
+import { readFileSync, writeFileSync, mkdtempSync, mkdirSync, symlinkSync, copyFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 
@@ -712,6 +712,35 @@ for (const [script, argument] of [['report-state.sh', 'busy'], ['report-tool.sh'
       assertHookSucceeded(result)
       const { body } = assertContractHonoured('/hook', stub.requests[0])
       assert.ok(!('provider_session_id' in body), `sent an empty conversation: ${stub.requests[0].raw}`)
+    })
+  })
+}
+
+// lich writes the scripts of a file-shipped harness one by one (Antigravity,
+// Kiro), so an install can carry them without conversation-id.sh. Each says so
+// on stderr and reports what it can without it.
+const WITHOUT_HELPER = [
+  ['report-state.sh', 'busy', 'reporting without provider_session_id', 1],
+  ['report-tool.sh', '', 'reporting without provider_session_id', 1],
+  ['report-session-start.sh', 'claude', 'session-start not reported', 0],
+]
+
+for (const [script, argument, lost, reports] of WITHOUT_HELPER) {
+  test(`${script} without conversation-id.sh says so and ${reports ? 'reports without the id' : 'reports nothing'}`, async () => {
+    const dir = mkdtempSync(path.join(TMP, 'no-helper-'))
+    copyFileSync(path.join(ROOT, 'hooks', script), path.join(dir, script))
+    await withStub(async (stub) => {
+      const result = await runHook(`"${dir}/${script}" ${argument}`, {
+        env: lichEnv(stub.port),
+        stdin: stdinFor({ provider: 'claude', event: 'PreToolUse' }),
+      })
+      assertHookSucceeded(result)
+      assert.equal(result.stderr, `lich-plugin: hooks/conversation-id.sh missing; ${lost}\n`)
+      assert.equal(stub.requests.length, reports)
+      if (reports) {
+        const { body } = assertContractHonoured('/hook', stub.requests[0])
+        assert.ok(!('provider_session_id' in body), `sent a conversation it cannot read: ${stub.requests[0].raw}`)
+      }
     })
   })
 }

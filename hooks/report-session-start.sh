@@ -10,10 +10,15 @@
 plugin_version=0.19.2
 provider=${1:-claude}
 
-# A file-shipped install that lacks conversation-id.sh still reports, only
-# without the conversation: sourcing a missing file would end the script.
-# `${0%/*}` rather than dirname: it needs no tool on PATH.
-[ -r "${0%/*}/conversation-id.sh" ] && . "${0%/*}/conversation-id.sh"
+# A file-shipped install that lacks conversation-id.sh says so and still
+# runs: sourcing a missing file would end the script. `${0%/*}` rather than
+# dirname: it needs no tool on PATH.
+if [ -r "${0%/*}/conversation-id.sh" ]; then
+  . "${0%/*}/conversation-id.sh"
+else
+  echo "lich-plugin: hooks/conversation-id.sh missing; session-start not reported" >&2
+  conversation_id() { :; }
+fi
 
 payload=$(cat)
 provider_session_id=$(printf '%s' "$payload" | conversation_id)
