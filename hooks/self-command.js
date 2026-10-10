@@ -73,7 +73,7 @@ async function queueBuiltin($, name, args) {
   if (SAVES_A_DEFAULT.has(name)) {
     return {
       deny:
-        say(await promptLang($), "denyDefaultSaved", { name }),
+        say(promptLang(await $.env.get("LICH_PROMPT_LANG")), "denyDefaultSaved", { name }),
     }
   }
   if (!(await isBuiltin($, name))) return undefined
@@ -119,7 +119,7 @@ export function register(on) {
   on("tool.describe", { tool: "Skill" }, async ($, e, next) => {
     const described = await next(e)
     if (!state.sessionId) return described
-    return { ...described, description: described.description + say(await promptLang($), "skillNote") }
+    return { ...described, description: described.description + say(promptLang(await $.env.get("LICH_PROMPT_LANG")), "skillNote") }
   })
 
   // The Skill tool runs first: a skill, or a built-in it serves as a prompt
@@ -133,14 +133,14 @@ export function register(on) {
     if (typeof queued !== "string") return queued
     return {
       result: { success: true, commandName: name },
-      context: [say(await promptLang($), "skillQueued", { queued })],
+      context: [say(promptLang(await $.env.get("LICH_PROMPT_LANG")), "skillQueued", { queued })],
     }
   })
 
   on("tool.describe", { tool: CONTROL_TOOL }, async ($, e, next) => {
     const described = await next(e)
     if (!state.sessionId) return described
-    return { ...described, description: described.description + say(await promptLang($), "controlNote", { sessionId: state.sessionId }) }
+    return { ...described, description: described.description + say(promptLang(await $.env.get("LICH_PROMPT_LANG")), "controlNote", { sessionId: state.sessionId }) }
   })
 
   // lich answers first: a command for another session is its own. Only its
@@ -153,6 +153,6 @@ export function register(on) {
     const queued = await queueBuiltin($, bareName(e.value), e.args?.trim() ?? "")
     if (queued === undefined) return native
     if (typeof queued !== "string") return queued
-    return { result: say(await promptLang($), "controlQueued", { queued }) }
+    return { result: say(promptLang(await $.env.get("LICH_PROMPT_LANG")), "controlQueued", { queued }) }
   })
 }

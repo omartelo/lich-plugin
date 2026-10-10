@@ -6,6 +6,8 @@ asking session. It follows the native agent's semantics: it works in the asking
 session's checkout, or in a worktree of its own when the call asks for
 `isolation: "worktree"`.
 
+The text this mod adds for the agent follows `LICH_PROMPT_LANG`, the prompt language lich exports into every session (English when unset or unknown; catalog in `hooks/prompt-text.js`).
+
 There is no HTTP contract behind it. It drives the lich CLI the asking session
 already has, `$LICH_BIN open`, so what it reads is what that command prints
 (`docs/cli.md` in the lich repository: `open --json`, Exit status).

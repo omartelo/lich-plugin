@@ -192,7 +192,7 @@ async function guard($, e, next) {
     const now = await $.clock.now()
     if (isNews(previous, session, now)) {
       const who = await whoMarked($, previous)
-      note = noteFor(previous, who, now, await promptLang($))
+      note = noteFor(previous, who, now, promptLang(await $.env.get("LICH_PROMPT_LANG")))
       showEditBy($, previous, who)
       $.clock.after(previous.at + RECENT_MS - now, () => clearEditBy($, previous))
     }

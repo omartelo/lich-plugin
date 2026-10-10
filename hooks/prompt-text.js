@@ -7,8 +7,6 @@
 // marker and the status enums are literal in every locale: the model matches on
 // them, and so does the contract.
 
-const ENV_VAR = "LICH_PROMPT_LANG"
-
 /** @type {Record<string, string>} */
 export const en = {
   askPreamble:
@@ -120,11 +118,11 @@ export function say(lang, key, vars = {}) {
 }
 
 /**
- * The prompt language this session was started with.
+ * The catalog language for a LICH_PROMPT_LANG value. The hook reads the env
+ * itself: the engine never follows $ across an import.
  *
- * @param {import('claude-code').EngineInterface} $
+ * @param {string | undefined} tag
  */
-export async function promptLang($) {
-  const tag = await $.env.get(ENV_VAR)
+export function promptLang(tag) {
   return tag && tag in catalogs ? tag : "en"
 }

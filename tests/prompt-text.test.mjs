@@ -53,7 +53,7 @@ test('a key no catalog has is an error, not an empty text', () => {
 })
 
 test('the language is read from LICH_PROMPT_LANG, English when unset or unknown', async () => {
-  const lang = (value) => promptLang({ env: { get: async (n) => (n === 'LICH_PROMPT_LANG' ? value : undefined) } })
+  const lang = async (value) => promptLang(value)
   assert.equal(await lang('pt-BR'), 'pt-BR')
   assert.equal(await lang('en'), 'en')
   assert.equal(await lang(undefined), 'en')

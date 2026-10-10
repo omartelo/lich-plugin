@@ -308,13 +308,14 @@ function runNatively($, e, next, reason) {
  */
 async function runAsSession($, state, e, next) {
   if (!isDelegable(e, next, state)) return next(e)
-  const [lich, session, cards, depth, lang] = await Promise.all([
+  const [lich, session, cards, depth, langTag] = await Promise.all([
     $.env.get("LICH_BIN"),
     $.env.get("LICH_SESSION_ID"),
     $.env.get("LICH_SUBAGENT_CARDS"),
     $.env.get("LICH_SUBAGENT_DEPTH"),
-    promptLang($),
+    $.env.get("LICH_PROMPT_LANG"),
   ])
+  const lang = promptLang(langTag)
   if (!lich || !session) return next(e)
   if (cards === CARDS_OFF) {
     if (!isWorkerDepth(depth)) return next(e)
@@ -445,7 +446,7 @@ async function stopWorker($, state, e, next) {
   const id = e.task_id ?? e.shell_id ?? ""
   const worker = state.workers.get(id)
   if (worker === undefined) return next(e)
-  const lang = await promptLang($)
+  const lang = promptLang(await $.env.get("LICH_PROMPT_LANG"))
   const argv = worker.shared
     ? [state.lich, "close", worker.name]
     : [state.lich, "control", worker.name, "abort"]

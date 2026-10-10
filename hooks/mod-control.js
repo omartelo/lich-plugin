@@ -232,7 +232,7 @@ export function register(on) {
     // session's variables, so it would also take the parent's commands.
     if (e.isInteractive && state.link === undefined) {
       state.link = await linkFromEnv($)
-      state.lang = await promptLang($)
+      state.lang = promptLang(await $.env.get("LICH_PROMPT_LANG"))
       const link = state.link
       if (link) $.clock.after(0, () => void poll($, state, link))
     }
