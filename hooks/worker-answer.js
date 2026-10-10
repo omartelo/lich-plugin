@@ -16,16 +16,18 @@
 // handed work to the background, and the turn Claude Code resumes in once it
 // finishes is the one that reports). Its `turn.complete` then says what: an
 // answer that is not blank is the worker's answer, a blank one is
-// `unanswered: "blank"`, a refusal `unanswered: "refusal"`. Measured on
-// Claude Code 2.1.289: `classic.Stop` fires on the main loop only, before
-// `turn.complete`, and its `last_assistant_message` equals the completion's
-// `answer`; an aborted turn fires no Stop.
+// `unanswered: "blank"`. Measured on Claude Code 2.1.289: `classic.Stop` fires
+// on the main loop only, before `turn.complete`, and its
+// `last_assistant_message` equals the completion's `answer`; an aborted turn
+// fires no Stop.
 //
-// A turn an API error ended reports nothing, though the contract has
-// `unanswered: "error"` for it: such a turn fires `StopFailure` instead of
-// `Stop`, and read off the Claude Code 2.1.296 bundle neither `StopFailure`'s
-// input nor `turn.complete`'s carries `background_tasks`, so nothing tells
-// whether the failed turn left work running.
+// A refused turn and one an API error ended report nothing, though the
+// contract has `unanswered: "refusal"` and `"error"` for them. Measured on
+// Claude Code 2.1.296, both end through `StopFailure` (a refusal with error
+// `invalid_request`) and then `turn.complete`, with no `Stop`, and neither
+// carries `background_tasks`: the mod cannot tell a failed turn with nothing
+// running from one whose background work resumes it later and answers then,
+// so reporting would answer the errand twice.
 //
 // Every function that takes `$` is declared here at the top level: the loader
 // refuses a module that hands `$` to a nested function.
@@ -46,7 +48,7 @@ const ANSWER_LIMIT = 16000
  * @typedef {{ base: string, token: string, session: string }} Link
  * @typedef {{ idle: boolean, text: string }} Stop
  * @typedef {{ link?: Link, stop?: Stop }} State
- * @typedef {{ text: string } | { unanswered: "blank" | "refusal" }} Report
+ * @typedef {{ text: string } | { unanswered: "blank" }} Report
  */
 
 /**
@@ -94,7 +96,6 @@ function cut(text) {
  */
 function reportOf(stop, e) {
   if (stop === undefined || !stop.idle) return undefined
-  if (e.reason === "refusal") return { unanswered: "refusal" }
   if (e.reason !== "answer") return undefined
   if (stop.text.trim() === "") return e.answer.trim() === "" ? { unanswered: "blank" } : undefined
   return stop.text === e.answer ? { text: cut(stop.text) } : undefined
@@ -155,9 +156,9 @@ export function register(on) {
 
   // One hook per reason a turn ends with: the matchers keep them beside
   // mod-control.js's own turn.complete hook, which has none, and Claude Code
-  // refuses one plugin's second hook on an event with no matcher. The aborted
-  // and failed ones report nothing; they are here so every turn drops the Stop
-  // it read, and a later turn never inherits it.
+  // refuses one plugin's second hook on an event with no matcher. The refused,
+  // aborted and failed ones report nothing; they are here so every turn drops
+  // the Stop it read, and a later turn never inherits it.
   on("turn.complete", { reason: "answer" }, ($, e, next) => settleTurn($, state, e, next))
   on("turn.complete", { reason: "refusal" }, ($, e, next) => settleTurn($, state, e, next))
   on("turn.complete", { reason: "error" }, ($, e, next) => settleTurn($, state, e, next))

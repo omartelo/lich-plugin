@@ -18,7 +18,6 @@ reply instructions, and answers the errand with what this mod posts.
 |-------------------------------------------|-------------------------------------------------------------|
 | `classic.Stop`, then `turn.complete{reason=answer}` | `POST /mod/answer` with `{"session_id", "text"}`  |
 | `classic.Stop` with a blank message, then `turn.complete{reason=answer}` | `POST /mod/answer` with `{"session_id", "unanswered": "blank"}` |
-| `classic.Stop`, then `turn.complete{reason=refusal}` | `POST /mod/answer` with `{"session_id", "unanswered": "refusal"}` |
 
 ## How it behaves
 
@@ -35,20 +34,20 @@ reply instructions, and answers the errand with what this mod posts.
   subagent, a monitor, a workflow); Claude Code resumes in a new turn when that
   work finishes, and that turn's `Stop`, with nothing listed, is the one that
   answers.
-- **A turn with nothing to answer says so.** One whose final message is blank
-  posts `unanswered: "blank"`, a refused one `unanswered: "refusal"`, so the
-  caller hears the errand ended instead of waiting on it. Both follow the rule
-  above: only when the turn's own `classic.Stop` lists nothing running. A
-  refused turn with no `Stop` of its own reports nothing.
+- **A blank turn says so.** One whose final message is blank posts
+  `unanswered: "blank"`, so the caller hears the errand ended instead of
+  waiting on it, and only when the turn's own `classic.Stop` lists nothing
+  running. The plugin reports blank turns only.
 - **An aborted turn does not report**: its user took the worker over, and the
   turn they start next is the one that answers.
-- **A failed turn does not report either**, though the contract has
-  `unanswered: "error"` for it. An API error fires `StopFailure` instead of
-  `Stop`, and read off the Claude Code 2.1.296 bundle neither `StopFailure`'s
-  input (`error`, `error_details`, `last_assistant_message`) nor
-  `turn.complete`'s carries `background_tasks`, and no mod engine call lists
-  them. Nothing tells whether the failed turn left work running, so `error` is
-  pending until Claude Code exposes that list on the failure.
+- **A refused or failed turn does not report either**, though the contract has
+  `unanswered: "refusal"` and `"error"` for them. Measured on Claude Code
+  2.1.296, both end through `StopFailure` (a refusal with error
+  `invalid_request`) and then `turn.complete`, with no `Stop`, and neither
+  carries `background_tasks`, nor does any mod engine call list them: the mod
+  cannot tell a failed turn with nothing running from one whose background
+  work resumes it later and answers then, so a report would answer the errand
+  twice. Both are pending until Claude Code exposes that list on the failure.
 - `turn.complete` is matched once per `reason` (`answer`, `refusal`,
   `error`, `aborted`), which keeps the hooks beside mod-control's own
   `turn.complete` hook: Claude Code refuses one plugin's second hook on an event

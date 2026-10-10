@@ -70,18 +70,23 @@ test('a worker lich names by its depth answers with subagent cards left on', asy
   expect(world.answers).toEqual([{ session_id: 'lich-1', text: 'Rewrote docs/cli.md.' }])
 })
 
-test('a blank turn is reported unanswered, and a refused one too', async ($, on) => {
+test('a blank turn is reported unanswered', async ($, on) => {
   mock.env(on, WORKER)
   const clock = mock.clock(on)
   const world = lich(on)
   await $.session.start({ cwd: '/w', surface: 'terminal', isInteractive: true })
   await $.classic.Stop({ stop_hook_active: false, last_assistant_message: '', background_tasks: [] })
   await $.turn.complete({ ...ANSWERED, answer: '' })
-  await $.classic.Stop({ stop_hook_active: false, last_assistant_message: 'No.', background_tasks: [] })
-  await $.turn.complete({ ...ANSWERED, answer: 'No.', reason: 'refusal' })
   await clock.settle()
-  expect(world.answers).toEqual([
-    { session_id: 'lich-1', unanswered: 'blank' },
-    { session_id: 'lich-1', unanswered: 'refusal' },
-  ])
+  expect(world.answers).toEqual([{ session_id: 'lich-1', unanswered: 'blank' }])
+})
+
+test('a refused turn, which fires no Stop, reports nothing', async ($, on) => {
+  mock.env(on, WORKER)
+  const clock = mock.clock(on)
+  const world = lich(on)
+  await $.session.start({ cwd: '/w', surface: 'terminal', isInteractive: true })
+  await $.turn.complete({ ...ANSWERED, answer: '', reason: 'refusal' })
+  await clock.settle()
+  expect(world.answers).toEqual([])
 })
