@@ -15,13 +15,11 @@
 // Every function that takes `$` is declared here at the top level: the loader
 // refuses a module that hands `$` to a nested function.
 
+import { promptLang, say } from "./prompt-text.js"
+
 // Run through a mod, these save what they set as the default for every new
 // session (measured on Claude Code 2.1.288 and 2.1.289).
 const SAVES_A_DEFAULT = new Set(["model", "effort"])
-
-const SKILL_NOTE =
-  "\n\nIn this session a built-in slash command (compact, clear, and the like) can be named here too, " +
-  "when the user asks you to run it: it is queued and runs once your turn ends, so end your turn right after."
 
 // The name Claude Code gives lich's tool (measured on 2.1.295 with lich's MCP
 // server).
@@ -31,11 +29,6 @@ const WHOAMI_TIMEOUT_MS = 2_000
 
 // `list_sessions` leaves this session out, so the model does not know its own
 // label; the note names it by `LICH_SESSION_ID`, which lich takes as a target too.
-/** @param {string} sessionId */
-const controlNote = (sessionId) =>
-  `\n\nIn this session, action command is accepted with this session itself as the target: pass session ` +
-  `"${sessionId}". The command is queued and runs once your turn ends, so end your turn right after.`
-
 /**
  * @typedef {import('claude-code').EngineInterface} Engine
  * @typedef {{ sessionId: string | undefined }} State
@@ -80,8 +73,7 @@ async function queueBuiltin($, name, args) {
   if (SAVES_A_DEFAULT.has(name)) {
     return {
       deny:
-        `/${name} run from inside the session would be saved as the default for every new Claude Code ` +
-        `session. Ask the user to set it from lich, whose ${name} override applies to this session only.`,
+        say(promptLang(await $.env.get("LICH_PROMPT_LANG")), "denyDefaultSaved", { name }),
     }
   }
   if (!(await isBuiltin($, name))) return undefined
@@ -127,7 +119,7 @@ export function register(on) {
   on("tool.describe", { tool: "Skill" }, async ($, e, next) => {
     const described = await next(e)
     if (!state.sessionId) return described
-    return { ...described, description: described.description + SKILL_NOTE }
+    return { ...described, description: described.description + say(promptLang(await $.env.get("LICH_PROMPT_LANG")), "skillNote") }
   })
 
   // The Skill tool runs first: a skill, or a built-in it serves as a prompt
@@ -141,14 +133,14 @@ export function register(on) {
     if (typeof queued !== "string") return queued
     return {
       result: { success: true, commandName: name },
-      context: [`${queued} is queued and runs once this turn ends. End the turn now.`],
+      context: [say(promptLang(await $.env.get("LICH_PROMPT_LANG")), "skillQueued", { queued })],
     }
   })
 
   on("tool.describe", { tool: CONTROL_TOOL }, async ($, e, next) => {
     const described = await next(e)
     if (!state.sessionId) return described
-    return { ...described, description: described.description + controlNote(state.sessionId) }
+    return { ...described, description: described.description + say(promptLang(await $.env.get("LICH_PROMPT_LANG")), "controlNote", { sessionId: state.sessionId }) }
   })
 
   // lich answers first: a command for another session is its own. Only its
@@ -161,6 +153,6 @@ export function register(on) {
     const queued = await queueBuiltin($, bareName(e.value), e.args?.trim() ?? "")
     if (queued === undefined) return native
     if (typeof queued !== "string") return queued
-    return { result: `${queued} is queued on this session and runs once this turn ends. End the turn now.` }
+    return { result: say(promptLang(await $.env.get("LICH_PROMPT_LANG")), "controlQueued", { queued }) }
   })
 }

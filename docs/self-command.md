@@ -6,6 +6,8 @@ behind it and nothing is sent to lich: lich's `control` refuses a session
 controlling itself on purpose (`docs/ceilings.md` in lich, "A session cannot
 control itself"), and the mod runs in the session's own process anyway.
 
+The text this mod adds for the agent follows `LICH_PROMPT_LANG`, the prompt language lich exports into every session (English when unset or unknown; catalog in `hooks/prompt-text.js`).
+
 | client                  | Claude Code                                             | Codex               | Antigravity         | opencode            | omp                 | Crush               |
 |-------------------------|---------------------------------------------------------|---------------------|---------------------|---------------------|---------------------|---------------------|
 | `hooks/self-command.js` | mod, registered by `hooks/lich.js`, the `modules` entry | none: no mod system | none: no mod system | none: no mod system | none: no mod system | none: no mod system |

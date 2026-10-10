@@ -22,6 +22,7 @@
 // Every function that takes `$` is declared at the top level: the loader
 // refuses a module that hands `$` to a nested function or keeps it in a variable.
 
+import { promptLang, say } from "./prompt-text.js"
 import { setStatusPart } from "./status-line.js"
 
 // lich's `promptLimit` (internal/relay). lich checks it only after the session
@@ -187,11 +188,12 @@ async function openWorker($, lich, e, branch, base) {
  * @param {AgentCall} e
  * @param {Opened} opened
  * @param {string} branch
+ * @param {string} lang
  */
-function backgrounded(e, opened, branch) {
+function backgrounded(e, opened, branch, lang) {
   const where = branch
-    ? `on branch ${branch} in ${opened.path}, not in this checkout`
-    : `in this same checkout, ${opened.path}, and edits its files as you do`
+    ? say(lang, "whereBranch", { branch, path: opened.path })
+    : say(lang, "whereShared", { path: opened.path })
   return {
     result: {
       status: /** @type {const} */ ("async_launched"),
@@ -200,12 +202,7 @@ function backgrounded(e, opened, branch) {
       prompt: e.prompt,
       outputFile: "",
     },
-    context: [
-      `The agent runs as the lich session "${opened.label}", ${where}. ` +
-        `Its full report arrives at this prompt on its own as a [lich] note, not as a task notification, so there ` +
-        `is no need to call wait_for_answer (it still works). SendMessage cannot reach that session; ` +
-        `send_to_session or lich send can.`,
-    ],
+    context: [say(lang, "backgrounded", { label: opened.label, where })],
   }
 }
 
@@ -249,28 +246,35 @@ function completed(e, opened, branch, text, durationMs) {
  * @param {string} branch
  * @param {Report} report
  * @param {number} durationMs
+ * @param {string} lang
  */
-function answerFor(e, opened, branch, report, durationMs) {
+function answerFor(e, opened, branch, report, durationMs, lang) {
   switch (report.status) {
     // A worker whose turn ended unanswered is usually still at it: it left a
     // command running in the background and resumes when it finishes, and its
     // report still arrives as a [lich] note.
     case "pending":
     case "unanswered":
-      return backgrounded(e, opened, branch)
+      return backgrounded(e, opened, branch, lang)
     case "answered": {
-      const where =
-        (branch
-          ? `The work is on branch ${branch} in ${opened.path} (lich session "${opened.label}"), not in this checkout. `
-          : `The work is in this same checkout, ${opened.path} (lich session "${opened.label}"). `) +
-        `Reach that session with send_to_session or lich send, not SendMessage.`
+      const where = say(lang, branch ? "completedBranch" : "completedShared", {
+        branch,
+        path: opened.path,
+        label: opened.label,
+      })
       return { result: completed(e, opened, branch, `${report.answer}\n\n${where}`, durationMs) }
     }
     case "unread":
     case "undelivered":
-      return { deny: `the task never reached "${opened.label}" (${report.status}): open its card.` }
+      return { deny: say(lang, "denyNeverReached", { label: opened.label, status: report.status }) }
     default:
-      return { deny: `lich answered "${report.status}" about "${opened.label}"${branch ? `, on branch ${branch}` : ""}: open its card.` }
+      return {
+        deny: say(lang, "denyAnswered", {
+          status: report.status,
+          label: opened.label,
+          branchPart: branch ? `, ${say(lang, "onBranch", { branch })}` : "",
+        }),
+      }
   }
 }
 
@@ -304,12 +308,14 @@ function runNatively($, e, next, reason) {
  */
 async function runAsSession($, state, e, next) {
   if (!isDelegable(e, next, state)) return next(e)
-  const [lich, session, cards, depth] = await Promise.all([
+  const [lich, session, cards, depth, langTag] = await Promise.all([
     $.env.get("LICH_BIN"),
     $.env.get("LICH_SESSION_ID"),
     $.env.get("LICH_SUBAGENT_CARDS"),
     $.env.get("LICH_SUBAGENT_DEPTH"),
+    $.env.get("LICH_PROMPT_LANG"),
   ])
+  const lang = promptLang(langTag)
   if (!lich || !session) return next(e)
   if (cards === CARDS_OFF) {
     if (!isWorkerDepth(depth)) return next(e)
@@ -332,12 +338,14 @@ async function runAsSession($, state, e, next) {
   } catch (error) {
     if (next.signal.aborted) {
       return {
-        deny: `interrupted; a lich session${branch ? ` on branch ${branch}` : ""} may already have the task, and a report it sends arrives here as a [lich] note.`,
+        deny: say(lang, "denyInterrupted", {
+          branchPart: branch ? ` ${say(lang, "onBranch", { branch })}` : "",
+        }),
       }
     }
     return runNatively($, e, next, messageOf(error))
   }
-  const answer = answerFor(e, opened, branch, opened.delivery, (await $.clock.now()) - startedMs)
+  const answer = answerFor(e, opened, branch, opened.delivery, (await $.clock.now()) - startedMs, lang)
   if (opened.delivery.status === "pending") trackWorker($, state, lich, opened, e, branch)
   return answer
 }
@@ -438,6 +446,7 @@ async function stopWorker($, state, e, next) {
   const id = e.task_id ?? e.shell_id ?? ""
   const worker = state.workers.get(id)
   if (worker === undefined) return next(e)
+  const lang = promptLang(await $.env.get("LICH_PROMPT_LANG"))
   const argv = worker.shared
     ? [state.lich, "close", worker.name]
     : [state.lich, "control", worker.name, "abort"]
@@ -445,10 +454,11 @@ async function stopWorker($, state, e, next) {
   try {
     outcome = await $.process.run(argv)
   } catch (error) {
-    return { deny: `lich could not stop "${worker.label}": ${messageOf(error)}` }
+    return { deny: say(lang, "denyStopFailed", { label: worker.label, reason: messageOf(error) }) }
   }
   if (outcome.exitCode !== 0) {
-    return { deny: `lich could not stop "${worker.label}": ${outcome.stderr.trim() || `lich exited ${outcome.exitCode}`}` }
+    const reason = outcome.stderr.trim() || say(lang, "lichExited", { code: outcome.exitCode })
+    return { deny: say(lang, "denyStopFailed", { label: worker.label, reason }) }
   }
   state.workers.delete(id)
   showWorkers($, state)

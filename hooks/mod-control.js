@@ -12,6 +12,8 @@
 // function that takes it is declared here at the top level: the loader refuses
 // a module that hands `$` to a nested function.
 
+import { promptLang, say } from "./prompt-text.js"
+
 // Sent as X-Lich-Plugin on every request; bumped at release (CLAUDE.md, Release).
 const PLUGIN_VERSION = "0.19.2"
 
@@ -26,16 +28,6 @@ const MAX_BACKOFF_MS = 10000
 // model request goes out, long after the command was acked `ok`, and then skips
 // the hook, so a level outside these is refused here, where lich hears of it.
 const EFFORTS = new Set(["low", "medium", "high", "xhigh", "max"])
-
-// Put before an `ask`'s question. Without it, a fork made while a turn runs
-// reaches for a tool, is refused (a fork has none) and answers in a second
-// request, at twice the latency and the uncached tokens: measured on Claude
-// Code 2.1.289.
-const ASK_PREAMBLE =
-  "This is a side question asked from outside your turn, while you work. It does not " +
-  "interrupt your turn and your answer is not added to the conversation. Tools are " +
-  "unavailable: do not call any tool. Answer from what the conversation already holds, " +
-  "in plain text, briefly. Question: "
 
 // The contract cuts an answer at this many UTF-16 units, which keeps an ack
 // under lich's 64 KiB body limit; a fork has no length bound of its own.
@@ -58,6 +50,7 @@ const ANSWER_LIMIT = 16000
  *   turnId?: string,
  *   model?: string,
  *   effort?: Effort,
+ *   lang?: string,
  * }} State
  */
 
@@ -178,7 +171,7 @@ async function apply($, state, command) {
       await $.command.run({ command: command.name ?? "", args: command.args })
       return
     case "ask":
-      return { answer: await answer($, command.question ?? "") }
+      return { answer: await answer($, command.question ?? "", state.lang) }
     default:
       throw new Error("unknown kind")
   }
@@ -213,9 +206,14 @@ function escapeXml(value) {
  *
  * @param {Engine} $
  * @param {string} question
+ * @param {string} lang
  */
-async function answer($, question) {
-  const reply = await $.model.fork({ prompt: ASK_PREAMBLE + question })
+async function answer($, question, lang) {
+  // The preamble goes before the question: without it, a fork made while a turn
+  // runs reaches for a tool, is refused (a fork has none) and answers in a second
+  // request, at twice the latency and the uncached tokens: measured on Claude
+  // Code 2.1.289.
+  const reply = await $.model.fork({ prompt: say(lang, "askPreamble") + question })
   if (!reply.isAnswered) {
     throw new Error(reply.reason === "api-error" ? `api-error ${reply.status} ${reply.error}` : reply.reason)
   }
@@ -234,6 +232,7 @@ export function register(on) {
     // session's variables, so it would also take the parent's commands.
     if (e.isInteractive && state.link === undefined) {
       state.link = await linkFromEnv($)
+      state.lang = promptLang(await $.env.get("LICH_PROMPT_LANG"))
       const link = state.link
       if (link) $.clock.after(0, () => void poll($, state, link))
     }

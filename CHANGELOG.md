@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **The text the mods add for the agent follows lich's prompt language.** The
+  side-question preamble, the subagent card notes and denies, the edit guard's
+  note and the self-command notes now come in English or Brazilian Portuguese,
+  chosen by `LICH_PROMPT_LANG`, which lich exports into every session; an
+  empty or unknown value is English. `[lich]`, tool and command names and
+  status values stay literal, and `Successfully stopped task` keeps Claude
+  Code's own wording. The texts live in `hooks/prompt-text.js`.
+
 - **A lich subagent worker whose turn ends blank now says so.** A final turn
   whose message is blank, with nothing left running in the background, posts
   `unanswered: "blank"` to `/mod/answer`, so the caller hears the errand ended
