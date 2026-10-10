@@ -117,29 +117,18 @@ test('a blank final message is reported unanswered as the contract spells it', a
   for (const request of mod.requests) assertContractHonoured('/mod/answer', request)
 })
 
-test('a refused turn is reported unanswered as the contract spells it', async () => {
-  const mod = load()
-  await mod.start()
-
-  await mod.turn(stop('I cannot help with that.'), complete('I cannot help with that.', 'refusal'))
-
-  assert.deepEqual(mod.bodies(), [{ session_id: LICH_SESSION_ID, unanswered: 'refusal' }])
-  assertContractHonoured('/mod/answer', mod.requests[0])
-})
-
-test('a blank or refused turn that handed work to the background reports nothing', async () => {
+test('a blank turn that handed work to the background reports nothing', async () => {
   const mod = load()
   await mod.start()
 
   await mod.turn(stop('', [SHELL]), complete(''))
-  await mod.turn(stop('I cannot help with that.', [SHELL]), complete('I cannot help with that.', 'refusal'))
 
   assert.equal(mod.requests.length, 0)
 })
 
-// A refused turn reads its background work off its own Stop; one without a
-// Stop cannot tell whether work is still running.
-test('a refused turn with no Stop of its own reports nothing', async () => {
+// Measured on Claude Code 2.1.296: a refusal ends the turn through StopFailure,
+// then turn.complete with reason refusal, and fires no Stop.
+test('a refused turn reports nothing', async () => {
   const mod = load()
   await mod.start()
 
@@ -162,12 +151,12 @@ test('an aborted or failed turn reports nothing', async () => {
   assert.equal(mod.requests.length, 0)
 })
 
-test('an aborted turn drops the Stop it read, so a later refusal cannot use it', async () => {
+test('an aborted turn drops the Stop it read, so a later blank turn cannot use it', async () => {
   const mod = load()
   await mod.start()
 
   await mod.turn(stop(''), complete('', 'aborted'))
-  await mod.turn(undefined, complete('', 'refusal'))
+  await mod.turn(undefined, complete(''))
 
   assert.equal(mod.requests.length, 0)
 })

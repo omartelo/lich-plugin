@@ -9,13 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- **A lich subagent worker whose turn has nothing to answer now says so.** A
-  final turn that ends blank or refused, with nothing left running in the
-  background, posts `unanswered` (`blank` or `refusal`) to `/mod/answer`,
-  so the caller hears the errand ended instead of waiting on it. A turn an API
-  error ended still reports nothing: Claude Code's `StopFailure` carries no
-  `background_tasks`, so the mod cannot tell it left nothing running. Needs a
-  lich that accepts `unanswered`.
+- **A lich subagent worker whose turn ends blank now says so.** A final turn
+  whose message is blank, with nothing left running in the background, posts
+  `unanswered: "blank"` to `/mod/answer`, so the caller hears the errand ended
+  instead of waiting on it. The plugin reports blank turns only: Claude Code
+  ends a refused turn and one an API error ended through `StopFailure`, with
+  no `Stop` and no `background_tasks`, so the mod cannot tell they left nothing
+  running and does not report them. Needs a lich that accepts `unanswered`.
 - **Every state report names the conversation it comes from**, in
   `provider_session_id`, so lich can drop one from an agent CLI the session
   runs as a tool (`claude -p`, `cursor-agent -p`), which inherits the session's
