@@ -8,7 +8,7 @@
 [ -n "$LICH_PORT" ] && [ -n "$LICH_TOKEN" ] && [ -n "$LICH_SESSION_ID" ] || exit 0
 
 # Sent as X-Lich-Plugin on every report; bumped at release (CLAUDE.md, Release).
-plugin_version=0.20.0
+plugin_version=0.20.1
 
 # A file-shipped install that lacks conversation-id.sh says so and still
 # runs: sourcing a missing file would end the script. `${0%/*}` rather than
