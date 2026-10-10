@@ -8,7 +8,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 
-import { en, ptBR, say, promptLang } from '../hooks/prompt-text.js'
+import { en, ptBR, zhCN, es, say, promptLang } from '../hooks/prompt-text.js'
 import { register as registerAgentCards } from '../hooks/agent-cards.js'
 import { register as registerEditGuard } from '../hooks/edit-guard.js'
 import { register as registerSelfCommand } from '../hooks/self-command.js'
@@ -215,3 +215,166 @@ test('mod-control: the side question is prefaced in pt-BR', async () => {
   assert.match(forks[0].prompt, /^Esta é uma pergunta lateral feita de fora do seu turno/)
   assert.ok(forks[0].prompt.endsWith('Pergunta: o que faz?'))
 })
+
+// ------------------------------------------------------- zh-CN and es catalogs --
+
+const NEW_LOCALES = { 'zh-CN': zhCN, es }
+
+for (const [tag, catalog] of Object.entries(NEW_LOCALES)) {
+  test(`${tag}: same keys, same slots and the literal names as English`, () => {
+    assert.deepEqual(Object.keys(catalog).sort(), Object.keys(en).sort())
+    for (const key of Object.keys(en)) {
+      assert.deepEqual(slots(catalog[key]), slots(en[key]), key)
+      for (const literal of LITERALS) {
+        if (en[key].includes(literal)) assert.ok(catalog[key].includes(literal), `${key} lost ${literal}`)
+      }
+    }
+  })
+
+  test(`${tag}: LICH_PROMPT_LANG selects the catalog`, () => {
+    assert.equal(promptLang(tag), tag)
+    assert.notEqual(say(tag, 'lichExited', { code: 2 }), 'lich exited 2')
+  })
+}
+
+// What each hook renders per locale, one text per hook. The hook is driven the
+// way the pt-BR tests above drive it, with only the language swapped.
+const EXPECTED = {
+  'zh-CN': {
+    background: /^agent 作为 lich 会话 "w" 运行，在同一个 checkout \/wt\/w 中/,
+    done: /^feito\n\n工作位于同一个 checkout \/wt\/w（lich 会话 "w"）中。/,
+    deny: '任务从未送达 "w"（unread）：请打开它的卡片。',
+    stop: 'lich 无法停止 "w"：boom',
+    edit: /^\/r\/a\.js 也被 lich 会话 lich-a 在 2026-10-05T12:00:00\.000Z（3 分钟前）编辑过/,
+    skill: /^base\n\n在此会话中，内置斜杠命令/,
+    control: /传入 session "lich-1"。/,
+    queued: '/compact 已进入队列，将在本回合结束后运行。现在请结束本回合。',
+    saved: /^在会话内部运行 \/model/,
+    ask: /^这是在你的回合之外/,
+  },
+  es: {
+    background: /^El agente se ejecuta como la sesión lich "w", en este mismo checkout, \/wt\/w/,
+    done: /^feito\n\nEl trabajo está en este mismo checkout, \/wt\/w \(sesión lich "w"\)\./,
+    deny: 'la tarea nunca llegó a "w" (unread): abre su tarjeta.',
+    stop: 'lich no pudo detener "w": boom',
+    edit: /^\/r\/a\.js también fue editado por la sesión lich lich-a en 2026-10-05T12:00:00\.000Z \(hace 3 min\)/,
+    skill: /^base\n\nEn esta sesión, un slash command integrado/,
+    control: /pasa session "lich-1"\./,
+    queued: '/compact está en cola y se ejecuta cuando termine este turno. Termina el turno ahora.',
+    saved: /^\/model ejecutado desde dentro de la sesión/,
+    ask: /^Esta es una pregunta lateral hecha desde fuera de tu turno/,
+  },
+}
+
+for (const [tag, want] of Object.entries(EXPECTED)) {
+  const LANG = { LICH_PROMPT_LANG: tag }
+
+  test(`${tag}: agent-cards renders the background note, the completed addendum and the denies`, async () => {
+    const OPENED = { name: 'w-1', label: 'w', path: '/wt/w', id: 'x' }
+    const env = { ...LANG, LICH_BIN: '/lich', LICH_SESSION_ID: 'lich-1' }
+    const call = async (status, tool = 'Agent', stderr = '') => {
+      const hooks = hooksOf(registerAgentCards)
+      const runs = [
+        exits(2, JSON.stringify({ ...OPENED, delivery: { ticket: 't', target: 'w', status, answer: 'feito' } })),
+        exits(1, '', 'boom'),
+      ]
+      const $ = {
+        env: { get: async (n) => env[n] },
+        clock: { now: async () => 0, after: () => ({ cancel() {} }) },
+        process: { run: async () => runs.shift() },
+        ui: { toast() {}, invalidate() {} },
+      }
+      await hooks.get('session.start')($, { isInteractive: true }, async (x) => x)
+      const next = Object.assign(pass({ result: 'native' }), { origin: { plugin: 'engine' }, signal: new AbortController().signal })
+      const e = { tool: 'Agent', tool_use_id: 't1', description: 'd', prompt: 'p', subagent_type: 'general-purpose' }
+      const first = await hooks.get('tool.call Agent')($, e, next)
+      if (tool === 'Agent') return first
+      return hooks.get('tool.call TaskStop')($, { tool: 'TaskStop', task_id: 'w-1' }, next)
+    }
+
+    assert.match((await call('pending')).context[0], want.background)
+    assert.match((await call('answered')).result.content[0].text, want.done)
+    assert.equal((await call('unread')).deny, want.deny)
+    assert.equal((await call('pending', 'TaskStop')).deny, want.stop)
+  })
+
+  test(`${tag}: edit-guard renders the note about another session`, async () => {
+    const T0 = Date.parse('2026-10-05T12:00:00.000Z')
+    const disk = new Map()
+    let now = T0
+    const hooks = hooksOf(registerEditGuard)
+    const session = (id) => {
+      const env = { ...LANG, LICH_SESSION_ID: id }
+      const $ = {
+        env: { get: async (n) => env[n] },
+        clock: { now: async () => now, after: () => ({ cancel() {} }) },
+        ui: { log() {}, invalidate() {} },
+        process: { run: async () => exits(0, '/r/.git\n') },
+        fs: {
+          exists: async (p) => disk.has(p),
+          read: async (p) => disk.get(p),
+          write: async (p, t) => void disk.set(p, t),
+        },
+      }
+      return () => hooks.get('tool.call Edit')($, { tool: 'Edit', file_path: '/r/a.js' }, pass({ result: {}, text: 'ok' }))
+    }
+    await session('lich-a')()
+    now = T0 + 3 * 60_000
+    const result = await session('lich-b')()
+    assert.match(result.context[0], want.edit)
+    assert.match(result.context[0], /send_to_session o lich send|send_to_session 或 lich send/)
+  })
+
+  test(`${tag}: self-command renders the tool notes and the queued answer`, async () => {
+    const hooks = hooksOf(registerSelfCommand)
+    const env = { ...LANG, LICH_SESSION_ID: 'lich-1', LICH_BIN: '/lich' }
+    const $ = {
+      env: { get: async (n) => env[n] },
+      clock: { after() {} },
+      command: { list: async () => [{ name: 'compact', source: 'builtin' }, { name: 'model', source: 'builtin' }], run: async () => ({}) },
+      ui: { toast() {}, invalidate() {} },
+      process: { run: async () => exits(0, JSON.stringify({ label: 'x', name: 'y' })) },
+    }
+    await hooks.get('session.start')($, { isInteractive: true }, async (e) => e)
+
+    const skill = await hooks.get('tool.describe Skill')($, { tool: 'Skill', description: 'base' }, async (e) => e)
+    assert.match(skill.description, want.skill)
+    const control = await hooks.get('tool.describe mcp__lich__control_session')(
+      $,
+      { tool: 'mcp__lich__control_session', description: 'base' },
+      async (e) => e,
+    )
+    assert.match(control.description, want.control)
+
+    const refused = { isError: true, result: 'compact is a built-in CLI command, not a skill' }
+    const queued = await hooks.get('tool.call Skill')($, { tool: 'Skill', skill: 'compact' }, async () => refused)
+    assert.equal(queued.context[0], want.queued)
+    const denied = await hooks.get('tool.call Skill')($, { tool: 'Skill', skill: 'model', args: 'opus' }, async () => refused)
+    assert.match(denied.deny, want.saved)
+  })
+
+  test(`${tag}: mod-control prefaces the side question`, async () => {
+    const hooks = hooksOf(registerModControl)
+    const forks = []
+    const env = { ...LANG, LICH_PORT: '1', LICH_TOKEN: 't', LICH_SESSION_ID: 's' }
+    let served = false
+    const $ = {
+      env: { get: async (n) => env[n] },
+      clock: { after: (ms, fn) => setImmediate(fn) },
+      http: {
+        fetch: async (url) => {
+          if (url.includes('/mod/acks')) return { status: 204, ok: true, headers: {}, text: '' }
+          if (served) return new Promise(() => {})
+          served = true
+          return { status: 200, ok: true, headers: {}, text: JSON.stringify([{ id: 'm1', kind: 'ask', question: 'q?' }]) }
+        },
+      },
+      model: { fork: async (args) => (forks.push(args), { isAnswered: true, text: 'a', usage: {} }) },
+    }
+    await hooks.get('session.start')($, { isInteractive: true }, async (e) => e)
+    for (let i = 0; i < 50 && forks.length === 0; i++) await new Promise((r) => setImmediate(r))
+    assert.equal(forks.length, 1)
+    assert.match(forks[0].prompt, want.ask)
+    assert.ok(forks[0].prompt.endsWith('q?'))
+  })
+}
