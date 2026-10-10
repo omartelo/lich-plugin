@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **A subagent card opens only once Claude Code allowed the Agent call.** The
+  mod answered the call above Claude Code's permission check, so a deny or ask
+  rule, the permission mode and the user's "no" at the dialog never applied,
+  and a refused call could still open a lich session that ran the task. It now
+  passes the call on to that check and opens the worker at `agent.spawn`,
+  which only an allowed call reaches (#74).
+
 ## [0.20.0] - 2026-10-10
 
 ### Added

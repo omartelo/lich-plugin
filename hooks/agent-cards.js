@@ -6,6 +6,13 @@
 // the lich CLI (`$LICH_BIN open`), whose output and exit codes are docs/cli.md
 // in the lich repository.
 //
+// The call goes through Claude Code's own permission check first (its rules,
+// mode, dialog and PreToolUse hooks, all beneath `next` in tool.call), and lich
+// opens the worker only at `agent.spawn`, which fires once the call was allowed
+// and before the native agent or its worktree exist; the spawn is then denied
+// and the Agent call answered with lich's outcome. A call refused there never
+// reaches `agent.spawn`, so it opens nothing (measured on 2.1.296).
+//
 // Once lich has the task the Agent call answers at once, as a background
 // subagent does, and nothing here waits on the worker: `--subagent` makes lich
 // type the worker's whole report at this session's prompt as a [lich] note.
@@ -69,7 +76,9 @@ const SUFFIX_CHARS = 4
  * @typedef {{ ticket: string, target: string, status: string, answer: string }} Report
  * @typedef {{ label: string, name: string, path: string, delivery?: Report }} Opened
  * @typedef {{ label: string, name: string, description: string, shared: boolean }} Worker
- * @typedef {{ interactive: boolean, workers: Map<string, Worker>, watching: boolean, lich: string }} State
+ * @typedef {{ call: AgentCall, lich: string, base: string, lang: string, answer?: object }} Claim
+ * @typedef {{ interactive: boolean, workers: Map<string, Worker>, watching: boolean, lich: string,
+ *   claims: Map<string, Claim> }} State
  * @typedef {{ label: string, name: string, state: string }} Peer
  * @typedef {{ tool: "Agent", tool_use_id: string, agentId?: string, description: string, prompt: string,
  *   subagent_type?: string, model?: string, team_name?: string, isolation?: string }} AgentCall
@@ -329,25 +338,49 @@ async function runAsSession($, state, e, next) {
   const isolated = e.isolation === "worktree"
   const base = isolated ? await currentBranch($) : ""
   if (depth === undefined && base.startsWith(WORKER_BRANCH_PREFIX)) return next(e)
+  /** @type {Claim} */
+  const claim = { call: e, lich, base, lang }
+  state.claims.set(e.tool_use_id, claim)
+  try {
+    const native = await next(e)
+    return claim.answer ?? native
+  } finally {
+    state.claims.delete(e.tool_use_id)
+  }
+}
+
+/**
+ * The spawn of an Agent call `runAsSession` claimed, reached only once Claude
+ * Code allowed the call: opens the worker in its place and keeps the answer for
+ * the call. Before lich has the task the native agent starts instead.
+ *
+ * @param {Engine} $
+ * @param {State} state
+ * @param {{ tool_use_id: string }} e
+ * @param {any} next
+ */
+async function openInPlaceOfSpawn($, state, e, next) {
+  const claim = state.claims.get(e.tool_use_id)
+  if (claim === undefined) return next(e)
+  const { call, lich, base, lang } = claim
   const startedMs = await $.clock.now()
-  const branch = isolated ? branchFor(e) : ""
+  const branch = call.isolation === "worktree" ? branchFor(call) : ""
   /** @type {Opened & { delivery: Report }} */
   let opened
   try {
-    opened = await openWorker($, lich, e, branch, base)
+    opened = await openWorker($, lich, call, branch, base)
   } catch (error) {
-    if (next.signal.aborted) {
-      return {
-        deny: say(lang, "denyInterrupted", {
-          branchPart: branch ? ` ${say(lang, "onBranch", { branch })}` : "",
-        }),
-      }
+    if (!next.signal.aborted) return runNatively($, call, () => next(e), messageOf(error))
+    claim.answer = {
+      deny: say(lang, "denyInterrupted", {
+        branchPart: branch ? ` ${say(lang, "onBranch", { branch })}` : "",
+      }),
     }
-    return runNatively($, e, next, messageOf(error))
+    return claim.answer
   }
-  const answer = answerFor(e, opened, branch, opened.delivery, (await $.clock.now()) - startedMs, lang)
-  if (opened.delivery.status === "pending") trackWorker($, state, lich, opened, e, branch)
-  return answer
+  claim.answer = answerFor(call, opened, branch, opened.delivery, (await $.clock.now()) - startedMs, lang)
+  if (opened.delivery.status === "pending") trackWorker($, state, lich, opened, call, branch)
+  return { deny: `lich runs this agent as the session "${opened.label}"` }
 }
 
 /**
@@ -475,7 +508,7 @@ async function stopWorker($, state, e, next) {
 /** @param {import('claude-code').On} on */
 export function register(on) {
   /** @type {State} */
-  const state = { interactive: false, workers: new Map(), watching: false, lich: "" }
+  const state = { interactive: false, workers: new Map(), watching: false, lich: "", claims: new Map() }
 
   // A `claude -p` started from a tool inside a lich session inherits its
   // variables; its subagents are its own and stay inside it. The matcher is
@@ -487,5 +520,6 @@ export function register(on) {
   })
 
   on("tool.call", { tool: "Agent" }, ($, e, next) => runAsSession($, state, e, next))
+  on("agent.spawn", ($, e, next) => openInPlaceOfSpawn($, state, e, next))
   on("tool.call", { tool: "TaskStop" }, ($, e, next) => stopWorker($, state, e, next))
 }
