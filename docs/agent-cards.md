@@ -91,6 +91,15 @@ for an isolated call.
 
 ## How it behaves
 
+- **The call is put to Claude Code's own permission check first.** The mod
+  passes a call it takes on beneath it (`next` in `tool.call`), where Claude
+  Code applies its rules, the mode, the dialog and PreToolUse hooks, and opens
+  the worker only at `agent.spawn`, which Claude Code raises once the call was
+  allowed and before the native agent or its worktree exist. The mod denies
+  that spawn and answers the Agent call with lich's outcome. A call refused
+  there, the user's "no" at the dialog included, never reaches `agent.spawn`:
+  its refusal stands and lich opens nothing. Both orders measured on Claude
+  Code 2.1.296.
 - **The call runs in the background**, as a background subagent does: once lich
   has the task it answers `async_launched` and the asking turn goes on. Parallel
   Agent calls run their hooks concurrently, so each opens its own card at once.

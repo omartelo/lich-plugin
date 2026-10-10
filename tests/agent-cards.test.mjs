@@ -44,6 +44,7 @@ const ISOLATED = { ...AGENT, isolation: 'worktree' }
 // A worker without isolation opens in the asking session's directory.
 const SHARED = { ...OPENED, label: 'claude-2', name: 'claude-2-9f8e', path: '/w' }
 const NATIVE = { result: 'the native agent ran' }
+const REJECTED = { result: "Error: The user doesn't want to proceed with this tool use.", isError: true }
 
 const report = (status, answer = '') => ({ ticket: TICKET, target: BRANCH, status, answer })
 const opened = (status, answer) => ({ ...OPENED, delivery: report(status, answer) })
@@ -117,13 +118,34 @@ function load({ env = ENV, runs = [], times = [1000, 4000] } = {}) {
     },
     start: (isInteractive = true) =>
       hooks.get('session.start')($, { cwd: '/w', surface: isInteractive ? 'terminal' : null, isInteractive }, async (e) => e),
-    /** Raises one Agent call; `passed` is what reached the native agent. */
-    async call(e = AGENT, { plugin = 'engine', signal = new AbortController().signal } = {}) {
+    /**
+     * Raises one tool call; `passed` is what reached the native tool. Beneath
+     * an Agent call's `next` the engine decides its permission and, only once
+     * `permission` is allowed, raises `agent.spawn` before the native agent
+     * starts, as measured on Claude Code 2.1.296.
+     */
+    async call(e = AGENT, { plugin = 'engine', signal = new AbortController().signal, permission = 'allow' } = {}) {
       const passed = []
+      const spawn = async (forwarded) => {
+        const input = { tool_use_id: forwarded.tool_use_id, prompt: forwarded.prompt, description: forwarded.description }
+        const spawnNext = Object.assign(
+          async () => {
+            passed.push(forwarded)
+            return { model: 'claude-opus-5-5' }
+          },
+          { signal },
+        )
+        const unhooked = (_$, spawning, nextSpawn) => nextSpawn(spawning)
+        const spawned = await (hooks.get('agent.spawn') ?? unhooked)($, input, spawnNext)
+        return spawned.deny === undefined ? NATIVE : { result: `Error: ${spawned.deny}`, text: spawned.deny, isError: true }
+      }
       const next = Object.assign(
         async (forwarded) => {
-          passed.push(forwarded)
-          return NATIVE
+          if (forwarded.tool !== 'Agent') {
+            passed.push(forwarded)
+            return NATIVE
+          }
+          return permission === 'allow' ? spawn(forwarded) : REJECTED
         },
         { origin: { plugin, tier: plugin === 'engine' ? 'core' : 'user' }, signal },
       )
@@ -487,6 +509,30 @@ test('an open the user interrupted is denied, never run natively', async () => {
   assert.deepEqual(onItsBranch.answer, {
     deny: `interrupted; a lich session on branch ${BRANCH} may already have the task, and a report it sends arrives here as a [lich] note.`,
   })
+})
+
+// ------------------------------------------------------------ permission --
+
+// Claude Code refuses the call beneath the mod's `next` (a deny rule, the
+// mode, the user's "no" in the dialog, a PreToolUse hook) and never raises
+// `agent.spawn`: the refusal stands and lich opens nothing.
+test('a call Claude Code refused opens no lich session', async () => {
+  for (const e of [AGENT, ISOLATED]) {
+    const runs = e === ISOLATED ? [onBranch('main')] : []
+    const { mod, answer, passed } = await delegate(runs, e, { permission: 'reject' })
+    assert.equal(answer, REJECTED)
+    assert.deepEqual(passed, [])
+    assert.equal(mod.ran.some(({ argv }) => argv[0] === LICH_BIN), false)
+    assert.deepEqual(mod.statuses, [])
+  }
+})
+
+test('a refused call leaves the next allowed one to open its session', async () => {
+  const mod = load({ runs: [exits(2, openedHere('pending'))] })
+  await mod.start()
+  await mod.call(AGENT, { permission: 'reject' })
+  const { answer } = await mod.call(AGENT)
+  assert.deepEqual(answer, backgrounded({ worker: SHARED }))
 })
 
 // ------------------------------------------------ never native after delegation --

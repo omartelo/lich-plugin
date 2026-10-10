@@ -6,10 +6,12 @@
 //
 // tests/agent-cards.test.mjs is the suite CI runs; this one needs a claude
 // binary, and proves the module loads beside mod-control.js and its hooks
-// chain in the engine that runs it: a backgrounded result and a fallback to the
-// native agent reach the caller as the engine relays them. The kit does not
-// check a `tool.call` result against the Agent tool's output schema (measured
-// on 2.1.289), so the `async_launched` shape is pinned by a live run, not here.
+// chain in the engine that runs it: a call the mod takes goes on to Claude
+// Code's permission check, and one refused there runs no lich. The open itself
+// happens at `agent.spawn`, which Claude Code raises beneath an allowed call;
+// the kit refuses `$.agent.spawn` from a test's hook (measured on 2.1.296), so
+// the open, the `async_launched` result and the worker count are pinned by
+// tests/agent-cards.test.mjs and a live run, not here.
 
 import { expect, mock, test } from 'claude-code/testing'
 import type { On, ProcessRunResult } from 'claude-code'
@@ -82,43 +84,21 @@ async function footerLine($: { ui: { render: (input: object) => Promise<unknown>
   return w.footer.modes.at(-1)
 }
 
-test('a task lich took comes back at once as a backgrounded agent', async ($, on) => {
-  const w = world(
-    on,
-    exited(2, { ...OPENED, delivery: { ticket: 't1', target: BRANCH, status: 'pending', answer: '' } }),
-  )
+test('a call the mod takes goes on to the permission check, and a refusal there runs no lich', async ($, on) => {
+  const w = world(on)
   await $.session.start({ cwd: '/w', surface: 'terminal', isInteractive: true })
   const ran = await $.tool.call(CALL)
-  expect(ran.deny).toBe(undefined)
-  expect(ran.isError).toBe(undefined)
-  expect(ran.result).toEqual(
-    expect.objectContaining({ status: 'async_launched', agentId: OPENED.name, outputFile: '' }),
-  )
-  expect(ran.context).toEqual([expect.stringContaining('in this same checkout')])
-  expect(w.native).toEqual([])
-  expect(w.argvs).toEqual([['/opt/lich/bin/lich', 'open', '--kind', 'claude', '--subagent', '--prompt', CALL.prompt, '--json']])
-})
-
-test('an isolated task opens in a worktree off the current branch', async ($, on) => {
-  const w = world(
-    on,
-    exited(2, { ...OPENED, delivery: { ticket: 't1', target: BRANCH, status: 'pending', answer: '' } }),
-  )
-  await $.session.start({ cwd: '/w', surface: 'terminal', isInteractive: true })
-  const ran = await $.tool.call({ ...CALL, isolation: 'worktree' })
-  expect(ran.context).toEqual([expect.stringContaining(`on branch ${BRANCH}`)])
-  expect(w.argvs.map((argv) => argv.slice(1, 9))).toEqual([
-    ['branch', '--show-current'],
-    ['open', '--kind', 'claude', '--subagent', '--worktree', BRANCH, '--base', 'main'],
-  ])
-})
-
-test('a failed open runs the native agent, with a toast saying why', async ($, on) => {
-  const w = world(on, exited(1, '', 'lich: no lich is running\n'))
-  await $.session.start({ cwd: '/w', surface: 'terminal', isInteractive: true })
-  await $.tool.call(CALL)
+  expect(ran.deny).toBe('the native agent ran')
   expect(w.native).toEqual(['Fix the auth flow'])
-  expect(w.toasts).toEqual(['lich: ran "Fix the auth flow" as a Claude Code subagent: lich: no lich is running'])
+  expect(w.argvs).toEqual([])
+})
+
+test('a refused isolated call reads its base branch and opens no worktree', async ($, on) => {
+  const w = world(on)
+  await $.session.start({ cwd: '/w', surface: 'terminal', isInteractive: true })
+  await $.tool.call({ ...CALL, isolation: 'worktree' })
+  expect(w.native).toEqual(['Fix the auth flow'])
+  expect(w.argvs).toEqual([['git', 'branch', '--show-current']])
 })
 
 test('a non-interactive run keeps its subagents native', async ($, on) => {
@@ -154,34 +134,10 @@ test('a worker at lich\'s depth limit keeps its subagents native, with a toast s
   expect(w.toasts).toEqual([expect.stringContaining('this session is itself a lich subagent')])
 })
 
-test('a running worker shows in the footer until lich closes it, and TaskStop closes one', async ($, on) => {
-  const pending = { ...OPENED, delivery: { ticket: 't1', target: BRANCH, status: 'pending', answer: '' } }
-  const peer = (name: string, state: string) => ({ label: name, name, project: 'lich', kind: 'claude', state })
-  const w = world(
-    on,
-    exited(2, pending),
-    exited(2, { ...pending, label: 'second', name: 'second-1a2b' }),
-    exited(0, [peer(OPENED.name, 'busy'), peer('second-1a2b', 'busy')]),
-    exited(0, ''),
-    exited(0, []),
-  )
+test('TaskStop on a task this mod did not open goes to Claude Code', async ($, on) => {
+  const w = world(on)
   await $.session.start({ cwd: '/w', surface: 'terminal', isInteractive: true })
-  await $.tool.call(CALL)
-  await $.tool.call({ ...CALL, tool_use_id: 'toolu_second' })
-  expect(await footerLine($, w)).toBe('lich: 2 workers')
-
-  await w.clock.advance(5000)
-  expect(w.argvs.at(-1)).toEqual(['/opt/lich/bin/lich', 'sessions', '--json'])
-  expect(await footerLine($, w)).toBe('lich: 2 workers')
-
-  const stopped = await $.tool.call({ tool: 'TaskStop', task_id: 'second-1a2b' })
-  expect(stopped.result).toEqual(expect.objectContaining({ task_id: 'second-1a2b', task_type: 'local_agent' }))
-  expect(w.argvs.at(-1)).toEqual(['/opt/lich/bin/lich', 'close', 'second-1a2b'])
-  expect(await footerLine($, w)).toBe('lich: 1 worker')
-
-  await w.clock.advance(5000)
-  expect(await footerLine($, w)).toBe(undefined)
-
   await $.tool.call({ tool: 'TaskStop', task_id: 'a712043a56e1aafb1' })
   expect(w.native).toEqual(['TaskStop a712043a56e1aafb1'])
+  expect(await footerLine($, w)).toBe(undefined)
 })

@@ -76,6 +76,17 @@ function hooksOf(register) {
 const pass = (value) => async () => value
 const exits = (code, stdout = '', stderr = '') => ({ exitCode: code, stdout, stderr })
 
+// Beneath an Agent call it allowed, Claude Code raises `agent.spawn` before the
+// native agent starts (measured on 2.1.296), which is where the mod opens lich.
+const allowedAgent = (hooks, $) => {
+  const signal = new AbortController().signal
+  const spawn = async (e) => {
+    const spawned = await hooks.get('agent.spawn')($, { tool_use_id: e.tool_use_id }, Object.assign(pass({ model: 'm' }), { signal }))
+    return spawned.deny === undefined ? { result: 'native' } : { result: `Error: ${spawned.deny}`, isError: true }
+  }
+  return Object.assign(spawn, { origin: { plugin: 'engine' }, signal })
+}
+
 test('agent-cards: the background note, the completed addendum and the denies speak pt-BR', async () => {
   const OPENED = { name: 'w-1', label: 'w', path: '/wt/w', id: 'x' }
   const env = { ...PT, LICH_BIN: '/lich', LICH_SESSION_ID: 'lich-1' }
@@ -89,9 +100,8 @@ test('agent-cards: the background note, the completed addendum and the denies sp
       ui: { toast() {}, invalidate() {} },
     }
     await hooks.get('session.start')($, { isInteractive: true }, async (x) => x)
-    const next = Object.assign(pass({ result: 'native' }), { origin: { plugin: 'engine' }, signal: new AbortController().signal })
     const e = { tool: 'Agent', tool_use_id: 't1', description: 'd', prompt: 'p', subagent_type: 'general-purpose' }
-    return hooks.get('tool.call Agent')($, e, next)
+    return hooks.get('tool.call Agent')($, e, allowedAgent(hooks, $))
   }
 
   const background = await call('pending')
@@ -120,7 +130,7 @@ test('agent-cards: TaskStop failure speaks pt-BR, the success message stays Clau
   }
   await hooks.get('session.start')($, { isInteractive: true }, async (x) => x)
   const next = Object.assign(pass({ result: 'native' }), { origin: { plugin: 'engine' }, signal: new AbortController().signal })
-  await hooks.get('tool.call Agent')($, { tool: 'Agent', tool_use_id: 't1', description: 'd', prompt: 'p', subagent_type: 'general-purpose' }, next)
+  await hooks.get('tool.call Agent')($, { tool: 'Agent', tool_use_id: 't1', description: 'd', prompt: 'p', subagent_type: 'general-purpose' }, allowedAgent(hooks, $))
 
   const failed = await hooks.get('tool.call TaskStop')($, { tool: 'TaskStop', task_id: 'w-1' }, next)
   assert.equal(failed.deny, 'o lich não conseguiu parar "w": boom')
@@ -287,7 +297,7 @@ for (const [tag, want] of Object.entries(EXPECTED)) {
       await hooks.get('session.start')($, { isInteractive: true }, async (x) => x)
       const next = Object.assign(pass({ result: 'native' }), { origin: { plugin: 'engine' }, signal: new AbortController().signal })
       const e = { tool: 'Agent', tool_use_id: 't1', description: 'd', prompt: 'p', subagent_type: 'general-purpose' }
-      const first = await hooks.get('tool.call Agent')($, e, next)
+      const first = await hooks.get('tool.call Agent')($, e, allowedAgent(hooks, $))
       if (tool === 'Agent') return first
       return hooks.get('tool.call TaskStop')($, { tool: 'TaskStop', task_id: 'w-1' }, next)
     }
