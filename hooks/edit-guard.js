@@ -11,6 +11,7 @@
 // Every function that takes `$` is declared here at the top level: the loader
 // refuses a module that hands `$` to a nested function.
 
+import { promptLang, say } from "./prompt-text.js"
 import { setStatusPart } from "./status-line.js"
 
 // Long enough to span the other session's turn that made the edit, short
@@ -105,16 +106,12 @@ async function labelOf($, id) {
  * @param {Marker} marker
  * @param {string} who
  * @param {number} now
+ * @param {string} lang
  */
-function noteFor(marker, who, now) {
+function noteFor(marker, who, now, lang) {
   const minutes = Math.round((now - marker.at) / 60_000)
-  const ago = minutes === 0 ? "under a minute ago" : `${minutes} min ago`
-  return (
-    `${marker.path} was also edited by the lich session ${who} at ` +
-    `${new Date(marker.at).toISOString()} (${ago}), which shares this checkout and may still be ` +
-    `working on it. Re-read the file before building on it, and coordinate with that session through ` +
-    `send_to_session or lich send rather than undoing its change.`
-  )
+  const ago = minutes === 0 ? say(lang, "editNoteJustNow") : say(lang, "editNoteAgo", { minutes })
+  return say(lang, "editNote", { path: marker.path, who, at: new Date(marker.at).toISOString(), ago })
 }
 
 /**
@@ -195,7 +192,7 @@ async function guard($, e, next) {
     const now = await $.clock.now()
     if (isNews(previous, session, now)) {
       const who = await whoMarked($, previous)
-      note = noteFor(previous, who, now)
+      note = noteFor(previous, who, now, await promptLang($))
       showEditBy($, previous, who)
       $.clock.after(previous.at + RECENT_MS - now, () => clearEditBy($, previous))
     }
