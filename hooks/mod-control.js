@@ -15,7 +15,7 @@
 import { promptLang, say } from "./prompt-text.js"
 
 // Sent as X-Lich-Plugin on every request; bumped at release (CLAUDE.md, Release).
-const PLUGIN_VERSION = "0.19.2"
+const PLUGIN_VERSION = "0.20.0"
 
 const SETTLE_WHEN_IDLE = new Set(["prompt", "command"])
 

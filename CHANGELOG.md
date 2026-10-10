@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.20.0] - 2026-10-10
+
 ### Added
 
 - **The agent-facing mod text also comes in Simplified Chinese and Spanish.**
@@ -732,7 +734,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   plugin is safe to install globally. Requests time out after ~1s and errors
   are swallowed — the hook never blocks or fails the turn.
 
-[Unreleased]: https://github.com/omartelo/lich-plugin/compare/v0.19.2...HEAD
+[Unreleased]: https://github.com/omartelo/lich-plugin/compare/v0.20.0...HEAD
+[0.20.0]: https://github.com/omartelo/lich-plugin/compare/v0.19.2...v0.20.0
 [0.19.2]: https://github.com/omartelo/lich-plugin/compare/v0.19.1...v0.19.2
 [0.19.1]: https://github.com/omartelo/lich-plugin/compare/v0.19.0...v0.19.1
 [0.19.0]: https://github.com/omartelo/lich-plugin/compare/v0.18.4...v0.19.0

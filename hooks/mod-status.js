@@ -12,7 +12,7 @@
 import { setStatusPart } from "./status-line.js"
 
 // Sent as X-Lich-Plugin on every request; bumped at release (CLAUDE.md, Release).
-const PLUGIN_VERSION = "0.19.2"
+const PLUGIN_VERSION = "0.20.0"
 
 // The contract asks for a read at most every few seconds; the worker count in
 // agent-cards.js polls lich on the same period.
