@@ -33,7 +33,7 @@
 // refuses a module that hands `$` to a nested function.
 
 // Sent as X-Lich-Plugin on every request; bumped at release (CLAUDE.md, Release).
-const PLUGIN_VERSION = "0.19.2"
+const PLUGIN_VERSION = "0.20.0"
 
 // The value a lich older than LICH_SUBAGENT_DEPTH spawns every `--subagent`
 // session with.
