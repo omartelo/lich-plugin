@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **The agent-facing mod text also comes in Simplified Chinese and Spanish.**
+  `LICH_PROMPT_LANG` values `zh-CN` and `es` select the new catalogs in
+  `hooks/prompt-text.js`, translated from the English source; literals such as
+  `[lich]` and tool and command names stay as they are.
+
 - **The text the mods add for the agent follows lich's prompt language.** The
   side-question preamble, the subagent card notes and denies, the edit guard's
   note and the self-command notes now come in English or Brazilian Portuguese,
